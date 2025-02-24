@@ -1,18 +1,36 @@
 // src/app/admin/Dashboard/lib/api.js
 export const api = {
   async fetchWritings() {
-    const res = await fetch('/api/writings');
-    return res.json();
+    try {
+      const res = await fetch('/api/writings');
+      const data = await res.json();
+      return data || []; // Extract writings array from nested data
+    } catch (error) {
+      console.error('Error fetching writings:', error);
+      return [];
+    }
   },
 
   async fetchTechBlogs() {
-    const res = await fetch('/api/tech-blog');
-    return res.json();
+    try {
+      const res = await fetch('/api/tech-blog');
+      const  data = await res.json();
+      return data.techBlogs || []; // Extract techBlogs array from nested data
+    } catch (error) {
+      console.error('Error fetching tech blogs:', error);
+      return [];
+    }
   },
 
   async fetchProjects() {
-    const res = await fetch('/api/projects');
-    return res.json();
+    try {
+      const res = await fetch('/api/projects');
+      const data = await res.json();
+      return data.projects || []; // Extract projects array from nested data
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+      return [];
+    }
   },
 
   async createContent(type, data) {

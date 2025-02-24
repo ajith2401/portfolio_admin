@@ -1,32 +1,69 @@
 // src/components/ui/dialog.jsx
-export function Dialog({ open, onOpenChange, children }) {
+'use client';
+
+import React, { useEffect, useRef } from 'react';
+import { X } from 'lucide-react';
+
+export const Dialog = ({ open, onOpenChange, children }) => {
+  const dialogRef = useRef(null);
+
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        onOpenChange?.(false);
+      }
+    };
+
+    if (open) {
+      document.addEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'unset';
+    };
+  }, [open, onOpenChange]);
+
   if (!open) return null;
 
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget) {
+      onOpenChange?.(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
-      <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full mx-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+      onClick={handleBackdropClick}
+    >
+      <div
+        ref={dialogRef}
+        className="relative w-full max-w-2xl max-h-[90vh] overflow-auto bg-white rounded-lg shadow-xl m-4"
+      >
         {children}
       </div>
     </div>
   );
-}
+};
 
-export function DialogContent({ children }) {
-  return <div className="p-6">{children}</div>;
-}
+export const DialogContent = ({ children, className = '' }) => {
+  return <div className={`p-6 ${className}`}>{children}</div>;
+};
 
-export function DialogHeader({ children }) {
-  return <div className="mb-4">{children}</div>;
-}
+export const DialogHeader = ({ children, className = '' }) => {
+  return <div className={`mb-6 ${className}`}>{children}</div>;
+};
 
-export function DialogTitle({ children }) {
-  return <h2 className="text-xl font-semibold">{children}</h2>;
-}
+export const DialogTitle = ({ children, className = '' }) => {
+  return <h2 className={`text-xl font-semibold ${className}`}>{children}</h2>;
+};
 
-export function DialogDescription({ children }) {
-  return <p className="text-sm text-gray-500">{children}</p>;
-}
+export const DialogDescription = ({ children, className = '' }) => {
+  return <p className={`text-sm text-gray-500 mt-2 ${className}`}>{children}</p>;
+};
 
-export function DialogTrigger({ asChild, children }) {
+export const DialogTrigger = ({ children, asChild }) => {
   return children;
-}
+};

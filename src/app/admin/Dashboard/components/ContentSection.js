@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -12,11 +12,8 @@ import {
   Alert,
   AlertTitle,
   AlertDescription,
-  Button
+  Button,
 } from '@/components/ui';
-import { WritingEditor } from './editors/WritingEditor';
-import { TechBlogEditor } from './editors/TechBlogEditor';
-import { ProjectEditor } from './editors/ProjectEditor';
 import { ContentList } from './ContentList';
 import { api } from '../lib/api';
 
@@ -25,6 +22,12 @@ export const ContentSection = ({ type, title }) => {
   const [selectedItem, setSelectedItem] = useState(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [alert, setAlert] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [pagination, setPagination] = useState({
+    current: 1,
+    total: 1,
+    pages: 1
+  });
 
   useEffect(() => {
     loadItems();
@@ -32,24 +35,39 @@ export const ContentSection = ({ type, title }) => {
 
   const loadItems = async () => {
     try {
-      let data = [];
+      setLoading(true);
+      let response;
       switch (type) {
         case 'writings':
-          data = await api.fetchWritings();
+          response = await api.fetchWritings();
+          console.log({response});
+          
+          if (response) {
+            setItems(response.writings || []);
+            setPagination(response.pagination || { current: 1, total: 0, pages: 1 });
+          }
           break;
         case 'techblog':
-          data = await api.fetchTechBlogs();
+          response = await api.fetchTechBlogs();
+          if (response?.data) {
+            setItems(response.data.techBlogs || []);
+            setPagination(response.data.pagination || { current: 1, total: 0, pages: 1 });
+          }
           break;
         case 'projects':
-          data = await api.fetchProjects();
+          response = await api.fetchProjects();
+          if (response?.data) {
+            setItems(response.data.projects || []);
+            setPagination(response.data.pagination || { current: 1, total: 0, pages: 1 });
+          }
           break;
       }
-      // Ensure we're setting an array, even if empty
-      setItems(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error loading content:', error);
       showAlert('Error loading content', 'error');
-      setItems([]); // Set empty array on error
+      setItems([]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -90,16 +108,6 @@ export const ContentSection = ({ type, title }) => {
     }
   };
 
-  const handleGenerateImage = async (id) => {
-    try {
-      await api.generateImage(id);
-      loadItems();
-      showAlert('Image generated successfully', 'success');
-    } catch (error) {
-      showAlert('Error generating image', 'error');
-    }
-  };
-
   const showAlert = (message, type = 'info') => {
     setAlert({ message, type });
     setTimeout(() => setAlert(null), 3000);
@@ -108,17 +116,15 @@ export const ContentSection = ({ type, title }) => {
   const getEditor = () => {
     switch (type) {
       case 'writings':
-        return WritingEditor;
+        return import('./editors/WritingEditor').then(mod => mod.WritingEditor);
       case 'techblog':
-        return TechBlogEditor;
+        return import('./editors/TechBlogEditor').then(mod => mod.TechBlogEditor);
       case 'projects':
-        return ProjectEditor;
+        return import('./editors/ProjectEditor').then(mod => mod.ProjectEditor);
       default:
         return null;
     }
   };
-
-  const Editor = getEditor();
 
   return (
     <div className="space-y-4">
@@ -146,26 +152,52 @@ export const ContentSection = ({ type, title }) => {
                 {selectedItem ? 'Edit Content' : 'Add New Content'}
               </DialogTitle>
             </DialogHeader>
-            <Editor
-              content={selectedItem}
-              onSave={handleSave}
-              onClose={() => setIsEditorOpen(false)}
-            />
+            {/* Dynamic import of editor component */}
+            {isEditorOpen && getEditor().then(Editor => (
+              <Editor
+                content={selectedItem}
+                onSave={handleSave}
+                onClose={() => setIsEditorOpen(false)}
+              />
+            ))}
           </DialogContent>
         </Dialog>
       </div>
 
-      <ContentList
-        type={type}
-        items={items}
-        onEdit={(item) => {
-          setSelectedItem(item);
-          setIsEditorOpen(true);
-        }}
-        onDelete={handleDelete}
-        onStatusChange={handleStatusChange}
-        onGenerateImage={handleGenerateImage}
-      />
+      {loading ? (
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <>
+          <ContentList
+            type={type}
+            items={items}
+            onEdit={(item) => {
+              setSelectedItem(item);
+              setIsEditorOpen(true);
+            }}
+            onDelete={handleDelete}
+            onStatusChange={handleStatusChange}
+          />
+
+          {/* Pagination */}
+          {pagination.pages > 1 && (
+            <div className="flex justify-center gap-2 mt-4">
+              {Array.from({ length: pagination.pages }, (_, i) => (
+                <Button
+                  key={i + 1}
+                  variant={pagination.current === i + 1 ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => loadItems(i + 1)}
+                >
+                  {i + 1}
+                </Button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 };
