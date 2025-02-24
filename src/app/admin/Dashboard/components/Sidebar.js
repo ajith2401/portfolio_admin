@@ -8,6 +8,7 @@ Menu, X
 } from 'lucide-react';
 
 export const Sidebar = ({ collapsed, toggleSidebar, currentSection, setCurrentSection }) => {
+    
 const menuItems = [
     { icon: Layout, label: 'Dashboard', section: 'dashboard' },
     { icon: Book, label: 'Tech Blog', section: 'techblog' },

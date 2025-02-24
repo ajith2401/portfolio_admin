@@ -43,10 +43,26 @@ export const api = {
   },
 
   async updateContent(type, id, data) {
+    // Create a FormData object
+    const formData = new FormData();
+    
+    // Add the data as a JSON string under the 'writing' key
+    formData.append('writing', JSON.stringify(data));
+    
+    // If there's an image in the data, handle it separately
+    if (data.image instanceof File) {
+      formData.append('image', data.image);
+      // Remove the image from the JSON data to avoid duplication
+      const dataWithoutImage = { ...data };
+      delete dataWithoutImage.image;
+      // Replace the 'writing' entry with the updated data
+      formData.set('writing', JSON.stringify(dataWithoutImage));
+    }
+    
     const res = await fetch(`/api/${type}/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      // Don't set Content-Type here - the browser will set it automatically with the boundary
+      body: formData
     });
     return res.json();
   },

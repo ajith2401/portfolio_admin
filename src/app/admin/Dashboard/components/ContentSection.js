@@ -1,7 +1,7 @@
 // src/app/admin/Dashboard/components/ContentSection.js
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Loader2 } from 'lucide-react';
 import {
   Dialog,
@@ -16,8 +16,10 @@ import {
 } from '@/components/ui';
 import { ContentList } from './ContentList';
 import { api } from '../lib/api';
+import { Pagination } from './Pagination';
 
 export const ContentSection = ({ type, title }) => {
+  console.log({type,title})
   const [items, setItems] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -29,36 +31,44 @@ export const ContentSection = ({ type, title }) => {
     pages: 1
   });
 
-  useEffect(() => {
-    loadItems();
-  }, [type]);
 
-  const loadItems = async () => {
+
+  const loadItems = useCallback(async (page = 1) => {
     try {
       setLoading(true);
       let response;
       switch (type) {
         case 'writings':
-          response = await api.fetchWritings();
-          console.log({response});
-          
+          response = await api.fetchWritings(page);
           if (response) {
             setItems(response.writings || []);
-            setPagination(response.pagination || { current: 1, total: 0, pages: 1 });
+            setPagination({
+              current: page,
+              total: response.pagination?.total || 0,
+              pages: response.pagination?.pages || 1
+            });
           }
           break;
         case 'techblog':
-          response = await api.fetchTechBlogs();
-          if (response?.data) {
+          response = await api.fetchTechBlogs(page);
+          if (response) {
             setItems(response.data.techBlogs || []);
-            setPagination(response.data.pagination || { current: 1, total: 0, pages: 1 });
+            setPagination({
+              current: page,
+              total: response.data.pagination?.total || 0,
+              pages: response.data.pagination?.pages || 1
+            });
           }
           break;
         case 'projects':
-          response = await api.fetchProjects();
-          if (response?.data) {
+          response = await api.fetchProjects(page);
+          if (response) {
             setItems(response.data.projects || []);
-            setPagination(response.data.pagination || { current: 1, total: 0, pages: 1 });
+            setPagination({
+              current: page,
+              total: response.data.pagination?.total || 0,
+              pages: response.data.pagination?.pages || 1
+            });
           }
           break;
       }
@@ -69,8 +79,12 @@ export const ContentSection = ({ type, title }) => {
     } finally {
       setLoading(false);
     }
-  };
+}, [type]); // Include type in dependencies
 
+useEffect(() => {
+  loadItems();
+}, [type, loadItems]);
+  
   const handleSave = async (formData) => {
     try {
       if (selectedItem) {
@@ -183,17 +197,17 @@ export const ContentSection = ({ type, title }) => {
 
           {/* Pagination */}
           {pagination.pages > 1 && (
-            <div className="flex justify-center gap-2 mt-4">
-              {Array.from({ length: pagination.pages }, (_, i) => (
-                <Button
-                  key={i + 1}
-                  variant={pagination.current === i + 1 ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => loadItems(i + 1)}
-                >
-                  {i + 1}
-                </Button>
-              ))}
+            <div className="mt-6">
+              <Pagination
+                currentPage={pagination.current}
+                totalPages={pagination.pages}
+                onPageChange={(page) => {
+                  // Handle page change
+                  if (page !== pagination.current) {
+                    loadItems(page);
+                  }
+                }}
+              />
             </div>
           )}
         </>

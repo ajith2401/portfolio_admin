@@ -19,10 +19,27 @@ export async function PUT(request, { params }) {
       );
     }
 
-    // Parse form data
-    const formData = await request.formData();
-    const updates = JSON.parse(formData.get('writing'));
-    const image = formData.get('image');
+    // Check the content type to determine how to parse the request
+    const contentType = request.headers.get('content-type') || '';
+    
+    let updates;
+    let image;
+    
+    if (contentType.includes('multipart/form-data')) {
+      // Parse form data
+      const formData = await request.formData();
+      updates = JSON.parse(formData.get('writing'));
+      image = formData.get('image');
+    } else if (contentType.includes('application/json')) {
+      // Parse JSON data
+      updates = await request.json();
+      image = null; // JSON requests can't include file uploads
+    } else {
+      return NextResponse.json(
+        { error: 'Unsupported content type' },
+        { status: 400 }
+      );
+    }
 
     // Handle image update if new image is provided
     if (image) {
