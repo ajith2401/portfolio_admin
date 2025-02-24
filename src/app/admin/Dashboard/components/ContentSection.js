@@ -52,22 +52,22 @@ export const ContentSection = ({ type, title }) => {
         case 'techblog':
           response = await api.fetchTechBlogs(page);
           if (response) {
-            setItems(response.data.techBlogs || []);
+            setItems(response?.techBlogs || []);
             setPagination({
               current: page,
-              total: response.data.pagination?.total || 0,
-              pages: response.data.pagination?.pages || 1
+              total: response?.pagination?.total || 0,
+              pages: response?.pagination?.pages || 1
             });
           }
           break;
         case 'projects':
           response = await api.fetchProjects(page);
           if (response) {
-            setItems(response.data.projects || []);
+            setItems(response?.projects || []);
             setPagination({
               current: page,
-              total: response.data.pagination?.total || 0,
-              pages: response.data.pagination?.pages || 1
+              total: response?.pagination?.total || 0,
+              pages: response?.pagination?.pages || 1
             });
           }
           break;
@@ -155,10 +155,10 @@ useEffect(() => {
         <h2 className="text-2xl font-semibold">{title}</h2>
         <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => setSelectedItem(null)}>
+           {/* <Button onClick={() => setSelectedItem(null)}>
               <Plus size={16} className="mr-2" />
               Add New
-            </Button>
+            </Button> */}
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
