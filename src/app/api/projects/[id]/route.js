@@ -1,4 +1,4 @@
-// src/app/api/writings/[id]/route.js
+// src/app/api/projects/[id]/route.js
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import { Writing, Comment } from '@/models';

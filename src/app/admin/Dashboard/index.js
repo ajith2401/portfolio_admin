@@ -77,8 +77,8 @@ const Dashboard = () => {
                     <div>
                       <h4 className="font-medium capitalize">{key}</h4>
                       <p className="text-sm text-gray-500">
-                        { Number(Math.round( data.total) * 100)}% published
-                      </p>
+                      {Math.round((data.published / data.total) * 100) || 0}% published
+                    </p>
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="text-center">

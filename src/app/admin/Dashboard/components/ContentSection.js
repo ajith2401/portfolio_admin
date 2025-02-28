@@ -104,7 +104,14 @@ useEffect(() => {
     if (confirm('Are you sure you want to delete this item?')) {
       try {
         await api.deleteContent(type, id);
-        loadItems();
+        
+        // If this is the last item on the page and not the first page
+        if (items.length === 1 && pagination.current > 1) {
+          loadItems(pagination.current - 1);
+        } else {
+          loadItems(pagination.current);
+        }
+        
         showAlert('Content deleted successfully', 'success');
       } catch (error) {
         showAlert('Error deleting content', 'error');

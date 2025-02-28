@@ -1,16 +1,15 @@
 // src/app/admin/Dashboard/lib/api.js
 export const api = {
-  async fetchWritings() {
-    try {
-      const res = await fetch('/api/writings');
-      const data = await res.json();
-      return data || []; // Extract writings array from nested data
-    } catch (error) {
-      console.error('Error fetching writings:', error);
-      return [];
-    }
-  },
-
+async fetchWritings(page = 1) {
+  try {
+    const res = await fetch(`/api/writings?page=${page}`);
+    const data = await res.json();
+    return data; // Return the full response object with writings and pagination
+  } catch (error) {
+    console.error('Error fetching writings:', error);
+    return { writings: [], pagination: { total: 0, pages: 1, current: 1 } };
+  }
+},
   async fetchTechBlogs() {
     try {
       const res = await fetch('/api/tech-blog');

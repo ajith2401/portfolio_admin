@@ -1,4 +1,4 @@
-//src/app/api/writings/with-image/route.js
+//src/app/api/projects/with-image/route.js
 import connectDB from "@/lib/db";
 import imageGenerationService from "@/ImageGenerator/imageGenerator";
 import { NextResponse } from "next/server";

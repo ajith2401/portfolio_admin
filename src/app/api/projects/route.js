@@ -1,9 +1,10 @@
-// src/app/api/writings/route.js
+// src/app/api/projects/route.js
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import { Writing, Comment } from '@/models';
 import { uploadImage } from '@/lib/cloudinary';
 import { Project } from '@/models/project.model';
+// import { createAdminUser } from '@/lib/userCreation';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
