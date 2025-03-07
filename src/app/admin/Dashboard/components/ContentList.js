@@ -23,7 +23,7 @@ export const ContentList = ({ type, items = [], onEdit, onDelete, onStatusChange
     switch (type) {
       case 'writings':
         return WRITING_CATEGORIES;
-      case 'techblog':
+      case 'tech-blog':
         return TECH_BLOG_CATEGORIES;
       case 'projects':
         return PROJECT_CATEGORIES;
@@ -46,7 +46,7 @@ export const ContentList = ({ type, items = [], onEdit, onDelete, onStatusChange
     <div className="space-y-6">
       {/* Header Section */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{type === 'techblog' ? 'Tech Blog' : type.charAt(0).toUpperCase() + type.slice(1)}</h1>
+        <h1 className="text-2xl font-bold">{type === 'tech-blog' ? 'Tech Blog' : type.charAt(0).toUpperCase() + type.slice(1)}</h1>
         <Button onClick={() => onEdit(null)}>Add New</Button>
       </div>
 

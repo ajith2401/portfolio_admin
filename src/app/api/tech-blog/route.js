@@ -39,7 +39,7 @@ export async function POST(request) {
     
     const data = await request.json();
     const blog = await TechBlog.create(data);
-    
+  
     return NextResponse.json(blog, { status: 201 });
   } catch (error) {
     console.error('Error creating tech blog:', error);

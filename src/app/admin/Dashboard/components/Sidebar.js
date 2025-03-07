@@ -11,7 +11,7 @@ export const Sidebar = ({ collapsed, toggleSidebar, currentSection, setCurrentSe
     
 const menuItems = [
     { icon: Layout, label: 'Dashboard', section: 'dashboard' },
-    { icon: Book, label: 'Tech Blog', section: 'techblog' },
+    { icon: Book, label: 'Tech Blog', section: 'tech-blog' },
     { icon: PenTool, label: 'Writings', section: 'writings' },
     { icon: Code, label: 'Projects', section: 'projects' },
     { icon: BarChart, label: 'Analytics', section: 'analytics' },

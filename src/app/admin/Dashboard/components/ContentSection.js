@@ -56,7 +56,7 @@ export const ContentSection = ({ type, title }) => {
             });
           }
           break;
-        case 'techblog':
+        case 'tech-blog':
           response = await api.fetchTechBlogs(page);
           if (response) {
             setItems(response?.techBlogs || []);
@@ -146,7 +146,7 @@ export const ContentSection = ({ type, title }) => {
     switch (type) {
       case 'writings':
         return WritingEditor;
-      case 'techblog':
+      case 'tech-blog':
         return TechBlogEditor;
       case 'projects':
         return ProjectEditor;

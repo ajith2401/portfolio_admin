@@ -110,8 +110,8 @@ const Dashboard = () => {
         );
       case 'writings':
         return <ContentSection type="writings" title="Writings" />;
-      case 'techblog':
-        return <ContentSection type="techblog" title="Tech Blog" />;
+      case 'tech-blog':
+        return <ContentSection type="tech-blog" title="Tech Blog" />;
       case 'projects':
         return <ContentSection type="projects" title="Projects" />;
       case 'analytics':
