@@ -8,6 +8,4 @@ export const WRITING_CATEGORIES = [
     'web-development', 'javascript', 'react', 'backend', 'devops', 'cloud'
   ];
   
-  export const PROJECT_CATEGORIES = [
-    'web', 'mobile', 'backend', 'devops', 'other'
-  ];
+  export const PROJECT_CATEGORIES = ['AI/ML', 'web', 'mobile', 'backend', 'devops', 'other'];

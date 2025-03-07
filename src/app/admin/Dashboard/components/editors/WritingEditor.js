@@ -1,4 +1,3 @@
-// src/app/admin/Dashboard/components/editors/WritingEditor.js
 'use client';
 
 import React, { useState } from 'react';
@@ -12,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui';
 import { WRITING_CATEGORIES } from '../../lib/constants';
+import SingleImageUpload from '@/components/ui/SingleImageUpload';
 
 export const WritingEditor = ({ content, onSave, onClose }) => {
   const [formData, setFormData] = useState(content || {
@@ -19,8 +19,41 @@ export const WritingEditor = ({ content, onSave, onClose }) => {
     subtitle: '',
     body: '',
     category: WRITING_CATEGORIES[0],
-    status: 'draft'
+    status: 'draft',
+    images: {
+      small: '',
+      medium: '',
+      large: ''
+    }
   });
+
+  // Handle image upload 
+  const handleImageUpload = (imageUrls) => {
+    setFormData(prevData => ({
+      ...prevData,
+      images: {
+        small: imageUrls.small || '',
+        medium: imageUrls.medium || '',
+        large: imageUrls.large || ''
+      }
+    }));
+  };
+
+  // Insert image into the body content
+  const insertImageToContent = (url) => {
+    if (!url) return;
+    
+    // Create proper markdown for the image
+    const imageMarkdown = `\n![Image](${url})\n`;
+    
+    // Insert at the end of the content
+    const newBody = formData.body + imageMarkdown;
+      
+    setFormData(prevData => ({
+      ...prevData, 
+      body: newBody
+    }));
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -49,11 +82,11 @@ export const WritingEditor = ({ content, onSave, onClose }) => {
       <div>
         <label className="block text-sm font-medium mb-1">Category</label>
         <Select
-          value={formData.category}
+          defaultValue={formData.category}
           onValueChange={(value) => setFormData({ ...formData, category: value })}
         >
           <SelectTrigger>
-            <SelectValue />
+            <SelectValue placeholder="Select category" />
           </SelectTrigger>
           <SelectContent>
             {WRITING_CATEGORIES.map(category => (
@@ -63,6 +96,49 @@ export const WritingEditor = ({ content, onSave, onClose }) => {
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      {/* Add Image Upload */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Featured Image</label>
+        <SingleImageUpload 
+          currentImage={formData.images.medium}
+          onImageUploaded={handleImageUpload}
+        />
+        
+        {/* Insert image buttons */}
+        <div className="mt-2 flex flex-wrap gap-2">
+          {formData.images.small && (
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm"
+              onClick={() => insertImageToContent(formData.images.small)}
+            >
+              Insert Thumbnail
+            </Button>
+          )}
+          {formData.images.medium && (
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm"
+              onClick={() => insertImageToContent(formData.images.medium)}
+            >
+              Insert Medium Image
+            </Button>
+          )}
+          {formData.images.large && (
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm"
+              onClick={() => insertImageToContent(formData.images.large)}
+            >
+              Insert Large Image
+            </Button>
+          )}
+        </div>
       </div>
 
       <div>
@@ -78,11 +154,11 @@ export const WritingEditor = ({ content, onSave, onClose }) => {
       <div>
         <label className="block text-sm font-medium mb-1">Status</label>
         <Select
-          value={formData.status}
+          defaultValue={formData.status}
           onValueChange={(value) => setFormData({ ...formData, status: value })}
         >
           <SelectTrigger>
-            <SelectValue />
+            <SelectValue placeholder="Select status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="draft">Draft</SelectItem>

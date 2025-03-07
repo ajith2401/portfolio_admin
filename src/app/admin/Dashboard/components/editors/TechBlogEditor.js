@@ -11,7 +11,6 @@ import {
   SelectValue,
 } from '@/components/ui';
 import { TECH_BLOG_CATEGORIES } from '../../lib/constants';
-import ImageUpload from '@/lib/ImageUpload';
 import { 
   Bold, 
   Italic, 
@@ -29,15 +28,12 @@ import {
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-// Create a custom component for rendering the preview content
+// Custom PreviewContent component to properly render images
 const PreviewContent = ({ content }) => {
-  // Only process if we have content
   if (!content) return null;
   
-  // We need to detect URLs and render them as images directly
+  // Process the content to properly render images
   const renderContent = () => {
-    // Replace image markdown with actual image tags
-    // This is a safer approach than using dangerouslySetInnerHTML
     const parts = [];
     const regex = /!\[(.*?)\]\((https?:\/\/[^)]+)\)/g;
     let lastIndex = 0;
@@ -90,13 +86,93 @@ const PreviewContent = ({ content }) => {
   );
 };
 
-export const TechBlogEditor = ({ content, onSave, onClose }) => {
+// Simplified ImageUpload component that only shows one uploader but returns three URLs
+const SingleImageUpload = ({ currentImage, onImageUploaded }) => {
+  const [isUploading, setIsUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState(currentImage || "");
+  
+  const handleImageSelect = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    // Create a preview
+    const localPreview = URL.createObjectURL(file);
+    setPreviewUrl(localPreview);
+    
+    // Start upload
+    setIsUploading(true);
+    
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      
+      const res = await fetch('/api/upload-image', {
+        method: 'POST',
+        body: formData
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        // Pass all three URLs to the parent component
+        onImageUploaded(data.imageUrls);
+        
+        // Show the medium version in the preview
+        setPreviewUrl(data.imageUrls.medium);
+      }
+    } catch (error) {
+      console.error('Upload failed:', error);
+      alert('Failed to upload image. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+  
+  return (
+    <div className="border rounded-md p-3">
+      <label className="block text-sm font-medium mb-2">Featured Image</label>
+      {previewUrl ? (
+        <div className="relative mb-2">
+          <img 
+            src={previewUrl} 
+            alt="Preview" 
+            className="w-full h-40 object-cover rounded-md" 
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setPreviewUrl("");
+              onImageUploaded({small: "", medium: "", large: ""});
+            }}
+            className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full text-xs"
+          >
+            ✕
+          </button>
+        </div>
+      ) : null}
+      
+      <div className="flex items-center justify-center">
+        <label className="cursor-pointer bg-gray-100 hover:bg-gray-200 transition-colors py-2 px-4 rounded-md text-sm flex items-center justify-center w-full">
+          <input 
+            type="file" 
+            className="hidden" 
+            accept="image/*"
+            onChange={handleImageSelect}
+            disabled={isUploading}
+          />
+          {isUploading ? "Uploading..." : (previewUrl ? "Change Image" : "Upload Image")}
+        </label>
+      </div>
+    </div>
+  );
+};
 
+export const TechBlogEditor = ({ content, onSave, onClose }) => {
   const [formData, setFormData] = useState(content || {
-    title: 'test',
-    subtitle: 'test',
-    content: 'test',
-    category: TECH_BLOG_CATEGORIES[0],
+    title: '',
+    subtitle: '',
+    content: '',
+    category: TECH_BLOG_CATEGORIES[0] || 'web-development',
     tags: [],
     status: 'draft',
     author: {
@@ -104,17 +180,20 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
       email: 'ajith24ram@gmail.com'
     },
     images: {
-      small: 'https://res.cloudinary.com/dk5p5vrwa/image/upload/v1741200667/devfolio/woxbsuhep9cxv8ytzzr7.jpg',
-      medium: 'https://res.cloudinary.com/dk5p5vrwa/image/upload/v1741200667/devfolio/woxbsuhep9cxv8ytzzr7.jpg',
-      large: 'https://res.cloudinary.com/dk5p5vrwa/image/upload/v1741200667/devfolio/woxbsuhep9cxv8ytzzr7.jpg'
+      small: '',
+      medium: '',
+      large: ''
     }
   });
+  
   const [preview, setPreview] = useState('');
   const [activeTab, setActiveTab] = useState('write');
   const textareaRef = useRef(null);
   
-  // Function to fix broken image markdown syntax (handles line breaks)
+  // Function to fix broken image markdown syntax
   const fixBrokenImageMarkdown = (text) => {
+    if (!text) return '';
+    
     // Fix common issue: line breaks between [] and ()
     let fixed = text.replace(/!\[(.*?)\][ \t\r\n]*\([ \t\r\n]*(https?:\/\/[^)]+)[ \t\r\n]*\)/g, '![$1]($2)');
     
@@ -136,7 +215,6 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
     const timeoutId = setTimeout(() => {
       // First fix any broken image markdown
       let processedContent = fixBrokenImageMarkdown(formData.content);
-      console.log("Fixed markdown:", processedContent);
       
       let html = processedContent;
       
@@ -330,17 +408,19 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
     }, 0);
   };
 
-  const handleImageUpload = (imageType, url) => {
+  // Handle all image URLs from single uploader
+  const handleImageUpload = (imageUrls) => {
     setFormData(prevData => ({
       ...prevData,
       images: {
-        ...prevData.images,
-        [imageType]: url
+        small: imageUrls.small || '',
+        medium: imageUrls.medium || '',
+        large: imageUrls.large || ''
       }
     }));
   };
   
-  // Insert an uploaded image directly into content
+  // Insert image into content
   const insertImageToContent = (url) => {
     if (!url || !textareaRef.current) return;
     
@@ -369,11 +449,14 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
     }, 0);
   };
 
+  // Handle form submission
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
   return (
-    <form onSubmit={(e) => {
-      e.preventDefault();
-      onSave(formData);
-    }} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium mb-1">Title</label>
@@ -386,11 +469,11 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
         <div>
           <label className="block text-sm font-medium mb-1">Category</label>
           <Select
-            value={formData.category}
+            defaultValue={formData.category}
             onValueChange={(value) => setFormData(prevData => ({ ...prevData, category: value }))}
           >
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue placeholder="Select category" />
             </SelectTrigger>
             <SelectContent>
               {TECH_BLOG_CATEGORIES.map(category => (
@@ -414,26 +497,13 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1">Featured Images</label>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <ImageUpload 
-            label="Small (thumbnail)" 
-            currentImage={formData.images.small}
-            onImageUploaded={(url) => handleImageUpload('small', url)}
-          />
-          <ImageUpload 
-            label="Medium (card)" 
-            currentImage={formData.images.medium}
-            onImageUploaded={(url) => handleImageUpload('medium', url)}
-          />
-          <ImageUpload 
-            label="Large (header)" 
-            currentImage={formData.images.large}
-            onImageUploaded={(url) => handleImageUpload('large', url)}
-          />
-        </div>
+        <label className="block text-sm font-medium mb-1">Featured Image</label>
+        <SingleImageUpload 
+          currentImage={formData.images.medium}
+          onImageUploaded={handleImageUpload}
+        />
         
-        {/* Buttons to insert uploaded images into content */}
+        {/* Insert image buttons */}
         <div className="mt-2 flex flex-wrap gap-2">
           {formData.images.small && (
             <Button 
@@ -452,7 +522,7 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
               size="sm"
               onClick={() => insertImageToContent(formData.images.medium)}
             >
-              Insert Card Image
+              Insert Medium Image
             </Button>
           )}
           {formData.images.large && (
@@ -462,7 +532,7 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
               size="sm"
               onClick={() => insertImageToContent(formData.images.large)}
             >
-              Insert Header Image
+              Insert Large Image
             </Button>
           )}
         </div>
@@ -608,30 +678,27 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
                 required
               />
             </TabsContent>
-            <TabsContent value="preview" className="m-0">
-              <div className="w-full min-h-[400px] p-4">
-                <PreviewContent content={preview} />
-              </div>
+            <TabsContent value="preview" className="m-0 p-4 min-h-[400px]">
+              <PreviewContent content={preview} />
             </TabsContent>
           </Tabs>
         </div>
-        
         {/* Add a troubleshooting guide */}
         <details className="mt-2 text-sm text-gray-600">
-          <summary className="cursor-pointer font-medium">Having trouble with images?</summary>
-          <div className="mt-2 p-3 bg-gray-50 rounded">
-            <p>Make sure your image markdown follows this format:</p>
-            <pre className="bg-gray-100 p-2 rounded mt-1 mb-2 overflow-x-auto">
-              ![Image description](https://example.com/image.jpg)
-            </pre>
-            <p>Common issues:</p>
-            <ul className="list-disc pl-5 mt-1">
-              <li>No line breaks between <code>![...]</code> and <code>(...)</code></li>
-              <li>Make sure the URL is complete and accessible</li>
-              <li>Check for extra characters or line breaks</li>
-            </ul>
-          </div>
-        </details>
+        <summary className="cursor-pointer font-medium">Having trouble with images?</summary>
+        <div className="mt-2 p-3 bg-gray-50 rounded">
+          <p>Make sure your image markdown follows this format:</p>
+          <pre className="bg-gray-100 p-2 rounded mt-1 mb-2 overflow-x-auto">
+            ![Image description](https://example.com/image.jpg)
+          </pre>
+          <p>Common issues:</p>
+          <ul className="list-disc pl-5 mt-1">
+            <li>No line breaks between <code>![...]</code> and <code>(...)</code></li>
+            <li>Make sure the URL is complete and accessible</li>
+            <li>Check for extra characters or line breaks</li>
+          </ul>
+        </div>
+      </details>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -663,7 +730,7 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
       <div>
         <label className="block text-sm font-medium mb-1">Tags</label>
         <Input
-          value={formData.tags.join(', ')}
+          value={Array.isArray(formData.tags) ? formData.tags.join(', ') : ''}
           onChange={(e) => setFormData(prevData => ({
             ...prevData,
             tags: e.target.value.split(',').map(tag => tag.trim()).filter(Boolean)
@@ -675,11 +742,11 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
       <div>
         <label className="block text-sm font-medium mb-1">Status</label>
         <Select
-          value={formData.status}
+          defaultValue={formData.status}
           onValueChange={(value) => setFormData(prevData => ({ ...prevData, status: value }))}
         >
           <SelectTrigger>
-            <SelectValue />
+            <SelectValue placeholder="Select status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="draft">Draft</SelectItem>

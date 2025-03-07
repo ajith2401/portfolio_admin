@@ -8,6 +8,12 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+// Convert FormData File to buffer
+async function fileToBuffer(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
 export const uploadGeneratedImage = async (buffer, options = {}) => {
   try {
     // Add buffer validation with more detailed error
@@ -116,39 +122,72 @@ const bufferToStream = (buffer) => {
 
 export const uploadImage = async (file) => {
   try {
-    const result = await cloudinary.uploader.upload(file, {
-      folder: 'writings',
-      transformation: [
-        { width: 200, height: 200, crop: "fill", quality: "auto" },
-        { width: 600, height: 600, crop: "fill", quality: "auto" },
-        { width: 1200, height: 1200, crop: "fill", quality: "auto" }
-      ]
-    });
+    // Check if the file is a File object from FormData
+    if (file instanceof File || (typeof File !== 'undefined' && file instanceof File)) {
+      // Convert File to buffer
+      const buffer = await fileToBuffer(file);
+      
+      // Create a stream from the buffer and upload
+      return new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: 'writings',
+            resource_type: 'auto', // Auto-detect resource type
+          },
+          (error, result) => {
+            if (error) {
+              console.error('Cloudinary upload error:', error);
+              reject(new Error(`Failed to upload image: ${error.message}`));
+              return;
+            }
+            
+            resolve({
+              small: result.secure_url.replace('/upload/', '/upload/w_200,h_200,c_fill,q_auto/'),
+              medium: result.secure_url.replace('/upload/', '/upload/w_600,h_600,c_fill,q_auto/'),
+              large: result.secure_url.replace('/upload/', '/upload/w_1200,h_1200,c_fill,q_auto/')
+            });
+          }
+        );
+        
+        const stream = bufferToStream(buffer);
+        stream.pipe(uploadStream);
+      });
+    } else {
+      // If it's already a path or buffer, use it directly
+      const result = await cloudinary.uploader.upload(file, {
+        folder: 'writings',
+        transformation: [
+          { width: 200, height: 200, crop: "fill", quality: "auto" },
+          { width: 600, height: 600, crop: "fill", quality: "auto" },
+          { width: 1200, height: 1200, crop: "fill", quality: "auto" }
+        ]
+      });
 
-    return {
-      small: result.secure_url.replace('/upload/', '/upload/w_200,h_200,c_fill,q_auto/'),
-      medium: result.secure_url.replace('/upload/', '/upload/w_600,h_600,c_fill,q_auto/'),
-      large: result.secure_url.replace('/upload/', '/upload/w_1200,h_1200,c_fill,q_auto/')
-    };
+      return {
+        small: result.secure_url.replace('/upload/', '/upload/w_200,h_200,c_fill,q_auto/'),
+        medium: result.secure_url.replace('/upload/', '/upload/w_600,h_600,c_fill,q_auto/'),
+        large: result.secure_url.replace('/upload/', '/upload/w_1200,h_1200,c_fill,q_auto/')
+      };
+    }
   } catch (error) {
     console.error('Error uploading to Cloudinary:', error);
-    throw new Error('Failed to upload image');
+    throw new Error(`Failed to upload image: ${error.message}`);
   }
 };
 
 export const deleteImage = async (imageUrl) => {
-    try {
-      if (!imageUrl) return;
+  try {
+    if (!imageUrl) return;
+    
+    // Extract public_id from the URL
+    const publicId = imageUrl
+      .split('/')
+      .slice(-1)[0]
+      .split('.')[0];
       
-      // Extract public_id from the URL
-      const publicId = imageUrl
-        .split('/')
-        .slice(-1)[0]
-        .split('.')[0];
-        
-      await cloudinary.uploader.destroy(`writings/${publicId}`);
-    } catch (error) {
-      console.error('Error deleting image from Cloudinary:', error);
-      // We don't throw here as this is cleanup operation
-    }
-  };
+    await cloudinary.uploader.destroy(`writings/${publicId}`);
+  } catch (error) {
+    console.error('Error deleting image from Cloudinary:', error);
+    // We don't throw here as this is cleanup operation
+  }
+};

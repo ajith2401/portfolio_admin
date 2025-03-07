@@ -1,4 +1,3 @@
-// src/components/ui/tabs.jsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -20,10 +19,16 @@ export function Tabs({ value, onValueChange, children, className = '', ...props 
       {React.Children.map(children, (child) => {
         if (!React.isValidElement(child)) return null;
 
-        if (child.type === TabsList || child.type === TabsContent) {
+        if (child.type === TabsList) {
           return React.cloneElement(child, {
             activeTab,
             onTabChange: handleTabChange,
+          });
+        }
+        
+        if (child.type === TabsContent) {
+          return React.cloneElement(child, {
+            activeTab,
           });
         }
 
@@ -53,8 +58,10 @@ export function TabsList({ activeTab, onTabChange, children, className = '', ...
 }
 
 export function TabsTrigger({ value, active, onClick, children, className = '', ...props }) {
+  // The key fix: Explicitly setting type="button" to prevent form submission
   return (
     <button
+      type="button"  // This prevents the button from submitting forms
       role="tab"
       aria-selected={active}
       data-state={active ? 'active' : 'inactive'}
@@ -63,7 +70,10 @@ export function TabsTrigger({ value, active, onClick, children, className = '', 
           ? 'bg-white text-gray-900 shadow-sm'
           : 'text-gray-500 hover:text-gray-900'
       } ${className}`}
-      onClick={onClick}
+      onClick={(e) => {
+        e.preventDefault(); // Additional prevention of default behavior
+        onClick();
+      }}
       {...props}
     >
       {children}

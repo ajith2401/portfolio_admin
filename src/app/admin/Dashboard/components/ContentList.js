@@ -15,6 +15,8 @@ import {
 import { WRITING_CATEGORIES, TECH_BLOG_CATEGORIES, PROJECT_CATEGORIES } from '../lib/constants';
 
 export const ContentList = ({ type, items = [], onEdit, onDelete, onStatusChange, onGenerateImage }) => {
+  console.log({items});
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -99,6 +101,7 @@ export const ContentList = ({ type, items = [], onEdit, onDelete, onStatusChange
 
       {/* Content List */}
       <div className="bg-white rounded-lg shadow divide-y">
+      {console.log({filteredItems})}
         {filteredItems.map((item) => (
           <div key={item._id} className="p-4 flex items-center justify-between hover:bg-gray-50">
             <div className="flex-1">
@@ -121,7 +124,7 @@ export const ContentList = ({ type, items = [], onEdit, onDelete, onStatusChange
             <div className="flex items-center gap-3">
               {type === 'writings' && (
                 <button
-                  onClick={() => onGenerateImage(item._id)}
+                  // onClick={() => onGenerateImage(item._id)}
                   className="p-1 hover:bg-gray-100 rounded-full"
                   title="Generate Image"
                 >

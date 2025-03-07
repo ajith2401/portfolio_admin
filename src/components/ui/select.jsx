@@ -1,52 +1,62 @@
-// src/components/ui/select.jsx
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 
-export const Select = ({ value, onValueChange, children, placeholder }) => {
+// Create context for the Select component
+const SelectContext = React.createContext(null);
+
+export const Select = ({ defaultValue, value, onValueChange, children, placeholder }) => {
+  const [selectedValue, setSelectedValue] = useState(defaultValue || value);
   const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef(null);
+  const [selectedLabel, setSelectedLabel] = useState("");
 
+  // Update internal state when props change
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
+    if (value !== undefined) {
+      setSelectedValue(value);
+    }
+  }, [value]);
+  
+  // Update internal state when defaultValue changes
+  useEffect(() => {
+    if (defaultValue !== undefined && value === undefined) {
+      setSelectedValue(defaultValue);
+    }
+  }, [defaultValue, value]);
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const handleSelect = (val, label) => {
+    setSelectedValue(val);
+    setSelectedLabel(label);
+    onValueChange?.(val);
+    setIsOpen(false);
+  };
+
+  const contextValue = {
+    isOpen,
+    setIsOpen,
+    selectedValue,
+    selectedLabel,
+    handleSelect,
+    placeholder
+  };
 
   return (
-    <div ref={containerRef} className="relative">
-      {React.Children.map(children, child => {
-        if (child.type === SelectTrigger) {
-          return React.cloneElement(child, {
-            onClick: () => setIsOpen(!isOpen),
-            isOpen
-          });
-        }
-        if (child.type === SelectContent && isOpen) {
-          return React.cloneElement(child, {
-            onSelect: (val) => {
-              onValueChange?.(val);
-              setIsOpen(false);
-            }
-          });
-        }
-        return null;
-      })}
-    </div>
+    <SelectContext.Provider value={contextValue}>
+      <div className="relative">
+        {children}
+      </div>
+    </SelectContext.Provider>
   );
 };
 
-export const SelectTrigger = ({ children, className = '', onClick, isOpen }) => {
+export const SelectTrigger = ({ children, className = '' }) => {
+  const { isOpen, setIsOpen } = React.useContext(SelectContext);
+
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => setIsOpen(!isOpen)}
       className={`flex items-center justify-between w-full h-10 px-3 py-2 text-sm bg-white border rounded-md focus:outline-none focus:ring-2 focus:ring-primary ${className}`}
     >
       {children}
@@ -55,29 +65,36 @@ export const SelectTrigger = ({ children, className = '', onClick, isOpen }) => 
   );
 };
 
-export const SelectContent = ({ children, onSelect }) => {
+export const SelectContent = ({ children }) => {
+  const { isOpen } = React.useContext(SelectContext);
+
+  if (!isOpen) return null;
+
   return (
     <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
-      {React.Children.map(children, child => {
-        if (child.type === SelectItem) {
-          return React.cloneElement(child, { onSelect });
-        }
-        return child;
-      })}
+      {children}
     </div>
   );
 };
 
-export const SelectValue = ({ children, placeholder }) => {
-  return <span className="truncate">{children || placeholder}</span>;
+export const SelectValue = ({ placeholder }) => {
+  const { selectedValue, selectedLabel, placeholder: contextPlaceholder } = React.useContext(SelectContext);
+  
+  // Display selectedLabel if we have it, otherwise use the default placeholder
+  const displayValue = selectedLabel || (selectedValue ? String(selectedValue) : (placeholder || contextPlaceholder || "Select an option"));
+  
+  return <span className="truncate">{displayValue}</span>;
 };
 
-export const SelectItem = ({ children, value, onSelect }) => {
+export const SelectItem = ({ children, value }) => {
+  const { selectedValue, handleSelect } = React.useContext(SelectContext);
+  const isSelected = value === selectedValue;
+
   return (
     <button
       type="button"
-      className="flex items-center w-full px-3 py-2 text-sm hover:bg-gray-100"
-      onClick={() => onSelect?.(value)}
+      className={`flex items-center w-full px-3 py-2 text-sm ${isSelected ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
+      onClick={() => handleSelect(value, children)}
     >
       {children}
     </button>

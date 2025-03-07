@@ -59,6 +59,8 @@ export const ContentSection = ({ type, title }) => {
         case 'tech-blog':
           response = await api.fetchTechBlogs(page);
           if (response) {
+            console.log({response});
+            
             setItems(response?.techBlogs || []);
             setPagination({
               current: page,

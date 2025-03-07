@@ -19,7 +19,7 @@ const ImageUpload = () => {
       const formData = new FormData();
       formData.append('image', selectedFile);
 
-      const res = await fetch('/api/upload', {
+      const res = await fetch('/api/upload-image', {
         method: 'POST',
         body: formData
       });
@@ -42,7 +42,7 @@ const ImageUpload = () => {
     if (!imageUrl) return;
 
     try {
-      const res = await fetch('/api/delete', {
+      const res = await fetch('/api/delete-image', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'
