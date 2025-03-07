@@ -112,8 +112,10 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
       // Process links with styling
       html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" class="text-blue-600 hover:underline">$1</a>');
       
-      // Process images with styling
-      html = html.replace(/!\[(.*?)\]\((.*?)\)/g, '<img src="$2" alt="$1" class="max-w-full h-auto my-4 rounded" />');
+      // Process images with styling - fixed to properly handle Cloudinary URLs
+      html = html.replace(/!\[(.*?)\]\((https?:\/\/[^)]+)\)/g, (match, altText, url) => {
+        return `<img src="${url}" alt="${altText}" class="max-w-full h-auto my-4 rounded" />`;
+      });
       
       // Process horizontal rule
       html = html.replace(/^---$/gm, '<hr class="my-6 border-t border-gray-300" />');
@@ -137,7 +139,18 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
           return para;
         }
         
-        // Replace single newlines with <br> tags
+        // Check for image markdown that wasn't processed earlier
+        if (para.match(/!\[.*?\]\(.*?\)/)) {
+          // Process any remaining image that may not have been caught earlier
+          let processedPara = para.replace(/!\[(.*?)\]\((https?:\/\/[^)]+)\)/g, 
+            '<img src="$2" alt="$1" class="max-w-full h-auto my-4 rounded" />');
+          
+          // Replace single newlines with <br> tags
+          processedPara = processedPara.replace(/\n/g, '<br>');
+          return `<p class="my-3">${processedPara}</p>`;
+        }
+        
+        // Regular paragraph handling
         const withLineBreaks = para.replace(/\n/g, '<br>');
         return `<p class="my-3">${withLineBreaks}</p>`;
       }).join('\n\n');
@@ -218,7 +231,11 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
         replacement = `### ${selectedText || 'Heading 3'}`;
         break;
       case 'image':
-        replacement = `![${selectedText || 'alt text'}](https://example.com/image.jpg)`;
+        // Improved image insertion with a realistic placeholder or keeping an existing URL
+        const imageUrl = selectedText.match(/^https?:\/\//) 
+          ? selectedText 
+          : 'https://example.com/image.jpg';
+        replacement = `![${selectedText.match(/^https?:\/\//) ? 'alt text' : selectedText || 'alt text'}](${imageUrl})`;
         break;
       case 'hr':
         replacement = `\n---\n`;
