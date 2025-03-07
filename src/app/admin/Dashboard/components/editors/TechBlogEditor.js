@@ -452,7 +452,14 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
   // Handle form submission
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave(formData);
+    // Process any string values that should be arrays before saving
+    const processedFormData = { ...formData };
+    // Process tags
+    if (typeof processedFormData.tags === 'string') {
+      processedFormData.tags = processedFormData.tags.split(',').map(item => item.trim()).filter(Boolean);
+    } 
+    // Now save the processed data
+    onSave(processedFormData);
   };
 
   return (
@@ -728,16 +735,24 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1">Tags</label>
-        <Input
-          value={Array.isArray(formData.tags) ? formData.tags.join(', ') : ''}
-          onChange={(e) => setFormData(prevData => ({
+      <label className="block text-sm font-medium mb-1">Tags</label>
+      <Input
+        value={formData.tags ? (Array.isArray(formData.tags) ? formData.tags.join(', ') : formData.tags) : ''}
+        onChange={(e) => setFormData(prevData => ({
+          ...prevData,
+          tags: e.target.value // Store raw input during typing
+        }))}
+        onBlur={(e) => {
+          // Process comma separation when the user leaves the field
+          const tagsArray = e.target.value.split(',').map(tag => tag.trim()).filter(Boolean);
+          setFormData(prevData => ({
             ...prevData,
-            tags: e.target.value.split(',').map(tag => tag.trim()).filter(Boolean)
-          }))}
-          placeholder="Enter tags separated by commas"
-        />
-      </div>
+            tags: tagsArray
+          }));
+        }}
+        placeholder="Enter tags separated by commas"
+      />
+    </div>
 
       <div>
         <label className="block text-sm font-medium mb-1">Status</label>

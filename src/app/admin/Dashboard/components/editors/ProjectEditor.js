@@ -139,11 +139,16 @@ export const ProjectEditor = ({ content, onSave, onClose }) => {
     }));
   };
 
-  // Helper function to handle array inputs from comma-separated strings
   const handleArrayInput = (key, value) => {
+    const arrayValue = Array.isArray(value) 
+      ? value 
+      : (typeof value === 'string' 
+        ? value.split(',').map(item => item.trim()).filter(Boolean)
+        : []);
+        
     setFormData(prevData => ({
       ...prevData,
-      [key]: value.split(',').map(item => item.trim()).filter(Boolean)
+      [key]: arrayValue
     }));
   };
 
@@ -408,7 +413,32 @@ export const ProjectEditor = ({ content, onSave, onClose }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave(formData);
+    
+    // Process any string values that should be arrays before saving
+    const processedFormData = { ...formData };
+    
+    // Process technologies
+    if (typeof processedFormData.technologies === 'string') {
+      processedFormData.technologies = processedFormData.technologies.split(',').map(item => item.trim()).filter(Boolean);
+    }
+    
+    // Process stack
+    if (typeof processedFormData.stack === 'string') {
+      processedFormData.stack = processedFormData.stack.split(',').map(item => item.trim()).filter(Boolean);
+    }
+    
+    // Process features
+    if (typeof processedFormData.features === 'string') {
+      processedFormData.features = processedFormData.features.split(',').map(item => item.trim()).filter(Boolean);
+    }
+    
+    // Process challenges
+    if (typeof processedFormData.challenges === 'string') {
+      processedFormData.challenges = processedFormData.challenges.split(',').map(item => item.trim()).filter(Boolean);
+    }
+    
+    // Now save the processed data
+    onSave(processedFormData);
   };
 
   return (
@@ -661,43 +691,85 @@ export const ProjectEditor = ({ content, onSave, onClose }) => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Technologies</label>
-          <Input
-            value={Array.isArray(formData.technologies) ? formData.technologies.join(', ') : ''}
-            onChange={(e) => handleArrayInput('technologies', e.target.value)}
-            placeholder="React, Node.js, MongoDB, etc."
-          />
-        </div>
-        <div>
+      <div>
+      <label className="block text-sm font-medium mb-1">Technologies</label>
+      <Input
+        value={formData.technologies ? (Array.isArray(formData.technologies) ? formData.technologies.join(', ') : formData.technologies) : ''}
+        onChange={(e) => setFormData(prevData => ({
+          ...prevData,
+          technologies: e.target.value // Just store the raw input value for now
+        }))}
+        onBlur={(e) => {
+          // Only process comma separation when the user leaves the field
+          const techArray = e.target.value.split(',').map(tech => tech.trim()).filter(Boolean);
+          setFormData(prevData => ({
+            ...prevData,
+            technologies: techArray
+          }));
+        }}
+        placeholder="React, Node.js, MongoDB, etc."
+      />
+    </div>
+    <div>
           <label className="block text-sm font-medium mb-1">Stack</label>
           <Input
-            value={Array.isArray(formData.stack) ? formData.stack.join(', ') : ''}
-            onChange={(e) => handleArrayInput('stack', e.target.value)}
+            value={formData.stack ? (Array.isArray(formData.stack) ? formData.stack.join(', ') : formData.stack) : ''}
+            onChange={(e) => setFormData(prevData => ({
+              ...prevData,
+              stack: e.target.value // Store raw input
+            }))}
+            onBlur={(e) => {
+              // Process on blur
+              const stackArray = e.target.value.split(',').map(item => item.trim()).filter(Boolean);
+              setFormData(prevData => ({
+                ...prevData,
+                stack: stackArray
+              }));
+            }}
             placeholder="MERN, LAMP, JAMstack, etc."
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1">Features</label>
-        <Textarea
-          value={Array.isArray(formData.features) ? formData.features.join(', ') : ''}
-          onChange={(e) => handleArrayInput('features', e.target.value)}
-          placeholder="Key features of the project (comma separated)"
-          className="min-h-[100px]"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium mb-1">Challenges</label>
-        <Textarea
-          value={Array.isArray(formData.challenges) ? formData.challenges.join(', ') : ''}
-          onChange={(e) => handleArrayInput('challenges', e.target.value)}
-          placeholder="Challenges faced during development (comma separated)"
-          className="min-h-[100px]"
-        />
-      </div>
+      <label className="block text-sm font-medium mb-1">Features</label>
+      <Textarea
+        value={formData.features ? (Array.isArray(formData.features) ? formData.features.join(', ') : formData.features) : ''}
+        onChange={(e) => setFormData(prevData => ({
+          ...prevData,
+          features: e.target.value
+        }))}
+        onBlur={(e) => {
+          const featuresArray = e.target.value.split(',').map(item => item.trim()).filter(Boolean);
+          setFormData(prevData => ({
+            ...prevData,
+            features: featuresArray
+          }));
+        }}
+        placeholder="Key features of the project (comma separated)"
+        className="min-h-[100px]"
+      />
+    </div>
+    
+    <div>
+    <label className="block text-sm font-medium mb-1">Challenges</label>
+    <Textarea
+      value={formData.challenges ? (Array.isArray(formData.challenges) ? formData.challenges.join(', ') : formData.challenges) : ''}
+      onChange={(e) => setFormData(prevData => ({
+        ...prevData,
+        challenges: e.target.value
+      }))}
+      onBlur={(e) => {
+        const challengesArray = e.target.value.split(',').map(item => item.trim()).filter(Boolean);
+        setFormData(prevData => ({
+          ...prevData,
+          challenges: challengesArray
+        }));
+      }}
+      placeholder="Challenges faced during development (comma separated)"
+      className="min-h-[100px]"
+    />
+  </div>
 
       <div>
         <label className="block text-sm font-medium mb-1">Achievement</label>
