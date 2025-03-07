@@ -1,3 +1,4 @@
+// src/app/admin/Dashboard/components/editors/MarkdownEditor.jsx
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -9,9 +10,13 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
 } from '@/components/ui';
 import { TECH_BLOG_CATEGORIES } from '../../lib/constants';
-import ImageUpload from '@/lib/ImageUpload';
+import { ImageUpload } from '../ImageUpload';
 import { 
   Bold, 
   Italic, 
@@ -27,10 +32,8 @@ import {
   Image as ImageIcon,
   Minus,
 } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-export const TechBlogEditor = ({ content, onSave, onClose }) => {
-
+export const MarkdownEditor = ({ content, onSave, onClose }) => {
   const [formData, setFormData] = useState(content || {
     title: '',
     subtitle: '',
@@ -49,103 +52,33 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
     }
   });
   const [preview, setPreview] = useState('');
-  const [activeTab, setActiveTab] = useState('write');
   const textareaRef = useRef(null);
-  
+
   useEffect(() => {
-    if (!formData.content) {
-      setPreview(''); // Clear preview if no content
-      return;
-    }
-  
-    const timeoutId = setTimeout(() => {
-      let html = formData.content;
+    // Simple markdown to HTML conversion for preview
+    let html = formData.content
+      .replace(/# (.*$)/gm, '<h1>$1</h1>')
+      .replace(/## (.*$)/gm, '<h2>$1</h2>')
+      .replace(/### (.*$)/gm, '<h3>$1</h3>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/~~(.*?)~~/g, '<del>$1</del>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+      .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>')
+      .replace(/!\[(.*?)\]\((.*?)\)/g, '<img src="$2" alt="$1" style="max-width:100%">')
+      .replace(/^\> (.*$)/gm, '<blockquote>$1</blockquote>')
+      .replace(/^\- (.*$)/gm, '<ul><li>$1</li></ul>')
+      .replace(/^(\d+)\. (.*$)/gm, '<ol><li>$2</li></ol>')
+      .replace(/^\-\- (.*$)/gm, '<ul style="margin-left:20px"><li>$1</li></ul>')
+      .replace(/^---$/gm, '<hr>')
+      .replace(/\n/g, '<br>');
       
-      // Process code blocks first to avoid conflicts with other formatting
-      html = html.replace(/```([\s\S]*?)```/g, (match, codeContent) => {
-        return `<pre class="bg-gray-100 p-3 my-3 rounded overflow-x-auto"><code>${codeContent.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>`;
-      });
+    // Fix lists (merge adjacent list items)
+    html = html.replace(/<\/ul><ul>/g, '')
+      .replace(/<\/ol><ol>/g, '');
       
-      // Inline code
-      html = html.replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded font-mono text-sm">$1</code>');
-      
-      // Process headings (make sure to match at line beginning)
-      html = html.replace(/^# (.*)$/gm, '<h1 class="text-2xl font-bold mt-6 mb-3">$1</h1>');
-      html = html.replace(/^## (.*)$/gm, '<h2 class="text-xl font-bold mt-5 mb-2">$1</h2>');
-      html = html.replace(/^### (.*)$/gm, '<h3 class="text-lg font-bold mt-4 mb-2">$1</h3>');
-      
-      // Process blockquotes - handle multi-line blockquotes
-      html = html.replace(/^> (.*)(?:\n^> (.*))*$/gm, (match) => {
-        const content = match.split('\n')
-          .map(line => line.replace(/^> (.*)$/, '$1'))
-          .join('<br>');
-        return `<blockquote class="border-l-4 border-gray-300 pl-4 py-1 my-4 italic text-gray-700">${content}</blockquote>`;
-      });
-      
-      // Process ordered lists - match consecutive numbered lines
-      html = html.replace(/^(\d+)\. (.*)(?:\n^(\d+)\. (.*))*$/gm, (match) => {
-        const items = match.split('\n')
-          .map(line => {
-            const itemMatch = line.match(/^(\d+)\. (.*)$/);
-            return itemMatch ? `<li>${itemMatch[2]}</li>` : line;
-          })
-          .join('');
-        return `<ol class="list-decimal pl-6 my-4">${items}</ol>`;
-      });
-      
-      // Process unordered lists - match consecutive bulleted lines
-      html = html.replace(/^- (.*)(?:\n^- (.*))*$/gm, (match) => {
-        const items = match.split('\n')
-          .map(line => {
-            const itemMatch = line.match(/^- (.*)$/);
-            return itemMatch ? `<li>${itemMatch[1]}</li>` : line;
-          })
-          .join('');
-        return `<ul class="list-disc pl-6 my-4">${items}</ul>`;
-      });
-      
-      // Process text formatting
-      html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-      html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-      html = html.replace(/~~(.*?)~~/g, '<del>$1</del>');
-      
-      // Process links with styling
-      html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" class="text-blue-600 hover:underline">$1</a>');
-      
-      // Process images with styling
-      html = html.replace(/!\[(.*?)\]\((.*?)\)/g, '<img src="$2" alt="$1" class="max-w-full h-auto my-4 rounded" />');
-      
-      // Process horizontal rule
-      html = html.replace(/^---$/gm, '<hr class="my-6 border-t border-gray-300" />');
-      
-      // Process paragraphs and line breaks
-      // Split into paragraphs on double newlines
-      const paragraphs = html.split(/\n\n+/);
-      
-      html = paragraphs.map(para => {
-        // Skip wrapping if paragraph already contains block-level HTML
-        if (
-          para.startsWith('<h1') || 
-          para.startsWith('<h2') || 
-          para.startsWith('<h3') || 
-          para.startsWith('<ul') || 
-          para.startsWith('<ol') || 
-          para.startsWith('<blockquote') || 
-          para.startsWith('<pre') ||
-          para.startsWith('<hr')
-        ) {
-          return para;
-        }
-        
-        // Replace single newlines with <br> tags
-        const withLineBreaks = para.replace(/\n/g, '<br>');
-        return `<p class="my-3">${withLineBreaks}</p>`;
-      }).join('\n\n');
-      
-      setPreview(html);
-    }, 300);
-  
-    return () => clearTimeout(timeoutId);
+    setPreview(html);
   }, [formData.content]);
 
   const insertMarkdown = (markdownType) => {
@@ -171,26 +104,10 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
         replacement = `[${selectedText || 'link text'}](https://example.com)`;
         break;
       case 'ul':
-        // Fix for list - handle multiple lines
-        if (selectedText.includes('\n')) {
-          replacement = selectedText
-            .split('\n')
-            .map(line => line.trim() ? `- ${line}` : '')
-            .join('\n');
-        } else {
-          replacement = `- ${selectedText || 'list item'}`;
-        }
+        replacement = `- ${selectedText || 'list item'}`;
         break;
       case 'ol':
-        // Fix for ordered list - handle multiple lines
-        if (selectedText.includes('\n')) {
-          replacement = selectedText
-            .split('\n')
-            .map((line, i) => line.trim() ? `${i+1}. ${line}` : '')
-            .join('\n');
-        } else {
-          replacement = `1. ${selectedText || 'list item'}`;
-        }
+        replacement = `1. ${selectedText || 'list item'}`;
         break;
       case 'code':
         replacement = selectedText.includes('\n') 
@@ -198,15 +115,7 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
           : `\`${selectedText || 'inline code'}\``;
         break;
       case 'quote':
-        // Fix for blockquote - handle multiple lines
-        if (selectedText.includes('\n')) {
-          replacement = selectedText
-            .split('\n')
-            .map(line => line.trim() ? `> ${line}` : '')
-            .join('\n');
-        } else {
-          replacement = `> ${selectedText || 'blockquote'}`;
-        }
+        replacement = `> ${selectedText || 'blockquote'}`;
         break;
       case 'h1':
         replacement = `# ${selectedText || 'Heading 1'}`;
@@ -243,13 +152,13 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
   };
 
   const handleImageUpload = (imageType, url) => {
-    setFormData(prevData => ({
-      ...prevData,
+    setFormData({
+      ...formData,
       images: {
-        ...prevData.images,
+        ...formData.images,
         [imageType]: url
       }
-    }));
+    });
   };
 
   return (
@@ -262,7 +171,7 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
           <label className="block text-sm font-medium mb-1">Title</label>
           <Input
             value={formData.title}
-            onChange={(e) => setFormData(prevData => ({ ...prevData, title: e.target.value }))}
+            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             required
           />
         </div>
@@ -270,7 +179,7 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
           <label className="block text-sm font-medium mb-1">Category</label>
           <Select
             value={formData.category}
-            onValueChange={(value) => setFormData(prevData => ({ ...prevData, category: value }))}
+            onValueChange={(value) => setFormData({ ...formData, category: value })}
           >
             <SelectTrigger>
               <SelectValue />
@@ -292,7 +201,7 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
         <label className="block text-sm font-medium mb-1">Subtitle</label>
         <Input
           value={formData.subtitle}
-          onChange={(e) => setFormData(prevData => ({ ...prevData, subtitle: e.target.value }))}
+          onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })}
         />
       </div>
 
@@ -443,7 +352,7 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
             </Button>
           </div>
           
-          <Tabs defaultValue="write" value={activeTab} onValueChange={setActiveTab}>
+          <Tabs defaultValue="write">
             <TabsList className="w-full bg-gray-50 border-b">
               <TabsTrigger value="write" className="flex-1">Write</TabsTrigger>
               <TabsTrigger value="preview" className="flex-1">Preview</TabsTrigger>
@@ -453,7 +362,7 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
                 ref={textareaRef}
                 className="w-full min-h-[400px] p-4 border-none outline-none font-mono text-sm"
                 value={formData.content}
-                onChange={(e) => setFormData(prevData => ({ ...prevData, content: e.target.value }))}
+                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                 required
               />
             </TabsContent>
@@ -472,10 +381,10 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
           <label className="block text-sm font-medium mb-1">Author Name</label>
           <Input
             value={formData.author.name}
-            onChange={(e) => setFormData(prevData => ({
-              ...prevData,
-              author: { ...prevData.author, name: e.target.value }
-            }))}
+            onChange={(e) => setFormData({
+              ...formData,
+              author: { ...formData.author, name: e.target.value }
+            })}
             required
           />
         </div>
@@ -484,10 +393,10 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
           <Input
             type="email"
             value={formData.author.email}
-            onChange={(e) => setFormData(prevData => ({
-              ...prevData,
-              author: { ...prevData.author, email: e.target.value }
-            }))}
+            onChange={(e) => setFormData({
+              ...formData,
+              author: { ...formData.author, email: e.target.value }
+            })}
             required
           />
         </div>
@@ -497,10 +406,10 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
         <label className="block text-sm font-medium mb-1">Tags</label>
         <Input
           value={formData.tags.join(', ')}
-          onChange={(e) => setFormData(prevData => ({
-            ...prevData,
+          onChange={(e) => setFormData({
+            ...formData,
             tags: e.target.value.split(',').map(tag => tag.trim()).filter(Boolean)
-          }))}
+          })}
           placeholder="Enter tags separated by commas"
         />
       </div>
@@ -509,7 +418,7 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
         <label className="block text-sm font-medium mb-1">Status</label>
         <Select
           value={formData.status}
-          onValueChange={(value) => setFormData(prevData => ({ ...prevData, status: value }))}
+          onValueChange={(value) => setFormData({ ...formData, status: value })}
         >
           <SelectTrigger>
             <SelectValue />

@@ -1,7 +1,5 @@
-// src/app/admin/Dashboard/components/ContentSection.js
 'use client';
-
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { Plus, Loader2 } from 'lucide-react';
 import {
   Dialog,
@@ -18,6 +16,17 @@ import { ContentList } from './ContentList';
 import { api } from '../lib/api';
 import { Pagination } from './Pagination';
 
+// Lazy-loaded editor components
+const WritingEditor = React.lazy(() => 
+  import('./editors/WritingEditor').then(mod => ({ default: mod.WritingEditor }))
+);
+const TechBlogEditor = React.lazy(() => 
+  import('./editors/TechBlogEditor').then(mod => ({ default: mod.TechBlogEditor }))
+);
+const ProjectEditor = React.lazy(() => 
+  import('./editors/ProjectEditor').then(mod => ({ default: mod.ProjectEditor }))
+);
+
 export const ContentSection = ({ type, title }) => {
   console.log({type,title})
   const [items, setItems] = useState([]);
@@ -30,8 +39,6 @@ export const ContentSection = ({ type, title }) => {
     total: 1,
     pages: 1
   });
-
-
 
   const loadItems = useCallback(async (page = 1) => {
     try {
@@ -79,11 +86,11 @@ export const ContentSection = ({ type, title }) => {
     } finally {
       setLoading(false);
     }
-}, [type]); // Include type in dependencies
+  }, [type]);
 
-useEffect(() => {
-  loadItems();
-}, [type, loadItems]);
+  useEffect(() => {
+    loadItems();
+  }, [type, loadItems]);
   
   const handleSave = async (formData) => {
     try {
@@ -134,18 +141,19 @@ useEffect(() => {
     setTimeout(() => setAlert(null), 3000);
   };
 
-  const getEditor = () => {
+  // Determine which Editor component to use
+  const EditorComponent = React.useMemo(() => {
     switch (type) {
       case 'writings':
-        return import('./editors/WritingEditor').then(mod => mod.WritingEditor);
+        return WritingEditor;
       case 'techblog':
-        return import('./editors/TechBlogEditor').then(mod => mod.TechBlogEditor);
+        return TechBlogEditor;
       case 'projects':
-        return import('./editors/ProjectEditor').then(mod => mod.ProjectEditor);
+        return ProjectEditor;
       default:
         return null;
     }
-  };
+  }, [type]);
 
   return (
     <div className="space-y-4">
@@ -162,10 +170,13 @@ useEffect(() => {
         <h2 className="text-2xl font-semibold">{title}</h2>
         <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
           <DialogTrigger asChild>
-           {/* <Button onClick={() => setSelectedItem(null)}>
+            <Button onClick={() => {
+              setSelectedItem(null);
+              setIsEditorOpen(true);
+            }}>
               <Plus size={16} className="mr-2" />
               Add New
-            </Button> */}
+            </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
@@ -173,14 +184,15 @@ useEffect(() => {
                 {selectedItem ? 'Edit Content' : 'Add New Content'}
               </DialogTitle>
             </DialogHeader>
-            {/* Dynamic import of editor component */}
-            {isEditorOpen && getEditor().then(Editor => (
-              <Editor
-                content={selectedItem}
-                onSave={handleSave}
-                onClose={() => setIsEditorOpen(false)}
-              />
-            ))}
+            {isEditorOpen && EditorComponent && (
+              <Suspense fallback={<div>Loading...</div>}>
+                <EditorComponent
+                  content={selectedItem}
+                  onSave={handleSave}
+                  onClose={() => setIsEditorOpen(false)}
+                />
+              </Suspense>
+            )}
           </DialogContent>
         </Dialog>
       </div>

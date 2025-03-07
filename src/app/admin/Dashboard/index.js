@@ -16,30 +16,79 @@ const Dashboard = () => {
     techblog: { total: 0, draft: 0, published: 0 },
     projects: { total: 0, draft: 0, published: 0 }
   });
+  const [isLoading, setIsLoading] = useState(true);
 
+  // Load stats only once when component mounts
   useEffect(() => {
     loadStats();
   }, []);
 
   const loadStats = async () => {
+    setIsLoading(true);
     try {
+      // Fix: Add error handling for each API call
+      const fetchWritings = api.fetchWritings().catch(err => {
+        console.error('Error fetching writings:', err);
+        return [];
+      });
+      
+      const fetchTechBlogs = api.fetchTechBlogs().catch(err => {
+        console.error('Error fetching tech blogs:', err);
+        return [];
+      });
+      
+      const fetchProjects = api.fetchProjects().catch(err => {
+        console.error('Error fetching projects:', err);
+        return [];
+      });
+
       const [writings, techblogs, projects] = await Promise.all([
-        api.fetchWritings(),
-        api.fetchTechBlogs(),
-        api.fetchProjects()
+        fetchWritings,
+        fetchTechBlogs,
+        fetchProjects
       ]);
 
+      // Make sure we have valid arrays before calculating stats
       setStats({
-        writings: calculateStats(writings),
-        techblog: calculateStats(techblogs),
-        projects: calculateStats(projects)
+        writings: calculateStats(Array.isArray(writings) ? writings : []),
+        techblog: calculateStats(Array.isArray(techblogs) ? techblogs : []),
+        projects: calculateStats(Array.isArray(projects) ? projects : [])
       });
     } catch (error) {
       console.error('Error loading stats:', error);
+      // Set default stats on error
+      setStats({
+        writings: { total: 0, draft: 0, published: 0 },
+        techblog: { total: 0, draft: 0, published: 0 },
+        projects: { total: 0, draft: 0, published: 0 }
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const renderContent = () => {
+    // Show loading state if data is being fetched
+    if (isLoading && currentSection === 'dashboard') {
+      return (
+        <div className="space-y-6">
+          <h2 className="text-2xl font-semibold">Dashboard Overview</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {['writings', 'techblog', 'projects'].map((key) => (
+              <div key={key} className="bg-white p-6 rounded-lg shadow-sm animate-pulse">
+                <h3 className="text-lg font-medium capitalize">{key}</h3>
+                <div className="mt-2 space-y-1">
+                  <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                  <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
     switch (currentSection) {
       case 'dashboard':
         return (
@@ -77,8 +126,8 @@ const Dashboard = () => {
                     <div>
                       <h4 className="font-medium capitalize">{key}</h4>
                       <p className="text-sm text-gray-500">
-                      {Math.round((data.published / data.total) * 100) || 0}% published
-                    </p>
+                        {data.total > 0 ? Math.round((data.published / data.total) * 100) : 0}% published
+                      </p>
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="text-center">
