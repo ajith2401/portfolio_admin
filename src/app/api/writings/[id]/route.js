@@ -6,8 +6,19 @@ import { deleteImage, uploadImage } from '@/lib/cloudinary';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function PUT(request, { params }) {
+export async function PUT(request, context) {
   try {
+    // Extract params from context
+    const params = context.params;
+    
+    // Make sure params.id is available
+    if (!params || !params.id) {
+      return NextResponse.json(
+        { error: 'Writing ID is required' },
+        { status: 400 }
+      );
+    }
+    
     await connectDB();
 
     // Get the existing writing
@@ -47,6 +58,7 @@ export async function PUT(request, { params }) {
         // Delete old images from Cloudinary
         if (existingWriting.images) {
           const deletePromises = Object.values(existingWriting.images)
+            .filter(url => url) // Only delete if URL exists
             .map(url => deleteImage(url));
           await Promise.all(deletePromises);
         }
@@ -106,6 +118,7 @@ export async function PUT(request, { params }) {
     );
   }
 }
+
 
 export async function GET(request, { params }) {
   try {
