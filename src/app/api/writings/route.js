@@ -1,7 +1,7 @@
 // src/app/api/writings/route.js
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
-import { Writing, Comment } from '@/models';
+import { Writing } from '@/models';
 import { uploadImage } from '@/lib/cloudinary';
 
 export const runtime = 'nodejs';
@@ -10,6 +10,10 @@ export const dynamic = 'force-dynamic';
 export async function GET(request) {
   try {
     await connectDB();
+    
+    // Debug logging to check if models are properly imported
+    console.log('Writing model:', Writing);
+    
     const { searchParams } = new URL(request.url);
     
     // Build query based on parameters
@@ -48,6 +52,11 @@ export async function GET(request) {
     const limit = parseInt(searchParams.get('limit')) || 12;
     const skip = (page - 1) * limit;
     
+    // Check if Writing model is undefined before using it
+    if (!Writing) {
+      throw new Error('Writing model is not properly imported');
+    }
+    
     const writings = await Writing.find(query)
       .sort(sort)
       .skip(skip)
@@ -79,6 +88,11 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     await connectDB();
+    
+    // Check if Writing model is undefined before using it
+    if (!Writing) {
+      throw new Error('Writing model is not properly imported');
+    }
     
     let writing;
     let imageFile;
