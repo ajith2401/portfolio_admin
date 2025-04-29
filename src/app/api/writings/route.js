@@ -79,29 +79,51 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     await connectDB();
-
-    // Parse the incoming form data
-    const formData = await request.formData();
     
-    // Get the writing data and parse it from JSON string
-    const writingData = formData.get('writing');
-    if (!writingData) {
-      return NextResponse.json(
-        { error: 'Writing data is required' },
-        { status: 400 }
-      );
-    }
-
     let writing;
-    try {
-      writing = JSON.parse(writingData);
-    } catch (error) {
-      return NextResponse.json(
-        { error: 'Invalid writing data format' },
-        { status: 400 }
-      );
+    let imageFile;
+    
+    // Check the content type to determine how to parse the request
+    const contentType = request.headers.get('content-type') || '';
+    
+    if (contentType.includes('multipart/form-data')) {
+      // Handle form data
+      try {
+        const formData = await request.formData();
+        const writingData = formData.get('writing');
+        
+        if (!writingData) {
+          return NextResponse.json(
+            { error: 'Writing data is required' },
+            { status: 400 }
+          );
+        }
+        
+        writing = typeof writingData === 'string' 
+          ? JSON.parse(writingData) 
+          : writingData;
+          
+        imageFile = formData.get('image');
+      } catch (error) {
+        console.error('Error parsing form data:', error);
+        return NextResponse.json(
+          { error: 'Invalid form data' },
+          { status: 400 }
+        );
+      }
+    } else {
+      // Handle JSON data
+      try {
+        writing = await request.json();
+      } catch (error) {
+        console.error('Error parsing JSON data:', error);
+        return NextResponse.json(
+          { error: 'Invalid JSON data' },
+          { status: 400 }
+        );
+      }
     }
-
+    
     // Validate required fields
     if (!writing.title || !writing.category || !writing.body) {
       return NextResponse.json(
@@ -111,7 +133,6 @@ export async function POST(request) {
     }
 
     // Handle image upload if present
-    const imageFile = formData.get('image');
     if (imageFile) {
       try {
         // Convert file to buffer/base64 if needed by your cloudinary setup

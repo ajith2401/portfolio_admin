@@ -1,5 +1,5 @@
 // src/models/writings.model.js
-import mongoose from 'mongoose';
+const mongoose = require('mongoose')
 
 const WritingSchema = new mongoose.Schema({
   category: {
@@ -113,4 +113,4 @@ try {
   Writing = mongoose.model('Writing', WritingSchema);
 }
 
-export { Writing };
+module.exports = Writing;
