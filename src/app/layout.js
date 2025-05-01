@@ -1,7 +1,8 @@
 // src/app/layout.js
 import localFont from "next/font/local";
 import "./globals.css";
-import { Great_Vibes, Inter, Playfair_Display ,Merriweather, DM_Sans, Work_Sans, Poppins } from 'next/font/google';
+import { Great_Vibes, Inter, Playfair_Display, Merriweather, DM_Sans, Work_Sans, Poppins } from 'next/font/google';
+import { Providers } from './providers';
 
 // Initialize the fonts
 const merriweather = Merriweather({
@@ -18,7 +19,6 @@ const poppins = Poppins({
   display: 'swap',
 });
 
-
 const dmSans = DM_Sans({
   subsets: ['latin'],
   variable: '--font-dm-sans',
@@ -30,6 +30,7 @@ const workSans = Work_Sans({
   variable: '--font-work-sans',
   display: 'swap',
 });
+
 const greatVibes = Great_Vibes({
   subsets: ['latin'],
   weight: '400',
@@ -78,19 +79,18 @@ export default function RootLayout({ children }) {
         ${merriweather.variable}
         ${dmSans.variable}
         ${workSans.variable}
-         ${poppins.variable}
+        ${poppins.variable}
       `}
     >
-
-        <body className="min-h-screen bg-background">
+      <body className="min-h-screen bg-background">
+        <Providers>
           <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8">
             <main className="w-full">
               {children}
             </main>
-           
           </div>
-        </body>
-
+        </Providers>
+      </body>
     </html>
   );
 }

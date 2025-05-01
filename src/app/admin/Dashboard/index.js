@@ -1,113 +1,42 @@
 // src/app/admin/Dashboard/index.js
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import { Sidebar } from './components/Sidebar';
 import { ContentSection } from './components/ContentSection';
-import { calculateStats } from './lib/utils';
-import { api } from './lib/api';
+import { useGetStatsQuery } from '@/store/slices/apiSlice';
+import { setCurrentSection } from '@/store/slices/uiSlice';
+import { Loader2 } from 'lucide-react';
 import { Button, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui';
-
+import { DashboardStats } from './DashboardStats';
 const Dashboard = () => {
-  const [currentSection, setCurrentSection] = useState('dashboard');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [stats, setStats] = useState({
-    writings: { total: 0, draft: 0, published: 0 },
-    techblog: { total: 0, draft: 0, published: 0 },
-    projects: { total: 0, draft: 0, published: 0 }
-  });
-  const [isLoading, setIsLoading] = useState(true);
+  const { currentSection, sidebarCollapsed } = useSelector((state) => state.ui);
+  const dispatch = useDispatch();
 
-  // Load stats only once when component mounts
-  useEffect(() => {
-    loadStats();
-  }, []);
+  // Load stats data from RTK Query
+  const { data: statsData, isLoading, error } = useGetStatsQuery();
 
-  const loadStats = async () => {
-    setIsLoading(true);
-    try {
-      // Fix: Add error handling for each API call
-      const fetchWritings = api.fetchWritings().catch(err => {
-        console.error('Error fetching writings:', err);
-        return [];
-      });
-      
-      const fetchTechBlogs = api.fetchTechBlogs().catch(err => {
-        console.error('Error fetching tech blogs:', err);
-        return [];
-      });
-      
-      const fetchProjects = api.fetchProjects().catch(err => {
-        console.error('Error fetching projects:', err);
-        return [];
-      });
-
-      const [writings, techblogs, projects] = await Promise.all([
-        fetchWritings,
-        fetchTechBlogs,
-        fetchProjects
-      ]);
-
-      // Make sure we have valid arrays before calculating stats
-      setStats({
-        writings: calculateStats(Array.isArray(writings) ? writings : []),
-        techblog: calculateStats(Array.isArray(techblogs) ? techblogs : []),
-        projects: calculateStats(Array.isArray(projects) ? projects : [])
-      });
-    } catch (error) {
-      console.error('Error loading stats:', error);
-      // Set default stats on error
-      setStats({
-        writings: { total: 0, draft: 0, published: 0 },
-        techblog: { total: 0, draft: 0, published: 0 },
-        projects: { total: 0, draft: 0, published: 0 }
-      });
-    } finally {
-      setIsLoading(false);
-    }
+  // Handle section selection
+  const handleSectionChange = (section) => {
+    dispatch(setCurrentSection(section));
   };
 
+  // Render the appropriate content based on current section
   const renderContent = () => {
-    // Show loading state if data is being fetched
+    // Show loading state if stats data is being fetched and we're on the dashboard
     if (isLoading && currentSection === 'dashboard') {
       return (
-        <div className="space-y-6">
-          <h2 className="text-2xl font-semibold">Dashboard Overview</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {['writings', 'techblog', 'projects'].map((key) => (
-              <div key={key} className="bg-white p-6 rounded-lg shadow-sm animate-pulse">
-                <h3 className="text-lg font-medium capitalize">{key}</h3>
-                <div className="mt-2 space-y-1">
-                  <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                  <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-                  <div className="h-4 bg-gray-200 rounded w-1/3"></div>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="flex flex-col items-center justify-center h-64">
+          <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
+          <p className="text-gray-500">Loading dashboard data...</p>
         </div>
       );
     }
 
     switch (currentSection) {
       case 'dashboard':
-        return (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-semibold">Dashboard Overview</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {Object.entries(stats).map(([key, data]) => (
-                <div key={key} className="bg-white p-6 rounded-lg shadow-sm">
-                  <h3 className="text-lg font-medium capitalize">{key}</h3>
-                  <div className="mt-2 space-y-1">
-                    <p>Total: {data.total}</p>
-                    <p className="text-green-600">Published: {data.published}</p>
-                    <p className="text-yellow-600">Draft: {data.draft}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
+        return <DashboardStats stats={statsData || {}} />;
       case 'writings':
         return <ContentSection type="writings" title="Writings" />;
       case 'tech-blog':
@@ -121,7 +50,7 @@ const Dashboard = () => {
             <div className="bg-white p-6 rounded-lg shadow-sm">
               <h3 className="text-lg font-medium mb-4">Content Performance</h3>
               <div className="space-y-4">
-                {Object.entries(stats).map(([key, data]) => (
+                {statsData && Object.entries(statsData).map(([key, data]) => (
                   <div key={key} className="flex items-center justify-between p-3 border rounded">
                     <div>
                       <h4 className="font-medium capitalize">{key}</h4>
@@ -185,13 +114,43 @@ const Dashboard = () => {
     }
   };
 
+  // Render error state if stats fetching failed
+  if (error && currentSection === 'dashboard') {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Sidebar 
+          collapsed={sidebarCollapsed} 
+          currentSection={currentSection}
+          setCurrentSection={handleSectionChange}
+        />
+        
+        <main className={`transition-all duration-300 ${
+          sidebarCollapsed ? 'ml-16' : 'ml-64'
+        }`}>
+          <div className="p-6">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+              <h2 className="text-lg font-medium mb-2">Error Loading Dashboard Data</h2>
+              <p>{error.message || 'Could not load dashboard statistics. Please try again.'}</p>
+              <Button 
+                variant="outline" 
+                className="mt-2" 
+                onClick={() => window.location.reload()}
+              >
+                Retry
+              </Button>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Sidebar 
         collapsed={sidebarCollapsed} 
-        toggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
         currentSection={currentSection}
-        setCurrentSection={setCurrentSection}
+        setCurrentSection={handleSectionChange}
       />
       
       <main className={`transition-all duration-300 ${
@@ -206,3 +165,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+

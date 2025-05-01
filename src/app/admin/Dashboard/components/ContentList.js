@@ -1,162 +1,284 @@
-// src/app/admin/Dashboard/components/ContentList.js
 'use client';
 
-import React, { useState } from 'react';
-import { Search, Edit, Trash2, Image } from 'lucide-react';
-import {
+import React, { useState, useMemo } from 'react';
+import { 
+  Edit, 
+  Trash2, 
+  Globe, 
+  Clock, 
+  ArrowUp, 
+  ArrowDown,
+  Tag,
+  Calendar 
+} from 'lucide-react';
+import { 
+  Badge,
   Button,
-  Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Card,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow 
 } from '@/components/ui';
-import { WRITING_CATEGORIES, TECH_BLOG_CATEGORIES, PROJECT_CATEGORIES } from '../lib/constants';
+import { formatDistanceToNow } from 'date-fns';
 
-export const ContentList = ({ type, items = [], onEdit, onDelete, onStatusChange, onGenerateImage }) => {
-  console.log({items});
-  
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [categoryFilter, setCategoryFilter] = useState('all');
+export const ContentList = ({ 
+  type, 
+  items = [], 
+  onEdit, 
+  onDelete, 
+  onStatusChange 
+}) => {
+  // State for sorting
+  const [sortConfig, setSortConfig] = useState({
+    key: 'createdAt',
+    direction: 'desc'
+  });
 
-  const getCategories = () => {
-    switch (type) {
-      case 'writings':
-        return WRITING_CATEGORIES;
-      case 'tech-blog':
-        return TECH_BLOG_CATEGORIES;
-      case 'projects':
-        return PROJECT_CATEGORIES;
-      default:
-        return [];
+  // Format date for display
+  const formatDate = (dateString) => {
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true });
+    } catch (error) {
+      return 'Invalid date';
     }
   };
 
-  const itemsArray = Array.isArray(items) ? items : [];
+  // Handle sorting column click
+  const handleSort = (key) => {
+    setSortConfig(prevConfig => ({
+      key,
+      direction: 
+        prevConfig.key === key 
+          ? (prevConfig.direction === 'asc' ? 'desc' : 'asc')
+          : 'asc'
+    }));
+  };
 
-  const filteredItems = itemsArray.filter(item => {
-    if (!item) return false;
-    const matchesSearch = item.title?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
-    const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
-    return matchesSearch && matchesStatus && matchesCategory;
-  });
+  // Sorted and filtered items
+  const sortedItems = useMemo(() => {
+    if (!items || items.length === 0) return [];
+    
+    return [...items].sort((a, b) => {
+      // Handle different sorting scenarios
+      let valueA, valueB;
+      
+      switch (sortConfig.key) {
+        case 'createdAt':
+        case 'updatedAt':
+          valueA = new Date(a[sortConfig.key] || a.createdAt).getTime();
+          valueB = new Date(b[sortConfig.key] || b.createdAt).getTime();
+          break;
+        case 'title':
+          valueA = a.title.toLowerCase();
+          valueB = b.title.toLowerCase();
+          break;
+        case 'category':
+          valueA = (a.category || '').toLowerCase();
+          valueB = (b.category || '').toLowerCase();
+          break;
+        case 'status':
+          // Prioritize published items
+          valueA = a.status === 'published' ? 1 : 0;
+          valueB = b.status === 'published' ? 1 : 0;
+          break;
+        default:
+          valueA = a[sortConfig.key] || '';
+          valueB = b[sortConfig.key] || '';
+      }
+      
+      // Apply sorting direction
+      return sortConfig.direction === 'asc'
+        ? (valueA > valueB ? 1 : -1)
+        : (valueA < valueB ? 1 : -1);
+    });
+  }, [items, sortConfig]);
 
-  return (
-    <div className="space-y-6">
-      {/* Header Section */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{type === 'tech-blog' ? 'Tech Blog' : type.charAt(0).toUpperCase() + type.slice(1)}</h1>
-        <Button onClick={() => onEdit(null)}>Add New</Button>
-      </div>
+  // Get status badge variant
+  const getStatusBadgeVariant = (status) => {
+    switch (status) {
+      case 'published':
+        return 'success';
+      case 'draft':
+        return 'secondary';
+      default:
+        return 'default';
+    }
+  };
 
-      {/* Filters Section */}
-      <div className="grid gap-4 md:grid-cols-3">
-        {/* Search Box */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-          <Input
-            placeholder="Search..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 w-full bg-white"
-          />
-        </div>
-
-        {/* Status Filter */}
-        <div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full bg-white">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="published">Published</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Category Filter */}
-        <div>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-full bg-white">
-              <SelectValue placeholder="Filter by category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {getCategories().map(category => (
-                <SelectItem key={category} value={category}>
-                  {category.split('-').map(word => 
-                    word.charAt(0).toUpperCase() + word.slice(1)
-                  ).join(' ')}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Content List */}
-      <div className="bg-white rounded-lg shadow divide-y">
-      {console.log({filteredItems})}
-        {filteredItems.map((item) => (
-          <div key={item._id} className="p-4 flex items-center justify-between hover:bg-gray-50">
-            <div className="flex-1">
-              <h3 className="font-medium text-gray-900">{item.title}</h3>
-              <div className="flex items-center gap-2 mt-1">
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                  ${item.status === 'published' 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-yellow-100 text-yellow-800'
-                  }`}
-                >
-                  {item.status}
-                </span>
-                <span className="text-sm text-gray-500">
-                  {item.category} • {new Date(item.createdAt).toLocaleDateString()}
-                </span>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-3">
-              {type === 'writings' && (
-                <button
-                  // onClick={() => onGenerateImage(item._id)}
-                  className="p-1 hover:bg-gray-100 rounded-full"
-                  title="Generate Image"
-                >
-                  <Image className="w-5 h-5 text-gray-500" />
-                </button>
-              )}
-
-              <button
-                onClick={() => onEdit(item)}
-                className="p-1 hover:bg-gray-100 rounded-full"
-                title="Edit"
-              >
-                <Edit className="w-5 h-5 text-blue-500" />
-              </button>
-
-              <button
-                onClick={() => onDelete(item._id)}
-                className="p-1 hover:bg-gray-100 rounded-full"
-                title="Delete"
-              >
-                <Trash2 className="w-5 h-5 text-red-500" />
-              </button>
-            </div>
-          </div>
-        ))}
-
-        {filteredItems.length === 0 && (
-          <div className="p-8 text-center text-gray-500">
-            No items found
-          </div>
+  // Render sortable header
+  const renderSortableHeader = (label, key) => {
+    const isSorted = sortConfig.key === key;
+    return (
+      <div 
+        className="flex items-center cursor-pointer hover:text-gray-900"
+        onClick={() => handleSort(key)}
+      >
+        {label}
+        {isSorted && (
+          <span className="ml-1">
+            {sortConfig.direction === 'asc' ? (
+              <ArrowUp className="h-3 w-3" />
+            ) : (
+              <ArrowDown className="h-3 w-3" />
+            )}
+          </span>
         )}
       </div>
-    </div>
+    );
+  };
+
+  return (
+    <Card>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-1/3">
+                {renderSortableHeader('Title', 'title')}
+              </TableHead>
+              <TableHead className="hidden md:table-cell">
+                {renderSortableHeader('Category', 'category')}
+              </TableHead>
+              <TableHead className="hidden md:table-cell">
+                {renderSortableHeader('Status', 'status')}
+              </TableHead>
+              <TableHead className="hidden lg:table-cell">
+                {renderSortableHeader('Created', 'createdAt')}
+              </TableHead>
+              <TableHead className="hidden lg:table-cell">
+                {renderSortableHeader('Updated', 'updatedAt')}
+              </TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedItems.map((item) => (
+              <TableRow key={item._id} className="hover:bg-gray-50">
+                {/* Title Cell */}
+                <TableCell>
+                  <div className="flex items-center">
+                    {/* Thumbnail */}
+                    <div className="w-10 h-10 mr-3 bg-gray-100 rounded overflow-hidden flex-shrink-0">
+                      {item.images?.small ? (
+                        <img 
+                          src={item.images.small} 
+                          alt={item.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gray-200">
+                          <Tag className="w-5 h-5 text-gray-400" />
+                        </div>
+                      )}
+                    </div>
+                    {/* Title and Mobile Details */}
+                    <div>
+                      <div className="font-medium truncate max-w-[200px]">
+                        {item.title}
+                      </div>
+                      <div className="text-xs text-gray-500 flex md:hidden mt-1 space-x-2">
+                        <Badge variant={getStatusBadgeVariant(item.status)}>
+                          {item.status}
+                        </Badge>
+                        <span>{item.category}</span>
+                      </div>
+                    </div>
+                  </div>
+                </TableCell>
+
+                {/* Category Cell */}
+                <TableCell className="hidden md:table-cell">
+                  {item.category}
+                </TableCell>
+
+                {/* Status Cell */}
+                <TableCell className="hidden md:table-cell">
+                  <Badge variant={getStatusBadgeVariant(item.status)}>
+                    {item.status}
+                  </Badge>
+                </TableCell>
+
+                {/* Created Date Cell */}
+                <TableCell className="hidden lg:table-cell">
+                  <div className="flex items-center text-sm text-gray-500">
+                    <Calendar className="w-3 h-3 mr-1" />
+                    {new Date(item.createdAt).toLocaleDateString()}
+                  </div>
+                </TableCell>
+
+                {/* Updated Date Cell */}
+                <TableCell className="hidden lg:table-cell">
+                  <div className="text-sm text-gray-500">
+                    {formatDate(item.updatedAt || item.createdAt)}
+                  </div>
+                </TableCell>
+
+                {/* Actions Cell */}
+                <TableCell className="text-right">
+                  <div className="flex justify-end space-x-1">
+                    {/* Edit Button */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={() => onEdit(item)}
+                      title="Edit"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+
+                    {/* Publish/Unpublish Toggle */}
+                    {item.status === 'draft' ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-green-500 hover:text-green-700 hover:bg-green-50"
+                        onClick={() => onStatusChange(item._id, 'published')}
+                        title="Publish"
+                      >
+                        <Globe className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-amber-500 hover:text-amber-700 hover:bg-amber-50"
+                        onClick={() => onStatusChange(item._id, 'draft')}
+                        title="Unpublish"
+                      >
+                        <Clock className="h-4 w-4" />
+                      </Button>
+                    )}
+
+                    {/* Delete Button */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                      onClick={() => onDelete(item._id)}
+                      title="Delete"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+
+            {/* Empty State */}
+            {sortedItems.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                  No items found
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </Card>
   );
 };
