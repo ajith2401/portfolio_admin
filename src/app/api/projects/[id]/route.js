@@ -1,7 +1,7 @@
 // src/app/api/projects/[id]/route.js
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
-import { Writing, Comment } from '@/models';
+import { Comment } from '@/models';
 import { deleteImage, uploadImage } from '@/lib/cloudinary';
 import { Project } from '@/models/project.model';
 export const runtime = 'nodejs';
@@ -10,12 +10,13 @@ export const dynamic = 'force-dynamic';
 export async function PUT(request, { params }) {
   try {
     await connectDB();
+    const { id } =  await params; // Extract id properly
 
-    // Get the existing writing
-    const existingWriting = await Project.findById(params.id);
-    if (!existingWriting) {
+    // Get the existing project
+    const existingProject = await Project.findById(id);
+    if (!existingProject) {
       return NextResponse.json(
-        { error: 'Writing not found' }, 
+        { error: 'Project not found' }, 
         { status: 404 }
       );
     }
@@ -68,9 +69,9 @@ export async function PUT(request, { params }) {
       }
     }
 
-    // Update writing
-    const updatedWriting = await Project.findByIdAndUpdate(
-      params.id,
+    // Update project
+    const updatedProject = await Project.findByIdAndUpdate(
+      id,
       { 
         $set: {
           ...updates,
@@ -87,9 +88,9 @@ export async function PUT(request, { params }) {
       options: { sort: { createdAt: -1 } }
     });
 
-    return NextResponse.json(updatedWriting);
+    return NextResponse.json(updatedProject);
   } catch (error) {
-    console.error('Error updating writing:', error);
+    console.error('Error updating project:', error);
     
     // Handle validation errors
     if (error.name === 'ValidationError') {
@@ -102,7 +103,7 @@ export async function PUT(request, { params }) {
     }
 
     return NextResponse.json(
-      { error: 'Failed to update writing' }, 
+      { error: 'Failed to update project' }, 
       { status: 500 }
     );
   }
@@ -111,52 +112,55 @@ export async function PUT(request, { params }) {
 export async function GET(request, { params }) {
   try {
     await connectDB();
-    const writing = await Project.findById(params.id).populate('comments');
-    if (!writing) {
-      return NextResponse.json({ error: 'Writing not found' }, { status: 404 });
+    const { id } =await params; // Extract id properly
+    
+    const project = await Project.findById(id).populate('comments');
+    if (!project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
-    return NextResponse.json(writing);
+    return NextResponse.json(project);
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  }
+}
 
 export async function DELETE(request, { params }) {
   try {
     await connectDB();
+    const { id } = await params; // Extract id properly
     
-    // First find the writing to get image URLs
-    const writing = await Project.findById(params.id);
+    // First find the project to get image URLs
+    const project = await Project.findById(id);
     
-    if (!writing) {
+    if (!project) {
       return NextResponse.json(
-        { error: 'Writing not found' }, 
+        { error: 'Project not found' }, 
         { status: 404 }
       );
     }
 
     // Delete images from Cloudinary if they exist
-    if (Project.images) {
-      const imagePromises = Object.values(Project.images)
+    if (project.images) {
+      const imagePromises = Object.values(project.images)
         .map(url => deleteImage(url));
       await Promise.all(imagePromises);
     }
 
     // Delete all associated comments
-    if (Project.comments && Project.comments.length > 0) {
-      await Comment.deleteMany({ _id: { $in: Project.comments } });
+    if (project.comments && project.comments.length > 0) {
+      await Comment.deleteMany({ _id: { $in: project.comments } });
     }
 
-    // Delete the writing
-    await Project.findByIdAndDelete(params.id);
+    // Delete the project
+    await Project.findByIdAndDelete(id);
 
     return NextResponse.json({ 
-      message: 'Writing and associated data deleted successfully' 
+      message: 'Project and associated data deleted successfully' 
     });
   } catch (error) {
-    console.error('Error deleting writing:', error);
+    console.error('Error deleting project:', error);
     return NextResponse.json(
-      { error: 'Failed to delete writing' }, 
+      { error: 'Failed to delete project' }, 
       { status: 500 }
     );
   }

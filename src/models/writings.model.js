@@ -25,6 +25,11 @@ const WritingSchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  status: {
+    type: String,
+    enum: ['draft', 'published'],
+    default: 'draft',
+  },
   images: {
     small: String,
     medium: String,

@@ -6,8 +6,8 @@ import { NextResponse } from "next/server";
 export async function GET(request, { params }) {
     try {
       await connectDB();
-      
-      const blog = await TechBlog.findById(params.id);
+      const { id } =  await params; // Extract id properly
+      const blog = await TechBlog.findById(id);
       if (!blog) {
         return NextResponse.json(
           { error: 'Tech blog not found' },
@@ -29,10 +29,10 @@ export async function GET(request, { params }) {
   export async function PUT(request, { params }) {
     try {
       await connectDB();
-      
+      const { id } =  await params; // Extract id properly
       const data = await request.json();
       const blog = await TechBlog.findByIdAndUpdate(
-        params.id,
+        id,
         { $set: data },
         { new: true, runValidators: true }
       );
@@ -58,8 +58,8 @@ export async function GET(request, { params }) {
   export async function DELETE(request, { params }) {
     try {
       await connectDB();
-      
-      const blog = await TechBlog.findByIdAndDelete(params.id);
+      const { id } =  await params; // Extract id properly
+      const blog = await TechBlog.findByIdAndDelete(id);
       if (!blog) {
         return NextResponse.json(
           { error: 'Tech blog not found' },

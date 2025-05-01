@@ -6,23 +6,26 @@ import { deleteImage, uploadImage } from '@/lib/cloudinary';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function PUT(request, context) {
+export async function PUT(request, { params }) {
   try {
     // Extract params from context
-    const params = context.params;
+    const { id } =  await params; 
     
-    // Make sure params.id is available
-    if (!params || !params.id) {
-      return NextResponse.json(
-        { error: 'Writing ID is required' },
-        { status: 400 }
-      );
-    }
+    // // Make sure params.id is available
+    // if (!params || !params.id) {
+    //   return NextResponse.json(
+    //     { error: 'Writing ID is required' },
+    //     { status: 400 }
+    //   );
+    // }
+    
+    // // // Extract id to avoid Next.js warnings
+    // // const { id } = await params;
     
     await connectDB();
 
     // Get the existing writing
-    const existingWriting = await Writing.findById(params.id);
+    const existingWriting = await Writing.findById(id);
     if (!existingWriting) {
       return NextResponse.json(
         { error: 'Writing not found' }, 
@@ -82,10 +85,9 @@ export async function PUT(request, context) {
     const isNewlyPublished = existingWriting.status !== 'published' && 
     updates.status === 'published';
     
-
     // Update writing
     const updatedWriting = await Writing.findByIdAndUpdate(
-      params.id,
+      id, // Use the extracted id here
       { 
         $set: {
           ...updates,
@@ -102,12 +104,17 @@ export async function PUT(request, context) {
       options: { sort: { createdAt: -1 } }
     });
 
-        // Send notifications if writing status changed from draft to published
-        if (isNewlyPublished) {
-          notifyWritingSubscribers(updatedWriting).catch(error => {
-            console.error('Error sending writing notifications:', error);
-          });
-        }
+    // Send notifications if writing status changed from draft to published
+    if (isNewlyPublished) {
+      // Check if notifyWritingSubscribers function exists
+      if (typeof notifyWritingSubscribers === 'function') {
+        notifyWritingSubscribers(updatedWriting).catch(error => {
+          console.error('Error sending writing notifications:', error);
+        });
+      } else {
+        console.warn('notifyWritingSubscribers function is not defined');
+      }
+    }
 
     return NextResponse.json(updatedWriting);
   } catch (error) {
@@ -130,11 +137,12 @@ export async function PUT(request, context) {
   }
 }
 
-
 export async function GET(request, { params }) {
   try {
     await connectDB();
-    const writing = await Writing.findById(params.id).populate('comments');
+    const { id } = await params; // Extract id properly
+    
+    const writing = await Writing.findById(id).populate('comments');
     if (!writing) {
       return NextResponse.json({ error: 'Writing not found' }, { status: 404 });
     }
@@ -142,14 +150,15 @@ export async function GET(request, { params }) {
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  }
+}
 
 export async function DELETE(request, { params }) {
   try {
     await connectDB();
+    const { id } = await params; // Extract id properly
     
     // First find the writing to get image URLs
-    const writing = await Writing.findById(params.id);
+    const writing = await Writing.findById(id);
     
     if (!writing) {
       return NextResponse.json(
@@ -171,7 +180,7 @@ export async function DELETE(request, { params }) {
     }
 
     // Delete the writing
-    await Writing.findByIdAndDelete(params.id);
+    await Writing.findByIdAndDelete(id);
 
     return NextResponse.json({ 
       message: 'Writing and associated data deleted successfully' 

@@ -282,27 +282,48 @@ export const ContentSection = ({ type, title }) => {
       );
     }
 
-    return viewMode === 'grid' ? (
-      <ContentGrid
-        type={type}
-        items={items}
-        onEdit={(item) => {
-          setSelectedItem(item);
-          setIsEditorOpen(true);
-        }}
-        onDelete={handleDelete}
-      />
-    ) : (
-      <ContentList
-        type={type}
-        items={items}
-        onEdit={(item) => {
-          setSelectedItem(item);
-          setIsEditorOpen(true);
-        }}
-        onDelete={handleDelete}
-      />
-    );
+// In ContentSection.js
+return viewMode === 'grid' ? (
+  <ContentGrid
+    type={type}
+    items={items}
+    onEdit={(item) => {
+      setSelectedItem(item);
+      setIsEditorOpen(true);
+    }}
+    onDelete={handleDelete}
+    onStatusChange={async (id, status) => {
+      try {
+        // Use the appropriate update mutation based on content type
+        await updateItem({ id, status });
+        showAlert('Status updated successfully', 'success');
+      } catch (error) {
+        console.error('Error updating status:', error);
+        showAlert('Failed to update status', 'destructive');
+      }
+    }}
+  />
+) : (
+  <ContentList
+    type={type}
+    items={items}
+    onEdit={(item) => {
+      setSelectedItem(item);
+      setIsEditorOpen(true);
+    }}
+    onDelete={handleDelete}
+    onStatusChange={async (id, status) => {
+      try {
+        // Use the appropriate update mutation based on content type
+        await updateItem({ id, status });
+        showAlert('Status updated successfully', 'success');
+      } catch (error) {
+        console.error('Error updating status:', error);
+        showAlert('Failed to update status', 'destructive');
+      }
+    }}
+  />
+);
   };
 
   return (

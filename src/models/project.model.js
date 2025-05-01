@@ -28,7 +28,7 @@ const ProjectSchema = new mongoose.Schema({
   category: {
     type: String,
     required: true,
-    enum: ['AI/ML', 'web', 'mobile', 'backend', 'devops', 'other'], // Added AI/ML based on your example
+    enum: ['AI/ML', 'web', 'mobile', 'backend', 'devops', 'other','Web Apps'], // Added AI/ML based on your example
   },
   images: {
     small: String,
@@ -73,6 +73,10 @@ const ProjectSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  comments: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Comment'
+    }],
   updatedAt: {
     type: Date,
     default: Date.now,

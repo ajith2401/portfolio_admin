@@ -22,7 +22,12 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import Image from 'next/image';
 
-export const ContentGrid = ({ type, items = [], onEdit, onDelete, onStatusChange }) => {
+export const ContentGrid = ({   type, 
+  items = [], 
+  onEdit, 
+  onDelete, 
+  onStatusChange 
+}) => {
   // Format date for display
   const formatDate = (dateString) => {
     try {
