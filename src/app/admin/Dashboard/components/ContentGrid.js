@@ -85,6 +85,8 @@ export const ContentGrid = ({ type, items = [], onEdit, onDelete, onStatusChange
           <div className="h-40 relative overflow-hidden">
             {item.images?.medium ? (
               <Image 
+                width={400}  // Specify a fixed width
+                height={160} // Specify a fixed height
                 src={item.images.medium} 
                 alt={item.title}
                 className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"

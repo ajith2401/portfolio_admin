@@ -16,10 +16,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
-  Alert,
-  AlertTitle,
-  AlertDescription,
   Button,
   Input,
   Select,
@@ -36,13 +32,28 @@ import {
   updateSearchFilters, 
   saveFormDraft, 
   clearFormDraft,
-  setViewMode 
+  setViewMode,
+  CONTENT_SECTIONS 
 } from '@/store/slices/uiSlice';
 import { 
   WRITING_CATEGORIES, 
   TECH_BLOG_CATEGORIES, 
   PROJECT_CATEGORIES 
 } from '../lib/constants';
+import { useGetWritingsQuery,
+  useAddWritingMutation,
+  useUpdateWritingMutation,
+  useDeleteWritingMutation,
+  useGetTechBlogsQuery,
+  useAddTechBlogMutation,
+  useUpdateTechBlogMutation,
+  useDeleteTechBlogMutation,
+  useGetProjectsQuery,
+  useAddProjectMutation,
+  useUpdateProjectMutation,
+  useDeleteProjectMutation
+ } from '@/store/slices/apiSlice';
+
 
 // Lazy-loaded editor components
 const WritingEditor = React.lazy(() => 
@@ -55,18 +66,71 @@ const ProjectEditor = React.lazy(() =>
   import('./editors/ProjectEditor').then(mod => ({ default: mod.ProjectEditor }))
 );
 
+// Mapping of content types to queries and mutations
+const CONTENT_TYPE_MAPPING = {
+  [CONTENT_SECTIONS.WRITINGS]: {
+    getQuery: useGetWritingsQuery,
+    addMutation: useAddWritingMutation,
+    updateMutation: useUpdateWritingMutation,
+    deleteMutation: useDeleteWritingMutation,
+    editor: WritingEditor,
+    categories: WRITING_CATEGORIES
+  },
+  [CONTENT_SECTIONS.TECH_BLOG]: {
+    getQuery: useGetTechBlogsQuery,
+    addMutation: useAddTechBlogMutation,
+    updateMutation: useUpdateTechBlogMutation,
+    deleteMutation: useDeleteTechBlogMutation,
+    editor: TechBlogEditor,
+    categories: TECH_BLOG_CATEGORIES
+  },
+  [CONTENT_SECTIONS.PROJECTS]: {
+    getQuery: useGetProjectsQuery,
+    addMutation: useAddProjectMutation,
+    updateMutation: useUpdateProjectMutation,
+    deleteMutation: useDeleteProjectMutation,
+    editor: ProjectEditor,
+    categories: PROJECT_CATEGORIES
+  }
+};
+
 export const ContentSection = ({ type, title }) => {
   const dispatch = useDispatch();
   
-  // Redux state
-  const currentPage = useSelector(state => state.ui.currentPage[type] || 1);
-  const searchFilters = useSelector(state => state.ui.searchFilters[type] || {
-    search: '',
-    category: 'all',
-    status: 'all'
+  // Safely get content type mapping
+  const contentTypeConfig = CONTENT_TYPE_MAPPING[type];
+  if (!contentTypeConfig) {
+    throw new Error(`Unsupported content type: ${type}`);
+  }
+
+  // Destructure content type configuration
+  const { 
+    getQuery, 
+    addMutation, 
+    updateMutation, 
+    deleteMutation, 
+    editor: EditorComponent,
+    categories 
+  } = contentTypeConfig;
+
+  // Redux state selectors with robust fallbacks
+  const currentPage = useSelector(state => 
+    state.ui.currentPage[type] || 1
+  );
+  const searchFilters = useSelector(state => 
+    state.ui.searchFilters[type] || { 
+      search: '', 
+      category: 'all', 
+      status: 'all' 
+    }
+  );
+  const formDrafts = useSelector(state => 
+    state.ui.formDrafts[type] || null
+  );
+  const viewMode = useSelector(state => {
+    const mode = state.ui.viewMode?.[type];
+    return ['grid', 'list'].includes(mode) ? mode : 'grid';
   });
-  const formDrafts = useSelector(state => state.ui.formDrafts[type]);
-  const viewMode = useSelector(state => state.ui.viewMode[type] || 'grid');
 
   // Local state
   const [selectedItem, setSelectedItem] = useState(null);
@@ -74,46 +138,12 @@ export const ContentSection = ({ type, title }) => {
   const [alert, setAlert] = useState(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  // Dynamically select query and mutation hooks based on content type
-  const {
-    useGetQuery,
-    useAddMutation,
-    useUpdateMutation,
-    useDeleteMutation
-  } = useMemo(() => {
-    switch (type) {
-      case 'writings':
-        return {
-          useGetQuery: useGetWritingsQuery,
-          useAddMutation: useAddWritingMutation,
-          useUpdateMutation: useUpdateWritingMutation,
-          useDeleteMutation: useDeleteWritingMutation
-        };
-      case 'tech-blog':
-        return {
-          useGetQuery: useGetTechBlogsQuery,
-          useAddMutation: useAddTechBlogMutation,
-          useUpdateMutation: useUpdateTechBlogMutation,
-          useDeleteMutation: useDeleteTechBlogMutation
-        };
-      case 'projects':
-        return {
-          useGetQuery: useGetProjectsQuery,
-          useAddMutation: useAddProjectMutation,
-          useUpdateMutation: useUpdateProjectMutation,
-          useDeleteMutation: useDeleteProjectMutation
-        };
-      default:
-        throw new Error(`Unsupported content type: ${type}`);
-    }
-  }, [type]);
-
   // Fetch data using RTK Query
   const { 
     data, 
     isLoading, 
     error 
-  } = useGetQuery({ 
+  } = getQuery({ 
     page: currentPage, 
     search: searchFilters.search, 
     category: searchFilters.category, 
@@ -121,43 +151,9 @@ export const ContentSection = ({ type, title }) => {
   });
 
   // Mutations
-  const [addItem] = useAddMutation();
-  const [updateItem] = useUpdateMutation();
-  const [deleteItem] = useDeleteMutation();
-
-  // Determine categories for the current content type
-  const getCategories = useCallback(() => {
-    switch (type) {
-      case 'writings':
-        return WRITING_CATEGORIES;
-      case 'tech-blog':
-        return TECH_BLOG_CATEGORIES;
-      case 'projects':
-        return PROJECT_CATEGORIES;
-      default:
-        return [];
-    }
-  }, [type]);
-
-  // Extract items based on content type
-  const items = useMemo(() => {
-    switch (type) {
-      case 'writings':
-        return data?.writings || [];
-      case 'tech-blog':
-        return data?.techBlogs || [];
-      case 'projects':
-        return data?.projects || [];
-      default:
-        return [];
-    }
-  }, [data, type]);
-
-  // Pagination details
-  const pagination = useMemo(() => 
-    data?.pagination || { total: 0, pages: 1, current: 1 }, 
-    [data]
-  );
+  const [addItem] = addMutation();
+  const [updateItem] = updateMutation();
+  const [deleteItem] = deleteMutation();
 
   // Handle form submission
   const handleSave = async (formData) => {
@@ -189,6 +185,7 @@ export const ContentSection = ({ type, title }) => {
         await deleteItem(id);
         
         // If this is the last item on the page and not the first page
+        const items = getItems(data, type);
         if (items.length === 1 && currentPage > 1) {
           dispatch(setCurrentPage({ section: type, page: currentPage - 1 }));
         }
@@ -224,6 +221,27 @@ export const ContentSection = ({ type, title }) => {
   const toggleViewMode = (mode) => {
     dispatch(setViewMode({ section: type, mode }));
   };
+
+  // Extract items from data
+  const getItems = (data, contentType) => {
+    switch (contentType) {
+      case CONTENT_SECTIONS.WRITINGS:
+        return data?.writings || [];
+      case CONTENT_SECTIONS.TECH_BLOG:
+        return data?.techBlogs || [];
+      case CONTENT_SECTIONS.PROJECTS:
+        return data?.projects || [];
+      default:
+        return [];
+    }
+  };
+
+  // Pagination details
+  const pagination = useMemo(() => 
+    data?.pagination || { total: 0, pages: 1, current: 1 }, 
+    [data]
+  );
+  const items = useMemo(() => getItems(data, type), [data, type]);
 
   // Render content based on loading/error states
   const renderContent = () => {
@@ -287,162 +305,147 @@ export const ContentSection = ({ type, title }) => {
     );
   };
 
-  // Determine appropriate editor component
-  const EditorComponent = useMemo(() => {
-    switch (type) {
-      case 'writings':
-        return WritingEditor;
-      case 'tech-blog':
-        return TechBlogEditor;
-      case 'projects':
-        return ProjectEditor;
-      default:
-        return null;
-    }
-  }, [type]);
-
   return (
     <div className="space-y-4">
-      {/* Alert */}
-      {alert && (
-        <Alert variant={alert.variant}>
-          <AlertTitle>
-            {alert.variant === 'destructive' ? 'Error' : 'Success'}
-          </AlertTitle>
-          <AlertDescription>{alert.message}</AlertDescription>
-        </Alert>
-      )}
+     {/* Header with view mode toggle and filters */}
+     <div className="flex justify-between items-center">
+     <h2 className="text-2xl font-semibold">{title}</h2>
+     <div className="flex items-center space-x-2">
+       {/* View Mode Toggle */}
+       <div className="bg-white border rounded-md p-1 flex">
+         <Button
+           variant={viewMode === 'grid' ? 'default' : 'ghost'}
+           size="sm"
+           className="px-2"
+           onClick={() => toggleViewMode('grid')}
+           title="Grid View"
+         >
+           <Grid size={18} />
+         </Button>
+         <Button
+           variant={viewMode === 'list' ? 'default' : 'ghost'}
+           size="sm"
+           className="px-2"
+           onClick={() => toggleViewMode('list')}
+           title="List View"
+         >
+           <List size={18} />
+         </Button>
+       </div>
 
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-semibold">{title}</h2>
-        <div className="flex items-center space-x-2">
-          {/* View Mode Toggle */}
-          <div className="bg-white border rounded-md p-1 flex">
-            <Button
-              variant={viewMode === 'grid' ? 'default' : 'ghost'}
-              size="sm"
-              className="px-2"
-              onClick={() => toggleViewMode('grid')}
-            >
-              <Grid size={18} />
-            </Button>
-            <Button
-              variant={viewMode === 'list' ? 'default' : 'ghost'}
-              size="sm"
-              className="px-2"
-              onClick={() => toggleViewMode('list')}
-            >
-              <List size={18} />
-            </Button>
-          </div>
+       {/* Filter Toggle */}
+       <Button
+         variant="outline"
+         size="sm"
+         onClick={() => setIsFilterOpen(!isFilterOpen)}
+         title={isFilterOpen ? "Hide Filters" : "Show Filters"}
+       >
+         {isFilterOpen ? <XCircle size={16} /> : <Filter size={16} />}
+       </Button>
 
-          {/* Filter Toggle */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsFilterOpen(!isFilterOpen)}
-          >
-            {isFilterOpen ? <XCircle size={16} /> : <Filter size={16} />}
-          </Button>
+       {/* Add New Button */}
+       <Button 
+         onClick={() => {
+           setSelectedItem(null);
+           setIsEditorOpen(true);
+         }}
+       >
+         <Plus size={16} className="mr-1" />
+         Add New
+       </Button>
+     </div>
+   </div>
 
-          {/* Add New Button */}
-          <Button onClick={() => setIsEditorOpen(true)}>
-            <Plus size={16} className="mr-1" />
-            Add New
-          </Button>
-        </div>
-      </div>
+   {/* Filters */}
+   {isFilterOpen && (
+     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+       {/* Search Input */}
+       <div className="relative">
+         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+         <Input
+           placeholder="Search..."
+           value={searchFilters.search}
+           onChange={(e) => handleFilterChange('search', e.target.value)}
+           className="pl-10 w-full bg-white"
+         />
+       </div>
 
-      {/* Filters */}
-      {isFilterOpen && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Search Input */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <Input
-              placeholder="Search..."
-              value={searchFilters.search}
-              onChange={(e) => handleFilterChange('search', e.target.value)}
-              className="pl-10 w-full bg-white"
-            />
-          </div>
+       {/* Category Filter */}
+       <Select
+         value={searchFilters.category}
+         onValueChange={(value) => handleFilterChange('category', value)}
+       >
+         <SelectTrigger>
+           <SelectValue placeholder="All Categories" />
+         </SelectTrigger>
+         <SelectContent>
+           <SelectItem value="all">All Categories</SelectItem>
+           {categories.map(category => (
+             <SelectItem key={category} value={category}>
+               {category.split('-').map(word => 
+                 word.charAt(0).toUpperCase() + word.slice(1)
+               ).join(' ')}
+             </SelectItem>
+           ))}
+         </SelectContent>
+       </Select>
 
-          {/* Category Filter */}
-          <Select
-            value={searchFilters.category}
-            onValueChange={(value) => handleFilterChange('category', value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="All Categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {getCategories().map(category => (
-                <SelectItem key={category} value={category}>
-                  {category.split('-').map(word => 
-                    word.charAt(0).toUpperCase() + word.slice(1)
-                  ).join(' ')}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+       {/* Status Filter */}
+       <Select
+         value={searchFilters.status}
+         onValueChange={(value) => handleFilterChange('status', value)}
+       >
+         <SelectTrigger>
+           <SelectValue placeholder="All Statuses" />
+         </SelectTrigger>
+         <SelectContent>
+           <SelectItem value="all">All Statuses</SelectItem>
+           <SelectItem value="draft">Draft</SelectItem>
+           <SelectItem value="published">Published</SelectItem>
+         </SelectContent>
+       </Select>
+     </div>
+   )}
 
-          {/* Status Filter */}
-          <Select
-            value={searchFilters.status}
-            onValueChange={(value) => handleFilterChange('status', value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="All Statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="published">Published</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      )}
+   {/* Content Area */}
+   <div className="space-y-4">
+     {renderContent()}
+   </div>
 
-      {/* Content */}
-      <div className="space-y-4">
-        {renderContent()}
-      </div>
+   {/* Pagination */}
+   {pagination.pages > 1 && (
+     <div className="mt-6 flex justify-center">
+       <Pagination
+         currentPage={currentPage}
+         totalPages={pagination.pages}
+         onPageChange={handlePageChange}
+       />
+     </div>
+   )}
 
-      {/* Pagination */}
-      {pagination.pages > 1 && (
-        <div className="mt-6 flex justify-center">
-          <Pagination
-            currentPage={currentPage}
-            totalPages={pagination.pages}
-            onPageChange={handlePageChange}
-          />
-        </div>
-      )}
-
-      {/* Editor Dialog */}
-      <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedItem ? `Edit ${title}` : `Create New ${title}`}
-            </DialogTitle>
-          </DialogHeader>
-          {isEditorOpen && EditorComponent && (
-            <React.Suspense fallback={<div>Loading...</div>}>
-              <EditorComponent
-                content={selectedItem || formDrafts}
-                onSave={handleSave}
-                onClose={() => {
-                  setIsEditorOpen(false);
-                  setSelectedItem(null);
-                }}
-              />
-            </React.Suspense>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
+   {/* Editor Dialog */}
+   <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
+     <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+       <DialogHeader>
+         <DialogTitle>
+           {selectedItem ? `Edit ${title}` : `Create New ${title}`}
+         </DialogTitle>
+       </DialogHeader>
+       
+       {isEditorOpen && (
+         <React.Suspense fallback={<div className="p-4 text-center">Loading editor...</div>}>
+           <EditorComponent
+             content={selectedItem || formDrafts}
+             onSave={handleSave}
+             onClose={() => {
+               setIsEditorOpen(false);
+               setSelectedItem(null);
+             }}
+           />
+         </React.Suspense>
+       )}
+     </DialogContent>
+   </Dialog>
+ </div>
+);
 };

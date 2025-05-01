@@ -1,32 +1,43 @@
-
-
-// src/store/slices/uiSlice.js
 import { createSlice } from '@reduxjs/toolkit';
 
+// Define constant sections to prevent typo errors
+export const CONTENT_SECTIONS = {
+  WRITINGS: 'writings',
+  TECH_BLOG: 'tech-blog',
+  PROJECTS: 'projects'
+};
+
 const initialState = {
-  currentSection: 'dashboard', // Default section
+  currentSection: 'dashboard',
   currentPage: {
-    writings: 1,
-    'tech-blog': 1,
-    projects: 1,
+    [CONTENT_SECTIONS.WRITINGS]: 1,
+    [CONTENT_SECTIONS.TECH_BLOG]: 1,
+    [CONTENT_SECTIONS.PROJECTS]: 1,
   },
   sidebarCollapsed: false,
   formDrafts: {
-    writings: null,
-    'tech-blog': null,
-    projects: null,
+    [CONTENT_SECTIONS.WRITINGS]: null,
+    [CONTENT_SECTIONS.TECH_BLOG]: null,
+    [CONTENT_SECTIONS.PROJECTS]: null,
   },
   searchFilters: {
-    writings: { search: '', category: 'all', status: 'all' },
-    'tech-blog': { search: '', category: 'all', status: 'all' },
-    projects: { search: '', category: 'all', status: 'all' },
+    [CONTENT_SECTIONS.WRITINGS]: { search: '', category: 'all', status: 'all' },
+    [CONTENT_SECTIONS.TECH_BLOG]: { search: '', category: 'all', status: 'all' },
+    [CONTENT_SECTIONS.PROJECTS]: { search: '', category: 'all', status: 'all' },
   },
+  // Add viewMode with proper initialization
+  viewMode: {
+    [CONTENT_SECTIONS.WRITINGS]: 'grid',
+    [CONTENT_SECTIONS.TECH_BLOG]: 'grid',
+    [CONTENT_SECTIONS.PROJECTS]: 'grid'
+  }
 };
 
 export const uiSlice = createSlice({
   name: 'ui',
   initialState,
   reducers: {
+    // Existing reducers
     setCurrentSection: (state, action) => {
       state.currentSection = action.payload;
     },
@@ -58,7 +69,25 @@ export const uiSlice = createSlice({
         status: 'all',
       };
     },
-  },
+    // New robust view mode setter
+    setViewMode: (state, action) => {
+      const { section, mode } = action.payload;
+      
+      // Validate section and mode
+      if (!Object.values(CONTENT_SECTIONS).includes(section)) {
+        console.warn(`Invalid section: ${section}`);
+        return;
+      }
+
+      if (!['grid', 'list'].includes(mode)) {
+        console.warn(`Invalid view mode: ${mode}. Defaulting to grid.`);
+        state.viewMode[section] = 'grid';
+        return;
+      }
+
+      state.viewMode[section] = mode;
+    }
+  }
 });
 
 export const {
@@ -69,6 +98,7 @@ export const {
   clearFormDraft,
   updateSearchFilters,
   resetSearchFilters,
+  setViewMode,
 } = uiSlice.actions;
 
 export default uiSlice.reducer;
