@@ -5,3 +5,4 @@ export { TechBlog } from './techblog.model';
 export { Project } from './project.model';
 export { User } from './user.model';
 export { Analytics } from './analytics.model';
+export { Subscriber } from './subscriber.model';

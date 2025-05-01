@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
 import { serialize } from 'cookie';
-import User from '@/models/user.model';
+import { User } from '@/models';
 import connectDB from '@/lib/db';
 
 export async function POST(req) {

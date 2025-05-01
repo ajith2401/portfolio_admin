@@ -78,6 +78,10 @@ export async function PUT(request, context) {
         );
       }
     }
+    // Check if status is changing from draft to published
+    const isNewlyPublished = existingWriting.status !== 'published' && 
+    updates.status === 'published';
+    
 
     // Update writing
     const updatedWriting = await Writing.findByIdAndUpdate(
@@ -97,6 +101,13 @@ export async function PUT(request, context) {
       path: 'comments',
       options: { sort: { createdAt: -1 } }
     });
+
+        // Send notifications if writing status changed from draft to published
+        if (isNewlyPublished) {
+          notifyWritingSubscribers(updatedWriting).catch(error => {
+            console.error('Error sending writing notifications:', error);
+          });
+        }
 
     return NextResponse.json(updatedWriting);
   } catch (error) {

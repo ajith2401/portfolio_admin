@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import { Writing } from '@/models';
 import { uploadImage } from '@/lib/cloudinary';
+import { notifyWritingSubscribers } from '@/lib/notificationHandler';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -179,6 +180,12 @@ export async function POST(request) {
       path: 'comments',
       options: { sort: { createdAt: -1 } }
     });
+
+    if (writing.status === 'published') {
+      notifyWritingSubscribers(populatedWriting).catch(error => {
+        console.error('Error sending writing notifications:', error);
+      });
+    }
 
     return NextResponse.json(populatedWriting, { status: 201 });
 
