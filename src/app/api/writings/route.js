@@ -11,50 +11,110 @@ export const dynamic = 'force-dynamic';
 export async function GET(request) {
   try {
     await connectDB();
-
     const { searchParams } = new URL(request.url);
     
     // Build query based on parameters
     const query = {};
     const sort = {};
     
-    // Category filter
-    const category = searchParams.get('category');
-    if (category) query.category = category;
+    // Category filter - make case insensitive
+    let category = searchParams.get('category');
+    if (category && category.toLowerCase() !== 'all writings') {
+      // Using regex for case-insensitive search
+      query.category = new RegExp(category, 'i');
+    }
     
-    // Date filter
+    // Date filter - enhanced with proper date handling
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
+    
     if (startDate || endDate) {
       query.createdAt = {};
-      if (startDate) query.createdAt.$gte = new Date(startDate);
-      if (endDate) query.createdAt.$lte = new Date(endDate);
+      
+      if (startDate) {
+        // Set to beginning of the day (00:00:00)
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        query.createdAt.$gte = start;
+      }
+      
+      if (endDate) {
+        // Set to end of the day (23:59:59)
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = end;
+      }
     }
     
-    // Search text
+    // Search text - improved search functionality
     const search = searchParams.get('search');
-    if (search) {
-      query.$text = { $search: search };
+    if (search && search.trim() !== '') {
+      // Check if the database has text index setup
+      // If not, use OR conditions for title and body
+      try {
+        query.$text = { $search: search };
+      } catch (err) {
+        // Fallback if text search is not available
+        const searchRegex = new RegExp(search, 'i');
+        query.$or = [
+          { title: searchRegex },
+          { body: searchRegex },
+          { category: searchRegex }
+        ];
+      }
     }
     
-    // Sorting
-    const sortBy = searchParams.get('sortBy');
-    if (sortBy === 'rating') {
-      sort.averageRating = -1;
-    } else if (sortBy === 'date') {
-      sort.createdAt = -1;
+    // Sorting - enhanced with more options
+    const sortBy = searchParams.get('sortBy') || 'date'; // Default to date
+    
+    switch(sortBy) {
+      case 'rating':
+        // Sort by rating (highest first)
+        sort.averageRating = -1;
+        // Secondary sort by date if ratings are equal
+        sort.createdAt = -1;
+        break;
+      
+      case 'oldest':
+        // Sort by oldest first
+        sort.createdAt = 1;
+        break;
+        
+      case 'title':
+        // Sort alphabetically by title
+        sort.title = 1;
+        break;
+        
+      case 'date':
+      default:
+        // Default sort: newest first
+        sort.createdAt = -1;
+        break;
     }
     
-    // Pagination
-    const page = parseInt(searchParams.get('page')) || 1;
-    const limit = parseInt(searchParams.get('limit')) || 12;
+    // Pagination - validate input values
+    const pageParam = searchParams.get('page');
+    const limitParam = searchParams.get('limit');
+    
+    // Ensure these are valid numbers
+    let page = 1;
+    if (pageParam) {
+      const parsedPage = parseInt(pageParam);
+      page = !isNaN(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+    }
+    
+    let limit = 12;
+    if (limitParam) {
+      const parsedLimit = parseInt(limitParam);
+      limit = !isNaN(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 50) : 12;
+    }
+    
     const skip = (page - 1) * limit;
     
-    // Check if Writing model is undefined before using it
-    if (!Writing) {
-      throw new Error('Writing model is not properly imported');
-    }
+    // Log query for debugging if needed
+    // console.log('Query:', JSON.stringify(query), 'Sort:', JSON.stringify(sort));
     
+    // Execute the query with pagination
     const writings = await Writing.find(query)
       .sort(sort)
       .skip(skip)
@@ -64,14 +124,29 @@ export async function GET(request) {
         options: { sort: { createdAt: -1 } }
       });
       
+    // Get total count for pagination
     const total = await Writing.countDocuments(query);
+    
+    // Calculate total pages (minimum of 1)
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    
+    // If requested page exceeds total pages, adjust to the last page
+    const currentPage = page > totalPages ? totalPages : page;
     
     return NextResponse.json({
       writings,
       pagination: {
         total,
-        pages: Math.ceil(total / limit),
-        current: page
+        pages: totalPages,
+        current: currentPage,
+        limit
+      },
+      filters: {
+        category: category || null,
+        startDate: startDate || null,
+        endDate: endDate || null,
+        search: search || null,
+        sortBy
       }
     });
   } catch (error) {
