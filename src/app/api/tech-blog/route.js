@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import { TechBlog } from '@/models/techblog.model';
+import { notifyBlogSubscribers } from '@/lib/notificationHandler';
 
 export async function GET(request) {
   try {
@@ -76,7 +77,14 @@ export async function POST(request) {
     
     const data = await request.json();
     const blog = await TechBlog.create(data);
-  
+      // Send notifications if blog is published
+      if (blog.status === 'published') {
+        // Send notifications asynchronously (non-blocking)
+        notifyBlogSubscribers(blog).catch(error => {
+          console.error('Error sending blog notifications:', error);
+        });
+      }
+      
     return NextResponse.json(blog, { status: 201 });
   } catch (error) {
     console.error('Error creating tech blog:', error);

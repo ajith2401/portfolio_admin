@@ -20,7 +20,6 @@ export async function sendContentNotifications(content, contentType) {
       isVerified: true,
       active: true
     });
-    
     if (!subscribers || subscribers.length === 0) {
       return {
         success: true,

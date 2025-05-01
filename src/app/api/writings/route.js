@@ -11,10 +11,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request) {
   try {
     await connectDB();
-    
-    // Debug logging to check if models are properly imported
-    console.log('Writing model:', Writing);
-    
+
     const { searchParams } = new URL(request.url);
     
     // Build query based on parameters
@@ -182,7 +179,7 @@ export async function POST(request) {
     });
 
     if (writing.status === 'published') {
-      notifyWritingSubscribers(populatedWriting).catch(error => {
+      notifyWritingSubscribers(populatedWriting).then(()=> console.log(">>>>>>>>>>>>>>>>>>>>>Mail send successfully ")).catch(error => {
         console.error('Error sending writing notifications:', error);
       });
     }

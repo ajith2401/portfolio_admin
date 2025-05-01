@@ -18,8 +18,6 @@ export async function middleware(req) {
     
     // Verify the JWT token
     const { payload } = await jwtVerify(token, secret);
-    console.log("Decoded token:", payload);
-    
     // Continue with the valid token
     return NextResponse.next();
   } catch (err) {
