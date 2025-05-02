@@ -8,7 +8,8 @@ const WritingSchema = new mongoose.Schema({
     enum: [
       'philosophy', 'poem', 'article', 'short story',
       'short writings', 'politics', 'cinema', 'letter', 'joke'
-    ]
+    ],
+    index: true // Index category for faster queries
   },
   title: {
     type: String,
@@ -18,7 +19,8 @@ const WritingSchema = new mongoose.Schema({
   },
   subtitle: {
     type: String,
-    trim: true
+    trim: true,
+    index: true // Add index for subtitle to help with Tamil search
   },
   body: {
     type: String,
@@ -29,6 +31,7 @@ const WritingSchema = new mongoose.Schema({
     type: String,
     enum: ['draft', 'published'],
     default: 'draft',
+    index: true // Add index for status
   },
   images: {
     small: String,
@@ -74,10 +77,60 @@ const WritingSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
     index: true
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now,
+    index: true // Add index for the updated date
+  },
+  // Add this field to optimize searching for Tamil content
+  contentLanguage: {
+    type: String,
+    enum: ['en', 'ta', 'mixed'], // English, Tamil, or mixed content
+    default: 'en',
+    index: true
   }
 });
 
-WritingSchema.index({ title: 'text', body: 'text' });
+// Create a more robust text index with language configuration
+WritingSchema.index({ 
+  title: 'text', 
+  subtitle: 'text',
+  body: 'text',
+  category: 'text'
+}, {
+  weights: {
+    title: 10, // Title is most important
+    subtitle: 8,
+    body: 5,
+    category: 3
+  },
+  language_override: 'language', // Will look for a 'language' field
+  default_language: 'none' // Important for Tamil search - disables language-specific stemming
+});
+
+// Auto-detect language based on content
+WritingSchema.pre('save', function(next) {
+  // Update timestamps
+  this.updatedAt = new Date();
+  
+  // Auto-detect Tamil content
+  const tamilRegex = /[\u0B80-\u0BFF]/;
+  const englishRegex = /[a-zA-Z]/;
+  
+  const hasTamil = tamilRegex.test(this.title) || tamilRegex.test(this.body);
+  const hasEnglish = englishRegex.test(this.title) || englishRegex.test(this.body);
+  
+  if (hasTamil && hasEnglish) {
+    this.contentLanguage = 'mixed';
+  } else if (hasTamil) {
+    this.contentLanguage = 'ta';
+  } else {
+    this.contentLanguage = 'en';
+  }
+  
+  next();
+});
 
 WritingSchema.methods.calculateAverageRating = function() {
   if (this.ratings.length === 0) {
@@ -108,6 +161,58 @@ WritingSchema.methods.addRating = async function(name, email, rating) {
   
   this.calculateAverageRating();
   await this.save();
+};
+
+// Add a static method for Tamil-specific searching
+WritingSchema.statics.searchTamil = async function(query, options = {}) {
+  const { page = 1, limit = 10, sort = { createdAt: -1 } } = options;
+  
+  // Create a query for Tamil content
+  const searchQuery = {
+    $or: [
+      { contentLanguage: 'ta' }, 
+      { contentLanguage: 'mixed' }
+    ]
+  };
+  
+  // Add the search pattern if provided
+  if (query && query.trim() !== '') {
+    // Normalize the query
+    const normalizedQuery = query.trim().normalize('NFC');
+    
+    // Create a pattern that's more flexible for Tamil
+    const titlePattern = new RegExp(normalizedQuery, 'i');
+    const bodyPattern = new RegExp(normalizedQuery, 'i');
+    
+    searchQuery.$and = [
+      searchQuery.$or,
+      {
+        $or: [
+          { title: titlePattern },
+          { body: bodyPattern },
+          { subtitle: titlePattern }
+        ]
+      }
+    ];
+  }
+  
+  // Execute the query with pagination
+  const skip = (page - 1) * limit;
+  const writings = await this.find(searchQuery)
+    .sort(sort)
+    .skip(skip)
+    .limit(limit);
+    
+  const total = await this.countDocuments(searchQuery);
+  
+  return {
+    writings,
+    pagination: {
+      total,
+      pages: Math.ceil(total / limit),
+      current: page
+    }
+  };
 };
 
 // Use a try-catch to handle model registration

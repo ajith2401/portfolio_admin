@@ -144,7 +144,7 @@ export const ContentSection = ({ type, title }) => {
     isLoading, 
     error 
   } = getQuery({ 
-    page: currentPage, 
+    // page: currentPage, 
     search: searchFilters.search, 
     category: searchFilters.category, 
     status: searchFilters.status 
