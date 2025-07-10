@@ -3,6 +3,9 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import { Writing, Comment } from '@/models';
 import { deleteImage, uploadImage } from '@/lib/cloudinary';
+import { generateSlug, ensureUniqueSlug } from '@/utils/slugGenerator';
+import { notifyWritingSubscribers } from '@/lib/notificationHandler';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -81,6 +84,21 @@ export async function PUT(request, { params }) {
         );
       }
     }
+
+    // Generate slug if title has changed and no slug is provided
+    if (updates.title && updates.title !== existingWriting.title && !updates.slug) {
+      const baseSlug = generateSlug(updates.title);
+      if (baseSlug) {
+        updates.slug = await ensureUniqueSlug(
+          baseSlug,
+          async (slug) => {
+            return await Writing.findOne({ slug, _id: { $ne: id } });
+          },
+          id
+        );
+      }
+    }
+
     // Check if status is changing from draft to published
     const isNewlyPublished = existingWriting.status !== 'published' && 
     updates.status === 'published';

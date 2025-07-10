@@ -4,6 +4,7 @@ import connectDB from '@/lib/db';
 import { Writing } from '@/models';
 import { uploadImage } from '@/lib/cloudinary';
 import { notifyWritingSubscribers } from '@/lib/notificationHandler';
+import { generateSlug, ensureUniqueSlug } from '@/utils/slugGenerator';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -217,6 +218,19 @@ export async function POST(request) {
         { error: 'Title, category, and body are required' },
         { status: 400 }
       );
+    }
+
+    // Generate slug if not provided
+    if (!writing.slug) {
+      const baseSlug = generateSlug(writing.title);
+      if (baseSlug) {
+        writing.slug = await ensureUniqueSlug(
+          baseSlug,
+          async (slug) => {
+            return await Writing.findOne({ slug });
+          }
+        );
+      }
     }
 
     // Handle image upload if present

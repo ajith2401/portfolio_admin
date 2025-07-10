@@ -1,9 +1,9 @@
 // src/app/api/projects/[id]/route.js
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
-import { Comment } from '@/models';
+import { Comment, Project } from '@/models';
 import { deleteImage, uploadImage } from '@/lib/cloudinary';
-import { Project } from '@/models/project.model';
+import { generateSlug, ensureUniqueSlug } from '@/utils/slugGenerator';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +30,7 @@ export async function PUT(request, { params }) {
     if (contentType.includes('multipart/form-data')) {
       // Parse form data
       const formData = await request.formData();
-      updates = JSON.parse(formData.get('writing'));
+      updates = JSON.parse(formData.get('content'));
       image = formData.get('image');
     } else if (contentType.includes('application/json')) {
       // Parse JSON data
@@ -49,6 +49,7 @@ export async function PUT(request, { params }) {
         // Delete old images from Cloudinary
         if (existingProject.images) {
           const deletePromises = Object.values(existingProject.images)
+            .filter(url => url) // Only delete if URL exists
             .map(url => deleteImage(url));
           await Promise.all(deletePromises);
         }
@@ -65,6 +66,20 @@ export async function PUT(request, { params }) {
         return NextResponse.json(
           { error: 'Failed to update image' }, 
           { status: 500 }
+        );
+      }
+    }
+
+    // Generate slug if title has changed and no slug is provided
+    if (updates.title && updates.title !== existingProject.title && !updates.slug) {
+      const baseSlug = generateSlug(updates.title);
+      if (baseSlug) {
+        updates.slug = await ensureUniqueSlug(
+          baseSlug,
+          async (slug) => {
+            return await Project.findOne({ slug, _id: { $ne: id } });
+          },
+          id
         );
       }
     }

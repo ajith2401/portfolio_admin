@@ -1,9 +1,9 @@
 // src/app/api/projects/route.js
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
-import { Project } from '@/models/project.model';
+import { Project } from '@/models';
 import { uploadImage } from '@/lib/cloudinary';
-import slugify from 'slugify';
+import { generateSlug, ensureUniqueSlug } from '@/utils/slugGenerator';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -123,11 +123,18 @@ export async function POST(request) {
       );
     }
 
-    // Generate slug from title
-    projectData.slug = slugify(projectData.title, { 
-      lower: true,
-      strict: true
-    });
+    // Generate slug if not provided
+    if (!projectData.slug) {
+      const baseSlug = generateSlug(projectData.title);
+      if (baseSlug) {
+        projectData.slug = await ensureUniqueSlug(
+          baseSlug,
+          async (slug) => {
+            return await Project.findOne({ slug });
+          }
+        );
+      }
+    }
 
     // Handle image upload if present
     if (imageFile) {
