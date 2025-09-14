@@ -1,5 +1,5 @@
 // src/lib/notificationHandler.js
-import connectDB from '@/lib/db';
+import connectDB from '@/lib/mongodb';
 import { Subscriber } from '@/models'; // Import from centralized models
 import { sendContentNotification } from '@/lib/emailUtils';
 

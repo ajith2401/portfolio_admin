@@ -15,8 +15,8 @@ export function generateSlug(text) {
     .trim()
     // Replace spaces and underscores with hyphens
     .replace(/[\s_]+/g, '-')
-    // Remove special characters except hyphens
-    .replace(/[^a-z0-9-]/g, '')
+    // Remove special characters except hyphens, keeping alphanumeric and Tamil characters
+    .replace(/[^a-z0-9\u0B80-\u0BFF-]/g, '')
     // Remove multiple consecutive hyphens
     .replace(/-+/g, '-')
     // Remove leading and trailing hyphens
@@ -69,8 +69,8 @@ export function validateSlug(slug) {
     return false;
   }
 
-  // Check if slug matches the required pattern
-  const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  // Check if slug matches the required pattern (including Tamil characters)
+  const slugPattern = /^[a-z0-9\u0B80-\u0BFF]+(?:-[a-z0-9\u0B80-\u0BFF]+)*$/;
   return slugPattern.test(slug) && slug.length <= 100;
 }
 
@@ -87,7 +87,8 @@ export function cleanSlug(slug) {
   return slug
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9-]/g, '')
+    // Keep alphanumeric, Tamil characters, and hyphens only
+    .replace(/[^a-z0-9\u0B80-\u0BFF-]/g, '')
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '')
     .substring(0, 100);

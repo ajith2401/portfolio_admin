@@ -88,23 +88,43 @@ const PreviewContent = ({ content }) => {
 };
 
 export const WritingEditor = ({ content, onSave, onClose }) => {
-  const [formData, setFormData] = useState(content || {
-    title: '',
-    subtitle: '',
-    body: '',
-    category: WRITING_CATEGORIES[0],
-    status: 'draft',
-    images: {
+  const [formData, setFormData] = useState(() => ({
+    title: content?.title || '',
+    subtitle: content?.subtitle || '',
+    body: content?.body || '',
+    category: content?.category || WRITING_CATEGORIES[0],
+    status: content?.status || 'draft',
+    images: content?.images || {
       small: '',
       medium: '',
       large: ''
-    }
-  });
+    },
+    ...content
+  }));
   
   const [preview, setPreview] = useState('');
   const [activeTab, setActiveTab] = useState('write');
   const textareaRef = useRef(null);
-  
+
+  // Update formData when content prop changes (for editing)
+  useEffect(() => {
+    if (content && content._id) {
+      setFormData(() => ({
+        title: content?.title || '',
+        subtitle: content?.subtitle || '',
+        body: content?.body || '',
+        category: content?.category || WRITING_CATEGORIES[0],
+        status: content?.status || 'draft',
+        images: content?.images || {
+          small: '',
+          medium: '',
+          large: ''
+        },
+        ...content
+      }));
+    }
+  }, [content]);
+
   // Function to fix broken image markdown syntax
   const fixBrokenImageMarkdown = (text) => {
     if (!text) return '';
@@ -218,8 +238,8 @@ export const WritingEditor = ({ content, onSave, onClose }) => {
   }, [formData.body]);
 
   const insertMarkdown = (markdownType) => {
-    if (!textareaRef.current) return;
-    
+    if (!textareaRef.current || !formData.body) return;
+
     const textarea = textareaRef.current;
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;

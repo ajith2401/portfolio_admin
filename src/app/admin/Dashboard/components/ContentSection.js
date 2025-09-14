@@ -143,11 +143,11 @@ export const ContentSection = ({ type, title }) => {
     data, 
     isLoading, 
     error 
-  } = getQuery({ 
-    // page: currentPage, 
-    search: searchFilters.search, 
-    category: searchFilters.category, 
-    status: searchFilters.status 
+  } = getQuery({
+    page: currentPage,
+    search: searchFilters.search,
+    category: searchFilters.category,
+    status: searchFilters.status
   });
 
   // Mutations

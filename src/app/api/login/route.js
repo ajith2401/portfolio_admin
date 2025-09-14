@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
 import { serialize } from 'cookie';
 import { User } from '@/models';
-import connectDB from '@/lib/db';
+import connectDB from '@/lib/mongodb';
 
 export async function POST(req) {
   await connectDB();  // Ensure DB is connected

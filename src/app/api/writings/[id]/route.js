@@ -1,9 +1,9 @@
 // src/app/api/writings/[id]/route.js
 import { NextResponse } from 'next/server';
-import connectDB from '@/lib/db';
+import connectDB from '@/lib/mongodb';
 import { Writing, Comment } from '@/models';
 import { deleteImage, uploadImage } from '@/lib/cloudinary';
-import { generateSlug, ensureUniqueSlug } from '@/utils/slugGenerator';
+import { generateSlug, ensureUniqueSlug, cleanSlug } from '@/utils/slugGenerator';
 import { notifyWritingSubscribers } from '@/lib/notificationHandler';
 
 export const runtime = 'nodejs';
@@ -85,6 +85,20 @@ export async function PUT(request, { params }) {
       }
     }
 
+    // Clean and validate slug if provided
+    if (updates.slug) {
+      updates.slug = cleanSlug(updates.slug);
+      if (!updates.slug) {
+        // If slug becomes empty after cleaning, generate from title or keep existing
+        if (updates.title) {
+          const baseSlug = generateSlug(updates.title);
+          updates.slug = baseSlug || existingWriting.slug;
+        } else {
+          updates.slug = existingWriting.slug; // Keep existing slug
+        }
+      }
+    }
+
     // Generate slug if title has changed and no slug is provided
     if (updates.title && updates.title !== existingWriting.title && !updates.slug) {
       const baseSlug = generateSlug(updates.title);
@@ -96,31 +110,53 @@ export async function PUT(request, { params }) {
           },
           id
         );
+      } else {
+        updates.slug = existingWriting.slug; // Keep existing slug as fallback
       }
+    }
+
+    // Ensure slug uniqueness if it was changed
+    if (updates.slug && updates.slug !== existingWriting.slug) {
+      updates.slug = await ensureUniqueSlug(
+        updates.slug,
+        async (slug) => {
+          return await Writing.findOne({ slug, _id: { $ne: id } });
+        },
+        id
+      );
+    }
+
+    // Final safety check - ensure slug is not empty
+    if (!updates.slug) {
+      updates.slug = existingWriting.slug || `writing-${Date.now()}`;
     }
 
     // Check if status is changing from draft to published
     const isNewlyPublished = existingWriting.status !== 'published' && 
     updates.status === 'published';
     
+    // Remove empty or undefined fields from updates
+    const cleanedUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([_, value]) => value !== '' && value !== null && value !== undefined)
+    );
+
     // Update writing
     const updatedWriting = await Writing.findByIdAndUpdate(
       id, // Use the extracted id here
-      { 
+      {
         $set: {
-          ...updates,
+          ...cleanedUpdates,
           // Preserve existing images if no new image uploaded
-          images: updates.images || existingWriting.images
+          images: cleanedUpdates.images || existingWriting.images,
+          // Ensure slug is always present
+          slug: cleanedUpdates.slug || existingWriting.slug
         }
       },
-      { 
+      {
         new: true,
         runValidators: true
       }
-    ).populate({
-      path: 'comments',
-      options: { sort: { createdAt: -1 } }
-    });
+    );
 
     // Send notifications if writing status changed from draft to published
     if (isNewlyPublished) {
@@ -160,7 +196,7 @@ export async function GET(request, { params }) {
     await connectDB();
     const { id } = await params; // Extract id properly
     
-    const writing = await Writing.findById(id).populate('comments');
+    const writing = await Writing.findById(id);
     if (!writing) {
       return NextResponse.json({ error: 'Writing not found' }, { status: 404 });
     }
@@ -192,10 +228,8 @@ export async function DELETE(request, { params }) {
       await Promise.all(imagePromises);
     }
 
-    // Delete all associated comments
-    if (writing.comments && writing.comments.length > 0) {
-      await Comment.deleteMany({ _id: { $in: writing.comments } });
-    }
+    // Delete all associated comments (if they exist as separate documents)
+    await Comment.deleteMany({ writingId: id });
 
     // Delete the writing
     await Writing.findByIdAndDelete(id);

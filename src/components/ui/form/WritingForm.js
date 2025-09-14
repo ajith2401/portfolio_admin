@@ -6,7 +6,7 @@ import useWritingStore from "@/store/seWritingStore.js";
 
 
 // Constants for form options
-const CATEGORIES = ["article", "poem", "philosophy", "short story"];
+const CATEGORIES = ["Poetry", "Short Story", "Essay", "Novel", "Article", "Review", "Personal"];
 const TEXTURES = ["vintagePaper","denim","watercolor","concrete","canvas","filmGrain","marble","rustedMetal","parchment","chalkBoard","lacePattern","waterDrops","flyingBirds","starrySky"]
 const THEME_CATEGORIES = {
   backgroundImage: {

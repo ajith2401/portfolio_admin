@@ -1,6 +1,6 @@
 // src/app/api/subscribe/route.js
 import { NextResponse } from 'next/server';
-import connectDB from '@/lib/db';
+import connectDB from '@/lib/mongodb';
 import { Subscriber } from '@/models'; // Import from centralized models
 import { validateEmail, sendVerificationEmail, sendWelcomeEmail } from '@/lib/emailUtils';
 

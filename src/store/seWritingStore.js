@@ -81,12 +81,28 @@ const useWritingStore = create((set) => ({
   createWriting: async (formData) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await fetch('/api/writings/with-image', {
+      // Generate submission data with required fields
+      const submissionData = {
+        title: formData.title,
+        body: formData.body,
+        category: formData.category,
+        // Optional meta fields
+        excerpt: formData.body.substring(0, 150) + '...',
+        metaDescription: formData.body.substring(0, 160),
+        // Additional styling data
+        theme: formData.theme,
+        themeMode: formData.themeMode,
+        textureType: formData.textureType,
+        effects: formData.effects,
+        style: formData.style
+      };
+
+      const response = await fetch('/api/writings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(submissionData)
       });
 
       if (!response.ok) {

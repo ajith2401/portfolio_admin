@@ -1,13 +1,19 @@
 // src/app/api/writings/route.js
 import { NextResponse } from 'next/server';
-import connectDB from '@/lib/db';
+import connectDB from '@/lib/mongodb';
 import { Writing } from '@/models';
 import { uploadImage } from '@/lib/cloudinary';
 import { notifyWritingSubscribers } from '@/lib/notificationHandler';
-import { generateSlug, ensureUniqueSlug } from '@/utils/slugGenerator';
+import { generateSlug, ensureUniqueSlug, cleanSlug } from '@/utils/slugGenerator';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+// Recommended MongoDB Indexes for best performance:
+// db.writings.createIndex({ slug: 1 })
+// db.writings.createIndex({ category: 1, publishedAt: -1 })
+// db.writings.createIndex({ status: 1 })
+// db.writings.createIndex({ title: "text", body: "text", category: "text" })
 
 export async function GET(request) {
   try {
@@ -18,120 +24,86 @@ export async function GET(request) {
     const query = {};
     const sort = {};
     
-    // Category filter - make case insensitive
+    // Category filter - use exact match for indexed performance
     let category = searchParams.get('category');
-    if (category && category.toLowerCase() !== 'all writings') {
-      // Using regex for case-insensitive search
-      query.category = new RegExp(category, 'i');
+    if (category && category !== 'All Writings') {
+      query.category = category;
     }
     
-    // Date filter - enhanced with proper date handling
+    // Add status filter if needed
+    const status = searchParams.get('status');
+    if (status) {
+      query.status = status;
+    }
+    
+    // Date filter
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
-    
     if (startDate || endDate) {
       query.createdAt = {};
-      
       if (startDate) {
-        // Set to beginning of the day (00:00:00)
         const start = new Date(startDate);
         start.setHours(0, 0, 0, 0);
         query.createdAt.$gte = start;
       }
-      
       if (endDate) {
-        // Set to end of the day (23:59:59)
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
         query.createdAt.$lte = end;
       }
     }
     
-    // Search text - improved search functionality
+    // Search text - use $text if indexed
     const search = searchParams.get('search');
     if (search && search.trim() !== '') {
-      // Check if the database has text index setup
-      // If not, use OR conditions for title and body
-      try {
-        query.$text = { $search: search };
-      } catch (err) {
-        // Fallback if text search is not available
-        const searchRegex = new RegExp(search, 'i');
-        query.$or = [
-          { title: searchRegex },
-          { body: searchRegex },
-          { category: searchRegex }
-        ];
-      }
+      query.$text = { $search: search };
     }
     
-    // Sorting - enhanced with more options
-    const sortBy = searchParams.get('sortBy') || 'date'; // Default to date
-    
-    switch(sortBy) {
+    // Sorting
+    const sortBy = searchParams.get('sortBy') || 'date';
+    switch (sortBy) {
       case 'rating':
-        // Sort by rating (highest first)
         sort.averageRating = -1;
-        // Secondary sort by date if ratings are equal
         sort.createdAt = -1;
         break;
-      
       case 'oldest':
-        // Sort by oldest first
         sort.createdAt = 1;
         break;
-        
       case 'title':
-        // Sort alphabetically by title
         sort.title = 1;
         break;
-        
       case 'date':
       default:
-        // Default sort: newest first
         sort.createdAt = -1;
         break;
     }
     
-    // Pagination - validate input values
+    // Pagination
     const pageParam = searchParams.get('page');
     const limitParam = searchParams.get('limit');
-    
-    // Ensure these are valid numbers
     let page = 1;
     if (pageParam) {
       const parsedPage = parseInt(pageParam);
       page = !isNaN(parsedPage) && parsedPage > 0 ? parsedPage : 1;
     }
-    
     let limit = 12;
     if (limitParam) {
       const parsedLimit = parseInt(limitParam);
       limit = !isNaN(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 50) : 12;
     }
-    
     const skip = (page - 1) * limit;
     
-    // Log query for debugging if needed
-    // console.log('Query:', JSON.stringify(query), 'Sort:', JSON.stringify(sort));
-    
-    // Execute the query with pagination
+    // Only select needed fields for the listing
     const writings = await Writing.find(query)
+      .select('title slug excerpt body images publishedAt category averageRating totalRatings status featured trending performance')
       .sort(sort)
       .skip(skip)
       .limit(limit)
-      .populate({
-        path: 'comments',
-        options: { sort: { createdAt: -1 } }
-      });
-      
+      .lean();
+    
     // Get total count for pagination
     const total = await Writing.countDocuments(query);
-    
-    // Calculate total pages (minimum of 1)
     const totalPages = Math.max(1, Math.ceil(total / limit));
-    
-    // If requested page exceeds total pages, adjust to the last page
     const currentPage = page > totalPages ? totalPages : page;
     
     return NextResponse.json({
@@ -153,7 +125,7 @@ export async function GET(request) {
   } catch (error) {
     console.error('Error fetching writings:', error);
     return NextResponse.json(
-      { error: error.message }, 
+      { error: 'Failed to fetch writings', details: error.message },
       { status: 500 }
     );
   }
@@ -162,6 +134,10 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     await connectDB();
+    
+    // Note: sanitization and rate limiting would be implemented here if needed
+    // request = sanitizeMiddleware(request);
+    // await applyRateLimit(request);
     
     // Check if Writing model is undefined before using it
     if (!Writing) {
@@ -220,8 +196,14 @@ export async function POST(request) {
       );
     }
 
-    // Generate slug if not provided
+    // Clean and generate slug
+    if (writing.slug) {
+      // Clean existing slug
+      writing.slug = cleanSlug(writing.slug);
+    }
+
     if (!writing.slug) {
+      // Generate slug from title if no valid slug exists
       const baseSlug = generateSlug(writing.title);
       if (baseSlug) {
         writing.slug = await ensureUniqueSlug(
@@ -230,7 +212,23 @@ export async function POST(request) {
             return await Writing.findOne({ slug });
           }
         );
+      } else {
+        // Fallback if title-based slug generation fails
+        writing.slug = `writing-${Date.now()}`;
       }
+    } else {
+      // Ensure provided slug is unique
+      writing.slug = await ensureUniqueSlug(
+        writing.slug,
+        async (slug) => {
+          return await Writing.findOne({ slug });
+        }
+      );
+    }
+
+    // Final check - ensure slug exists
+    if (!writing.slug) {
+      writing.slug = `writing-${Date.now()}`;
     }
 
     // Handle image upload if present
@@ -256,16 +254,13 @@ export async function POST(request) {
     writing.averageRating = 0;
     writing.totalRatings = 0;
     writing.ratings = [];
-    writing.comments = [];
+    // Note: comments is a count field, not an array
 
     // Create the writing
     const newWriting = await Writing.create(writing);
 
-    // Populate comments if any
-    const populatedWriting = await newWriting.populate({
-      path: 'comments',
-      options: { sort: { createdAt: -1 } }
-    });
+    // Get the created writing without populating comments (since it's just a count)
+    const populatedWriting = newWriting;
 
     if (writing.status === 'published') {
       notifyWritingSubscribers(populatedWriting).then(()=> console.log(">>>>>>>>>>>>>>>>>>>>>Mail send successfully ")).catch(error => {

@@ -1,6 +1,6 @@
 // src/app/api/projects/route.js
 import { NextResponse } from 'next/server';
-import connectDB from '@/lib/db';
+import connectDB from '@/lib/mongodb';
 import { Project } from '@/models';
 import { uploadImage } from '@/lib/cloudinary';
 import { generateSlug, ensureUniqueSlug } from '@/utils/slugGenerator';

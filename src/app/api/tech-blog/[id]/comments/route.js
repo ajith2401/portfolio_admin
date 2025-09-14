@@ -1,6 +1,6 @@
 // src/app/api/tech-blog/[id]/comments/route.js
 import { NextResponse } from 'next/server';
-import connectDB from '@/lib/db';
+import connectDB from '@/lib/mongodb';
 
 import { Comment } from '@/models/comment.model';
 import { TechBlog } from '@/models';
