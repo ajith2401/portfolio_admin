@@ -43,7 +43,7 @@ const ProjectSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Long description is required'],
     trim: true,
-    maxlength: [2000, 'Long description cannot exceed 2000 characters']
+    maxlength: [10000, 'Long description cannot exceed 10000 characters']
   },
   metaDescription: {
     type: String,
@@ -54,84 +54,62 @@ const ProjectSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Category is required'],
     enum: {
-      values: ['Web Application', 'Mobile App', 'Desktop App', 'API/Backend', 'Tool/Utility', 'Open Source', 'Client Work', 'Personal Project'],
+      values: [
+        'AI/ML',
+        'web',
+        'mobile',
+        'backend',
+        'devops',
+        'other',
+        'Web Apps',
+        'Mobile Apps',
+        'Web Application',
+        'Mobile App',
+        'Desktop App',
+        'API/Backend',
+        'Tool/Utility',
+        'Open Source',
+        'Client Work',
+        'Personal Project'
+      ],
       message: 'Category must be one of the predefined values'
     },
     index: true
   },
-  technologies: [{
-    name: {
-      type: String,
-      required: true,
-      trim: true
-    },
-    category: {
-      type: String,
-      enum: ['Frontend', 'Backend', 'Database', 'DevOps', 'Mobile', 'Other'],
-      default: 'Other'
-    },
-    proficiency: {
-      type: String,
-      enum: ['Beginner', 'Intermediate', 'Advanced', 'Expert'],
-      default: 'Intermediate'
-    },
-    version: String,
-    icon: String
+  technologies: [mongoose.Schema.Types.Mixed],
+  stack: [{
+    type: String,
+    trim: true
   }],
+  achievement: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  stats: {
+    users: { type: String, default: '' },
+    accuracy: { type: String, default: '' },
+    schemes: { type: String, default: '' }
+  },
   links: {
-    live: {
-      url: String,
-      label: {
-        type: String,
-        default: 'Live Demo'
-      }
-    },
-    github: {
-      url: String,
-      label: {
-        type: String,
-        default: 'Source Code'
-      }
-    },
-    documentation: {
-      url: String,
-      label: {
-        type: String,
-        default: 'Documentation'
-      }
-    },
-    blog: {
-      url: String,
-      label: {
-        type: String,
-        default: 'Blog Post'
-      }
-    }
+    live: { type: mongoose.Schema.Types.Mixed, default: '' },
+    github: { type: mongoose.Schema.Types.Mixed, default: '' },
+    demo: { type: mongoose.Schema.Types.Mixed, default: '' },
+    documentation: { type: mongoose.Schema.Types.Mixed, default: '' },
+    blog: { type: mongoose.Schema.Types.Mixed, default: '' }
   },
   images: {
-    thumbnail: String,
-    gallery: [String],
-    featured: String,
-    logo: String
+    small: { type: String, default: '' },
+    medium: { type: String, default: '' },
+    large: { type: String, default: '' },
+    thumbnail: { type: String, default: '' },
+    banner: { type: String, default: '' },
+    featured: { type: String, default: '' },
+    logo: { type: String, default: '' },
+    gallery: [{ type: String }]
   },
-  features: [{
-    title: {
-      type: String,
-      required: true,
-      trim: true
-    },
-    description: String,
-    icon: String,
-    implemented: {
-      type: Boolean,
-      default: true
-    }
-  }],
-  challenges: [{
-    problem: String,
-    solution: String,
-    learned: String
-  }],
+  features: [mongoose.Schema.Types.Mixed],
+  challenges: [mongoose.Schema.Types.Mixed],
   timeline: {
     started: Date,
     completed: Date,
@@ -221,6 +199,14 @@ ProjectSchema.index({ priority: -1, status: 1 });
 ProjectSchema.index({ 'technologies.name': 1, status: 1 });
 ProjectSchema.index({ tags: 1, status: 1 });
 
+// Pre-validate middleware to generate base slug if not provided
+ProjectSchema.pre('validate', function(next) {
+  if (!this.slug && this.title) {
+    this.slug = generateSlug(this.title);
+  }
+  next();
+});
+
 // Pre-save middleware to generate slug and other fields
 ProjectSchema.pre('save', async function(next) {
   try {
@@ -260,7 +246,7 @@ ProjectSchema.pre('save', async function(next) {
     }
     
     // Calculate project duration if dates are set
-    if (this.timeline.started && this.timeline.completed) {
+    if (this.timeline?.started && this.timeline?.completed) {
       const start = new Date(this.timeline.started);
       const end = new Date(this.timeline.completed);
       const diffTime = Math.abs(end - start);

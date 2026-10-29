@@ -84,6 +84,20 @@ export async function PUT(request, { params }) {
       }
     }
 
+    // Convert string fields to arrays if needed
+    if (typeof updates.technologies === 'string') {
+      updates.technologies = updates.technologies.split(',').map(t => t.trim()).filter(Boolean);
+    }
+    if (typeof updates.stack === 'string') {
+      updates.stack = updates.stack.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    if (typeof updates.features === 'string') {
+      updates.features = updates.features.split(',').map(f => f.trim()).filter(Boolean);
+    }
+    if (typeof updates.challenges === 'string') {
+      updates.challenges = updates.challenges.split(',').map(c => c.trim()).filter(Boolean);
+    }
+
     // Update project
     const updatedProject = await Project.findByIdAndUpdate(
       id,

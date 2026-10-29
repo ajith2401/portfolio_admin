@@ -181,6 +181,30 @@ export async function POST(request) {
         .filter(Boolean);
     }
 
+    // If stack is a string, convert to array
+    if (typeof projectData.stack === 'string') {
+      projectData.stack = projectData.stack
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+    }
+
+    // If features is a string, convert to array
+    if (typeof projectData.features === 'string') {
+      projectData.features = projectData.features
+        .split(',')
+        .map(f => f.trim())
+        .filter(Boolean);
+    }
+
+    // If challenges is a string, convert to array
+    if (typeof projectData.challenges === 'string') {
+      projectData.challenges = projectData.challenges
+        .split(',')
+        .map(c => c.trim())
+        .filter(Boolean);
+    }
+
     // Create the project
     const newProject = await Project.create(projectData);
 
