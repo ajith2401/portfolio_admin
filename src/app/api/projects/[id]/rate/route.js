@@ -1,24 +1,64 @@
-// src/app/api/writings/[id]/rate/route.js
+// src/app/api/projects/[id]/rate/route.js
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
-import { Writing, Comment } from '@/models';
+import { Project } from '@/models';
+import { applyRateLimit } from '@/lib/rateLimit';
+import { sanitizeHtml } from '@/lib/sanitize';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request, { params }) {
+  const rateLimit = applyRateLimit(request, 'rate-project', 10, 60 * 1000);
+  if (!rateLimit.allowed) {
+    return rateLimit.response;
+  }
+
   try {
     await connectDB();
-    const { name, email, rating } = await request.json();
-    
-    const writing = await Writing.findById(params.id);
-    if (!writing) {
-      return NextResponse.json({ error: 'Writing not found' }, { status: 404 });
+    const { id } = await params;
+    const body = await request.json().catch(() => null);
+    if (!body || !body.email || body.rating === undefined) {
+      return NextResponse.json({ error: 'Email and rating are required' }, { status: 400 });
     }
-    
-    await writing.addRating(name, email, rating);
-    return NextResponse.json(writing);
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(body.email)) {
+      return NextResponse.json({ error: 'Valid email is required' }, { status: 400 });
+    }
+
+    const ratingNum = Math.max(1, Math.min(5, Math.round(Number(body.rating))));
+    const sanitizedName = sanitizeHtml(String(body.name || 'Anonymous')).trim();
+
+    const project = await Project.findById(id);
+    if (!project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
+    if (!project.ratings) {
+      project.ratings = [];
+    }
+
+    const normalizedEmail = String(body.email).trim().toLowerCase();
+    const existingRating = project.ratings.find(r => r.email === normalizedEmail);
+    if (existingRating) {
+      existingRating.rating = ratingNum;
+      existingRating.name = sanitizedName;
+    } else {
+      project.ratings.push({ name: sanitizedName, email: normalizedEmail, rating: ratingNum });
+    }
+
+    const totalRating = project.ratings.reduce((sum, r) => sum + r.rating, 0);
+    project.averageRating = totalRating / project.ratings.length;
+    project.totalRatings = project.ratings.length;
+
+    await project.save();
+
+    return NextResponse.json({
+      averageRating: project.averageRating,
+      totalRatings: project.totalRatings
+    });
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to record rating' }, { status: 500 });
   }
 }

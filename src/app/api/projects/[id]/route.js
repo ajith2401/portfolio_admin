@@ -4,15 +4,49 @@ import connectDB from '@/lib/mongodb';
 import { Comment, Project } from '@/models';
 import { deleteImage, uploadImage } from '@/lib/cloudinary';
 import { generateSlug, ensureUniqueSlug } from '@/utils/slugGenerator';
+import { getAuthenticatedUser, requireAuth, validateOrigin } from '@/lib/auth';
+import { sanitizeHtml } from '@/lib/sanitize';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function PUT(request, { params }) {
+export async function GET(request, { params }) {
   try {
     await connectDB();
-    const { id } =  await params; // Extract id properly
+    const { id } = await params;
+    
+    const project = await Project.findById(id);
+    if (!project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
 
-    // Get the existing project
+    if (project.status !== 'published') {
+      const auth = await getAuthenticatedUser(request);
+      if (!auth.valid || !['admin', 'editor'].includes(auth.user.role)) {
+        return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+      }
+    }
+
+    return NextResponse.json(project);
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function PUT(request, { params }) {
+  const auth = await requireAuth(request, ['admin', 'editor']);
+  if (!auth.authorized) {
+    return auth.response;
+  }
+
+  if (!validateOrigin(request)) {
+    return NextResponse.json({ error: 'Forbidden: Invalid request origin' }, { status: 403 });
+  }
+
+  try {
+    await connectDB();
+    const { id } = await params;
+
     const existingProject = await Project.findById(id);
     if (!existingProject) {
       return NextResponse.json(
@@ -21,21 +55,18 @@ export async function PUT(request, { params }) {
       );
     }
 
-    // Check the content type to determine how to parse the request
     const contentType = request.headers.get('content-type') || '';
-    
     let updates;
     let image;
     
     if (contentType.includes('multipart/form-data')) {
-      // Parse form data
       const formData = await request.formData();
-      updates = JSON.parse(formData.get('content'));
+      const rawData = formData.get('content') || formData.get('project');
+      updates = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
       image = formData.get('image');
     } else if (contentType.includes('application/json')) {
-      // Parse JSON data
       updates = await request.json();
-      image = null; // JSON requests can't include file uploads
+      image = null;
     } else {
       return NextResponse.json(
         { error: 'Unsupported content type' },
@@ -44,17 +75,23 @@ export async function PUT(request, { params }) {
     }
 
     // Handle image update if new image is provided
-    if (image) {
+    if (image && typeof image === 'object' && image.type) {
+      const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+      if (!allowedMimes.includes(image.type)) {
+        return NextResponse.json({ error: 'Invalid image format. Allowed: JPEG, PNG, WEBP, GIF' }, { status: 400 });
+      }
+      if (image.size > 5 * 1024 * 1024) {
+        return NextResponse.json({ error: 'Image size exceeds maximum allowed 5MB limit' }, { status: 400 });
+      }
+
       try {
-        // Delete old images from Cloudinary
         if (existingProject.images) {
           const deletePromises = Object.values(existingProject.images)
-            .filter(url => url) // Only delete if URL exists
+            .filter(url => url && typeof url === 'string')
             .map(url => deleteImage(url));
           await Promise.all(deletePromises);
         }
 
-        // Upload new image
         const buffer = await image.arrayBuffer();
         const base64Image = Buffer.from(buffer).toString('base64');
         const dataURI = `data:${image.type};base64,${base64Image}`;
@@ -62,7 +99,7 @@ export async function PUT(request, { params }) {
         const images = await uploadImage(dataURI);
         updates.images = images;
       } catch (error) {
-        console.error('Error handling image update:', error);
+        console.error('Error handling project image update:', error);
         return NextResponse.json(
           { error: 'Failed to update image' }, 
           { status: 500 }
@@ -70,67 +107,44 @@ export async function PUT(request, { params }) {
       }
     }
 
-    // Generate slug if title has changed and no slug is provided
+    // Sanitize fields
+    if (updates.title) updates.title = sanitizeHtml(updates.title).trim();
+    if (updates.shortDescription) updates.shortDescription = sanitizeHtml(updates.shortDescription).trim();
+    if (updates.longDescription) updates.longDescription = sanitizeHtml(updates.longDescription);
+
+    // Generate slug if title changed
     if (updates.title && updates.title !== existingProject.title && !updates.slug) {
       const baseSlug = generateSlug(updates.title);
       if (baseSlug) {
         updates.slug = await ensureUniqueSlug(
           baseSlug,
-          async (slug) => {
-            return await Project.findOne({ slug, _id: { $ne: id } });
-          },
+          async (slug) => Project.findOne({ slug, _id: { $ne: id } }),
           id
         );
       }
     }
 
-    // Convert string fields to arrays if needed
-    if (typeof updates.technologies === 'string') {
-      updates.technologies = updates.technologies.split(',').map(t => t.trim()).filter(Boolean);
-    }
-    if (typeof updates.stack === 'string') {
-      updates.stack = updates.stack.split(',').map(s => s.trim()).filter(Boolean);
-    }
-    if (typeof updates.features === 'string') {
-      updates.features = updates.features.split(',').map(f => f.trim()).filter(Boolean);
-    }
-    if (typeof updates.challenges === 'string') {
-      updates.challenges = updates.challenges.split(',').map(c => c.trim()).filter(Boolean);
-    }
+    // Remove immutable / computed rating fields from client payload
+    delete updates.averageRating;
+    delete updates.totalRatings;
+    delete updates.ratings;
 
-    // Update project
-    const updatedProject = await Project.findByIdAndUpdate(
+    const project = await Project.findByIdAndUpdate(
       id,
-      { 
-        $set: {
-          ...updates,
-          // Preserve existing images if no new image uploaded
-          images: updates.images || existingProject.images
-        }
-      },
-      { 
-        new: true,
-        runValidators: true
-      }
-    ).populate({
-      path: 'comments',
-      options: { sort: { createdAt: -1 } }
-    });
+      { $set: updates },
+      { new: true, runValidators: true }
+    );
 
-    return NextResponse.json(updatedProject);
+    return NextResponse.json(project);
   } catch (error) {
     console.error('Error updating project:', error);
-    
-    // Handle validation errors
     if (error.name === 'ValidationError') {
-      const validationErrors = Object.values(error.errors)
-        .map(err => err.message);
+      const validationErrors = Object.values(error.errors).map(err => err.message);
       return NextResponse.json(
         { error: 'Validation failed', details: validationErrors }, 
         { status: 400 }
       );
     }
-
     return NextResponse.json(
       { error: 'Failed to update project' }, 
       { status: 500 }
@@ -138,29 +152,21 @@ export async function PUT(request, { params }) {
   }
 }
 
-export async function GET(request, { params }) {
-  try {
-    await connectDB();
-    const { id } =await params; // Extract id properly
-    
-    const project = await Project.findById(id).populate('comments');
-    if (!project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-    }
-    return NextResponse.json(project);
-  } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
-
 export async function DELETE(request, { params }) {
+  const auth = await requireAuth(request, ['admin']);
+  if (!auth.authorized) {
+    return auth.response;
+  }
+
+  if (!validateOrigin(request)) {
+    return NextResponse.json({ error: 'Forbidden: Invalid request origin' }, { status: 403 });
+  }
+
   try {
     await connectDB();
-    const { id } = await params; // Extract id properly
+    const { id } = await params;
     
-    // First find the project to get image URLs
     const project = await Project.findById(id);
-    
     if (!project) {
       return NextResponse.json(
         { error: 'Project not found' }, 
@@ -168,19 +174,14 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    // Delete images from Cloudinary if they exist
     if (project.images) {
       const imagePromises = Object.values(project.images)
+        .filter(url => url && typeof url === 'string')
         .map(url => deleteImage(url));
       await Promise.all(imagePromises);
     }
 
-    // Delete all associated comments
-    if (project.comments && project.comments.length > 0) {
-      await Comment.deleteMany({ _id: { $in: project.comments } });
-    }
-
-    // Delete the project
+    await Comment.deleteMany({ parentId: id });
     await Project.findByIdAndDelete(id);
 
     return NextResponse.json({ 

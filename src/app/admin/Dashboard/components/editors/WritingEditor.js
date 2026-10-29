@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import SingleImageUpload from '@/components/ui/SingleImageUpload';
+import { sanitizeHtml } from '@/lib/sanitize';
 
 // Custom PreviewContent component to properly render images
 const PreviewContent = ({ content }) => {
@@ -45,7 +46,7 @@ const PreviewContent = ({ content }) => {
       if (match.index > lastIndex) {
         parts.push(
           <span key={`text-${lastIndex}`} dangerouslySetInnerHTML={{ 
-            __html: content.substring(lastIndex, match.index) 
+            __html: sanitizeHtml(content.substring(lastIndex, match.index)) 
           }} />
         );
       }
@@ -72,7 +73,7 @@ const PreviewContent = ({ content }) => {
     if (lastIndex < content.length) {
       parts.push(
         <span key={`text-${lastIndex}`} dangerouslySetInnerHTML={{ 
-          __html: content.substring(lastIndex) 
+          __html: sanitizeHtml(content.substring(lastIndex)) 
         }} />
       );
     }

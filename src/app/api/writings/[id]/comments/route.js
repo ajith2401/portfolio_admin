@@ -1,13 +1,35 @@
+// src/app/api/writings/[id]/comments/route.js
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { Writing, Comment } from '@/models';
+import { sanitizeHtml } from '@/lib/sanitize';
+import { applyRateLimit } from '@/lib/rateLimit';
+import { getAuthenticatedUser } from '@/lib/auth';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
 export async function GET(request, { params }) {
   try {
     await connectDB();
-    const comments = await Comment.find({ writing: params.id })
-      .sort({ createdAt: -1 });
+    const { id } = await params;
+    
+    const auth = await getAuthenticatedUser(request);
+    const isAdmin = auth.valid && ['admin', 'editor'].includes(auth.user.role);
+
+    const query = {
+      parentId: id,
+      parentModel: 'Writing'
+    };
+
+    if (!isAdmin) {
+      query.status = 'approved';
+    }
+
+    const comments = await Comment.find(query)
+      .sort({ createdAt: -1 })
+      .lean();
+
     return NextResponse.json(comments);
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -15,25 +37,53 @@ export async function GET(request, { params }) {
 }
 
 export async function POST(request, { params }) {
+  const rateLimit = applyRateLimit(request, 'comment-writing', 5, 60 * 1000);
+  if (!rateLimit.allowed) {
+    return rateLimit.response;
+  }
+
   try {
     await connectDB();
-    const commentData = await request.json();
-    
-    const writing = await Writing.findById(params.id);
+    const { id } = await params;
+    const body = await request.json().catch(() => null);
+
+    if (!body || !body.name || !body.email || !body.comment) {
+      return NextResponse.json(
+        { error: 'Name, email, and comment are required' },
+        { status: 400 }
+      );
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(body.email)) {
+      return NextResponse.json({ error: 'Valid email is required' }, { status: 400 });
+    }
+
+    const writing = await Writing.findById(id);
     if (!writing) {
       return NextResponse.json({ error: 'Writing not found' }, { status: 404 });
     }
-    
+
+    const ratingVal = Number(body.rating) || 5;
+    const clampedRating = Math.max(1, Math.min(5, Math.round(ratingVal)));
+
+    // Prevent mass assignment: force pending moderation, sanitize input
     const comment = await Comment.create({
-      ...commentData,
-      writing: params.id
+      parentId: id,
+      parentModel: 'Writing',
+      name: sanitizeHtml(String(body.name)).trim(),
+      email: String(body.email).trim().toLowerCase(),
+      comment: sanitizeHtml(String(body.comment)).trim(),
+      rating: clampedRating,
+      status: 'pending',
     });
-    
-    writing.comments.push(comment._id);
-    await writing.save();
-    
-    return NextResponse.json(comment, { status: 201 });
+
+    return NextResponse.json(
+      { message: 'Comment submitted successfully and is pending review', commentId: comment._id },
+      { status: 201 }
+    );
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('Error adding comment:', error);
+    return NextResponse.json({ error: 'Failed to submit comment' }, { status: 500 });
   }
 }

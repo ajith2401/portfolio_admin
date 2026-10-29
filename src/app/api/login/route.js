@@ -1,73 +1,89 @@
-// /app/api/login/route.js
+// src/app/api/login/route.js
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { SignJWT } from 'jose';
-import { serialize } from 'cookie';
 import { User } from '@/models';
 import connectDB from '@/lib/mongodb';
+import { signToken, createSessionCookie } from '@/lib/auth';
+import { applyRateLimit, globalRateLimiter, getClientIp } from '@/lib/rateLimit';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function POST(req) {
-  await connectDB();  // Ensure DB is connected
+  // 1. Rate limiting on login: max 5 requests per 15 minutes per IP
+  const rateLimitResult = applyRateLimit(req, 'login', 5, 15 * 60 * 1000);
+  if (!rateLimitResult.allowed) {
+    return rateLimitResult.response;
+  }
+
+  await connectDB();
 
   try {
-    // Parse the request body
-    const { email, password } = await req.json();
-
-    // Check if email and password are provided
-    if (!email || !password) {
-      return NextResponse.json({ message: 'Email and password are required' }, { status: 400 });
+    const body = await req.json().catch(() => null);
+    if (!body || !body.email || !body.password) {
+      return NextResponse.json(
+        { message: 'Invalid email or password' },
+        { status: 400 }
+      );
     }
 
-    // Find the user by email
-    const user = await User.findOne({ email });
+    const { email, password } = body;
+    const normalizedEmail = String(email).trim().toLowerCase();
+
+    // Find the user by normalized email
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
-      return NextResponse.json({ message: 'Invalid email or password' }, { status: 401 });
+      // Use generic error message to prevent user enumeration
+      return NextResponse.json(
+        { message: 'Invalid email or password' },
+        { status: 401 }
+      );
     }
 
-    // Compare the provided password with the stored hash
+    // Verify password with bcrypt
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return NextResponse.json({ message: 'Invalid email or password' }, { status: 401 });
+      return NextResponse.json(
+        { message: 'Invalid email or password' },
+        { status: 401 }
+      );
     }
+
+    // Reset rate limiter on successful authentication
+    const ip = getClientIp(req);
+    globalRateLimiter.reset(`login:${ip}`);
+
+    // Update lastLogin timestamp
+    user.lastLogin = new Date();
+    await user.save();
 
     // Create JWT payload
     const payload = {
       userId: user._id.toString(),
-      role: user.role
+      role: user.role,
+      email: user.email
     };
 
-    // Convert secret to Uint8Array for jose
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET);
-    
-    // Generate JWT token using jose
-    const token = await new SignJWT(payload)
-      .setProtectedHeader({ alg: 'HS256' })
-      .setIssuedAt()
-      .setExpirationTime('1h')
-      .sign(secret);
+    const token = await signToken(payload, '1h');
+    const cookie = createSessionCookie(token, 60 * 60);
 
-    // Create a cookie to store the JWT token
-    const cookie = serialize('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // Use secure flag in production
-      maxAge: 60 * 60,  // 1 hour
-      path: '/',
-    });
-
-    // Set the cookie in the response headers
     const res = NextResponse.json({
       message: 'Login successful',
       user: {
+        id: user._id.toString(),
         name: user.name,
         email: user.email,
         role: user.role,
       },
     });
-    res.headers.set('Set-Cookie', cookie);
 
+    res.headers.set('Set-Cookie', cookie);
     return res;
   } catch (error) {
     console.error('Error during login:', error);
-    return NextResponse.json({ message: 'Server error' }, { status: 500 });
+    return NextResponse.json(
+      { message: 'An unexpected server error occurred' },
+      { status: 500 }
+    );
   }
 }

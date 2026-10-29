@@ -5,21 +5,22 @@ import { Writing } from '@/models';
 import { uploadImage } from '@/lib/cloudinary';
 import { notifyWritingSubscribers } from '@/lib/notificationHandler';
 import { generateSlug, ensureUniqueSlug, cleanSlug } from '@/utils/slugGenerator';
+import { getAuthenticatedUser, requireAuth, validateOrigin } from '@/lib/auth';
+import { applyRateLimit } from '@/lib/rateLimit';
+import { sanitizeHtml } from '@/lib/sanitize';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-// Recommended MongoDB Indexes for best performance:
-// db.writings.createIndex({ slug: 1 })
-// db.writings.createIndex({ category: 1, publishedAt: -1 })
-// db.writings.createIndex({ status: 1 })
-// db.writings.createIndex({ title: "text", body: "text", category: "text" })
 
 export async function GET(request) {
   try {
     await connectDB();
     const { searchParams } = new URL(request.url);
     
+    // Check authentication to determine whether drafts may be viewed
+    const auth = await getAuthenticatedUser(request);
+    const isAuthenticatedAdmin = auth.valid && ['admin', 'editor'].includes(auth.user.role);
+
     // Build query based on parameters
     const query = {};
     const sort = {};
@@ -30,10 +31,15 @@ export async function GET(request) {
       query.category = category;
     }
     
-    // Add status filter if needed
-    const status = searchParams.get('status');
-    if (status) {
-      query.status = status;
+    // Access control on status:
+    // Unauthenticated callers may ONLY retrieve published content.
+    if (!isAuthenticatedAdmin) {
+      query.status = 'published';
+    } else {
+      const status = searchParams.get('status');
+      if (status) {
+        query.status = status;
+      }
     }
     
     // Date filter
@@ -56,7 +62,7 @@ export async function GET(request) {
     // Search text - use $text if indexed
     const search = searchParams.get('search');
     if (search && search.trim() !== '') {
-      query.$text = { $search: search };
+      query.$text = { $search: search.trim() };
     }
     
     // Sorting
@@ -83,12 +89,12 @@ export async function GET(request) {
     const limitParam = searchParams.get('limit');
     let page = 1;
     if (pageParam) {
-      const parsedPage = parseInt(pageParam);
+      const parsedPage = parseInt(pageParam, 10);
       page = !isNaN(parsedPage) && parsedPage > 0 ? parsedPage : 1;
     }
     let limit = 12;
     if (limitParam) {
-      const parsedLimit = parseInt(limitParam);
+      const parsedLimit = parseInt(limitParam, 10);
       limit = !isNaN(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 50) : 12;
     }
     const skip = (page - 1) * limit;
@@ -125,21 +131,33 @@ export async function GET(request) {
   } catch (error) {
     console.error('Error fetching writings:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch writings', details: error.message },
+      { error: 'Failed to fetch writings' },
       { status: 500 }
     );
   }
 }
 
 export async function POST(request) {
+  // 1. Enforce Authentication & Role Authorization
+  const auth = await requireAuth(request, ['admin', 'editor']);
+  if (!auth.authorized) {
+    return auth.response;
+  }
+
+  // 2. Origin validation for state changes
+  if (!validateOrigin(request)) {
+    return NextResponse.json({ error: 'Forbidden: Invalid request origin' }, { status: 403 });
+  }
+
+  // 3. Rate limiting
+  const rateLimit = applyRateLimit(request, 'create-writing', 30, 60 * 1000);
+  if (!rateLimit.allowed) {
+    return rateLimit.response;
+  }
+
   try {
     await connectDB();
     
-    // Note: sanitization and rate limiting would be implemented here if needed
-    // request = sanitizeMiddleware(request);
-    // await applyRateLimit(request);
-    
-    // Check if Writing model is undefined before using it
     if (!Writing) {
       throw new Error('Writing model is not properly imported');
     }
@@ -147,14 +165,12 @@ export async function POST(request) {
     let writing;
     let imageFile;
     
-    // Check the content type to determine how to parse the request
     const contentType = request.headers.get('content-type') || '';
     
     if (contentType.includes('multipart/form-data')) {
-      // Handle form data
       try {
         const formData = await request.formData();
-        const writingData = formData.get('writing');
+        const writingData = formData.get('writing') || formData.get('content');
         
         if (!writingData) {
           return NextResponse.json(
@@ -176,7 +192,6 @@ export async function POST(request) {
         );
       }
     } else {
-      // Handle JSON data
       try {
         writing = await request.json();
       } catch (error) {
@@ -196,45 +211,52 @@ export async function POST(request) {
       );
     }
 
+    // Sanitize user inputs while preserving formatting and Tamil typography
+    writing.title = sanitizeHtml(writing.title).trim();
+    if (writing.subtitle) writing.subtitle = sanitizeHtml(writing.subtitle).trim();
+    writing.body = sanitizeHtml(writing.body);
+    if (writing.excerpt) writing.excerpt = sanitizeHtml(writing.excerpt).trim();
+
     // Clean and generate slug
     if (writing.slug) {
-      // Clean existing slug
       writing.slug = cleanSlug(writing.slug);
     }
 
     if (!writing.slug) {
-      // Generate slug from title if no valid slug exists
       const baseSlug = generateSlug(writing.title);
       if (baseSlug) {
         writing.slug = await ensureUniqueSlug(
           baseSlug,
-          async (slug) => {
-            return await Writing.findOne({ slug });
-          }
+          async (slug) => Writing.findOne({ slug })
         );
       } else {
-        // Fallback if title-based slug generation fails
         writing.slug = `writing-${Date.now()}`;
       }
     } else {
-      // Ensure provided slug is unique
       writing.slug = await ensureUniqueSlug(
         writing.slug,
-        async (slug) => {
-          return await Writing.findOne({ slug });
-        }
+        async (slug) => Writing.findOne({ slug })
       );
     }
 
-    // Final check - ensure slug exists
     if (!writing.slug) {
       writing.slug = `writing-${Date.now()}`;
     }
 
     // Handle image upload if present
-    if (imageFile) {
+    if (imageFile && typeof imageFile === 'object' && imageFile.type) {
+      // Validate file type
+      const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+      if (!allowedMimes.includes(imageFile.type)) {
+        return NextResponse.json({ error: 'Invalid image format. Allowed: JPEG, PNG, WEBP, GIF' }, { status: 400 });
+      }
+
+      // Max size: 5MB
+      if (imageFile.size > 5 * 1024 * 1024) {
+        return NextResponse.json({ error: 'Image size exceeds maximum allowed 5MB limit' }, { status: 400 });
+      }
+
       try {
-        // Convert file to buffer/base64 if needed by your cloudinary setup
         const buffer = await imageFile.arrayBuffer();
         const base64Image = Buffer.from(buffer).toString('base64');
         const dataURI = `data:${imageFile.type};base64,${base64Image}`;
@@ -254,26 +276,25 @@ export async function POST(request) {
     writing.averageRating = 0;
     writing.totalRatings = 0;
     writing.ratings = [];
-    // Note: comments is a count field, not an array
 
-    // Create the writing
+    // Default status to draft if not valid
+    if (!['draft', 'published'].includes(writing.status)) {
+      writing.status = 'draft';
+    }
+
     const newWriting = await Writing.create(writing);
 
-    // Get the created writing without populating comments (since it's just a count)
-    const populatedWriting = newWriting;
-
-    if (writing.status === 'published') {
-      notifyWritingSubscribers(populatedWriting).then(()=> console.log(">>>>>>>>>>>>>>>>>>>>>Mail send successfully ")).catch(error => {
+    if (newWriting.status === 'published') {
+      notifyWritingSubscribers(newWriting).catch(error => {
         console.error('Error sending writing notifications:', error);
       });
     }
 
-    return NextResponse.json(populatedWriting, { status: 201 });
+    return NextResponse.json(newWriting, { status: 201 });
 
   } catch (error) {
     console.error('Error creating writing:', error);
     
-    // Handle Mongoose validation errors
     if (error.name === 'ValidationError') {
       const validationErrors = Object.values(error.errors).map(err => err.message);
       return NextResponse.json(

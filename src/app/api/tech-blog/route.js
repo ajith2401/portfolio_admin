@@ -4,21 +4,35 @@ import connectDB from '@/lib/mongodb';
 import { TechBlog } from '@/models';
 import { notifyBlogSubscribers } from '@/lib/notificationHandler';
 import { generateSlug, ensureUniqueSlug } from '@/utils/slugGenerator';
+import { getAuthenticatedUser, requireAuth, validateOrigin } from '@/lib/auth';
+import { applyRateLimit } from '@/lib/rateLimit';
+import { sanitizeHtml } from '@/lib/sanitize';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   try {
     await connectDB();
     const { searchParams } = new URL(request.url);
 
-    // Build query based on parameters
+    const auth = await getAuthenticatedUser(request);
+    const isAuthenticatedAdmin = auth.valid && ['admin', 'editor'].includes(auth.user.role);
+
     const query = {};
     const sort = {};
 
-    // Category filter
     const category = searchParams.get('category');
     if (category) query.category = category;
 
-    // Date filter
+    // Enforce 'published' for unauthenticated requests
+    if (!isAuthenticatedAdmin) {
+      query.status = 'published';
+    } else {
+      const status = searchParams.get('status');
+      if (status) query.status = status;
+    }
+
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     if (startDate || endDate) {
@@ -27,29 +41,29 @@ export async function GET(request) {
       if (endDate) query.createdAt.$lte = new Date(endDate);
     }
 
-    // Search text
     const search = searchParams.get('search');
-    if (search) {
-      query.$text = { $search: search };
+    if (search && search.trim() !== '') {
+      query.$text = { $search: search.trim() };
     }
 
-    // Sorting
     const sortBy = searchParams.get('sortBy');
     if (sortBy === 'rating') {
       sort.averageRating = -1;
     } else if (sortBy === 'date') {
       sort.createdAt = -1;
+    } else {
+      sort.createdAt = -1;
     }
 
-    // Pagination
-    const page = parseInt(searchParams.get('page')) || 1;
-    const limit = parseInt(searchParams.get('limit')) || 12;
+    const page = Math.max(1, parseInt(searchParams.get('page'), 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit'), 10) || 12));
     const skip = (page - 1) * limit;
 
     const techBlogs = await TechBlog.find(query)
       .sort(sort)
       .skip(skip)
       .limit(limit)
+      .lean();
 
     const total = await TechBlog.countDocuments(query);
 
@@ -64,21 +78,40 @@ export async function GET(request) {
   } catch (error) {
     console.error('Error fetching tech blogs:', error);
     return NextResponse.json(
-      { error: error.message },
+      { error: 'Failed to fetch tech blogs' },
       { status: 500 }
     );
   }
 }
 
-
-// POST new tech blog
 export async function POST(request) {
+  const auth = await requireAuth(request, ['admin', 'editor']);
+  if (!auth.authorized) {
+    return auth.response;
+  }
+
+  if (!validateOrigin(request)) {
+    return NextResponse.json({ error: 'Forbidden: Invalid request origin' }, { status: 403 });
+  }
+
+  const rateLimit = applyRateLimit(request, 'create-tech-blog', 30, 60 * 1000);
+  if (!rateLimit.allowed) {
+    return rateLimit.response;
+  }
+
   try {
     await connectDB();
     
-    const data = await request.json();
+    let data;
+    try {
+      data = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: 'Invalid JSON data' },
+        { status: 400 }
+      );
+    }
     
-    // Validate required fields
     if (!data.title || !data.category || !data.content) {
       return NextResponse.json(
         { error: 'Title, category, and content are required' },
@@ -86,34 +119,50 @@ export async function POST(request) {
       );
     }
 
+    // Sanitize user inputs
+    data.title = sanitizeHtml(data.title).trim();
+    if (data.subtitle) data.subtitle = sanitizeHtml(data.subtitle).trim();
+    data.content = sanitizeHtml(data.content);
+
     // Generate slug if not provided
     if (!data.slug) {
       const baseSlug = generateSlug(data.title);
       if (baseSlug) {
         data.slug = await ensureUniqueSlug(
           baseSlug,
-          async (slug) => {
-            return await TechBlog.findOne({ slug });
-          }
+          async (slug) => TechBlog.findOne({ slug })
         );
+      } else {
+        data.slug = `tech-blog-${Date.now()}`;
       }
+    } else {
+      data.slug = await ensureUniqueSlug(
+        data.slug,
+        async (slug) => TechBlog.findOne({ slug })
+      );
     }
 
+    // Default status to draft if not valid
+    if (!['draft', 'published'].includes(data.status)) {
+      data.status = 'draft';
+    }
+
+    // Prevent direct rating manipulation
+    delete data.averageRating;
+    delete data.totalRatings;
+    delete data.ratings;
+
     const blog = await TechBlog.create(data);
-    
-    // Send notifications if blog is published
+
     if (blog.status === 'published') {
-      // Send notifications asynchronously (non-blocking)
       notifyBlogSubscribers(blog).catch(error => {
         console.error('Error sending blog notifications:', error);
       });
     }
-      
+
     return NextResponse.json(blog, { status: 201 });
   } catch (error) {
     console.error('Error creating tech blog:', error);
-    
-    // Handle Mongoose validation errors
     if (error.name === 'ValidationError') {
       const validationErrors = Object.values(error.errors).map(err => err.message);
       return NextResponse.json(
@@ -121,7 +170,6 @@ export async function POST(request) {
         { status: 400 }
       );
     }
-
     return NextResponse.json(
       { error: 'Failed to create tech blog' },
       { status: 500 }

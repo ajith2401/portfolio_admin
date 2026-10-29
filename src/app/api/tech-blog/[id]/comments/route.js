@@ -1,20 +1,34 @@
 // src/app/api/tech-blog/[id]/comments/route.js
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
+import { Comment, TechBlog } from '@/models';
+import { sanitizeHtml } from '@/lib/sanitize';
+import { applyRateLimit } from '@/lib/rateLimit';
+import { getAuthenticatedUser } from '@/lib/auth';
 
-import { Comment } from '@/models/comment.model';
-import { TechBlog } from '@/models';
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-// GET comments for a tech blog
 export async function GET(request, { params }) {
   try {
     await connectDB();
+    const { id } = await params;
     
-    const comments = await Comment.find({
-      parentId: params.id,
-      parentModel: 'TechBlog',
-      status: 'approved'
-    }).sort({ createdAt: -1 });
+    const auth = await getAuthenticatedUser(request);
+    const isAdmin = auth.valid && ['admin', 'editor'].includes(auth.user.role);
+
+    const query = {
+      parentId: id,
+      parentModel: 'TechBlog'
+    };
+
+    if (!isAdmin) {
+      query.status = 'approved';
+    }
+
+    const comments = await Comment.find(query)
+      .sort({ createdAt: -1 })
+      .lean();
     
     return NextResponse.json(comments);
   } catch (error) {
@@ -26,52 +40,54 @@ export async function GET(request, { params }) {
   }
 }
 
-// POST new comment
 export async function POST(request, { params }) {
+  const rateLimit = applyRateLimit(request, 'comment-techblog', 5, 60 * 1000);
+  if (!rateLimit.allowed) {
+    return rateLimit.response;
+  }
+
   try {
     await connectDB();
+    const { id } = await params;
     
-    const data = await request.json();
-    const blog = await TechBlog.findById(params.id);
-    
+    const body = await request.json().catch(() => null);
+    if (!body || !body.name || !body.email || !body.comment) {
+      return NextResponse.json(
+        { error: 'Name, email, and comment are required' },
+        { status: 400 }
+      );
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(body.email)) {
+      return NextResponse.json({ error: 'Valid email is required' }, { status: 400 });
+    }
+
+    const blog = await TechBlog.findById(id);
     if (!blog) {
       return NextResponse.json(
         { error: 'Tech blog not found' },
         { status: 404 }
       );
     }
+
+    const ratingVal = Number(body.rating) || 5;
+    const clampedRating = Math.max(1, Math.min(5, Math.round(ratingVal)));
     
-    // Create comment with reference to TechBlog
     const comment = await Comment.create({
-      ...data,
-      parentId: params.id,
-      parentModel: 'TechBlog'
+      parentId: id,
+      parentModel: 'TechBlog',
+      name: sanitizeHtml(String(body.name)).trim(),
+      email: String(body.email).trim().toLowerCase(),
+      comment: sanitizeHtml(String(body.comment)).trim(),
+      rating: clampedRating,
+      status: 'pending'
     });
     
-    // Update blog's rating
-    if (blog.ratings) {
-      const existingRating = blog.ratings.find(r => r.email === data.email);
-      
-      if (existingRating) {
-        existingRating.rating = data.rating;
-        existingRating.name = data.name;
-      } else {
-        blog.ratings.push({
-          name: data.name,
-          email: data.email,
-          rating: data.rating
-        });
-      }
-      
-      // Calculate average rating
-      const totalRating = blog.ratings.reduce((sum, r) => sum + r.rating, 0);
-      blog.averageRating = totalRating / blog.ratings.length;
-      blog.totalRatings = blog.ratings.length;
-      
-      await blog.save();
-    }
-    
-    return NextResponse.json(comment, { status: 201 });
+    return NextResponse.json(
+      { message: 'Comment submitted successfully and is pending review', commentId: comment._id },
+      { status: 201 }
+    );
   } catch (error) {
     console.error('Error creating comment:', error);
     return NextResponse.json(
@@ -80,4 +96,3 @@ export async function POST(request, { params }) {
     );
   }
 }
-

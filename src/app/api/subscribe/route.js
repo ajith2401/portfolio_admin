@@ -1,30 +1,39 @@
 // src/app/api/subscribe/route.js
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import connectDB from '@/lib/mongodb';
-import { Subscriber } from '@/models'; // Import from centralized models
+import { Subscriber } from '@/models';
 import { validateEmail, sendVerificationEmail, sendWelcomeEmail } from '@/lib/emailUtils';
+import { applyRateLimit } from '@/lib/rateLimit';
 
-// Helper function to generate verification token
-function generateToken() {
-  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+function generateSecureToken() {
+  return crypto.randomBytes(32).toString('hex');
 }
 
 export async function POST(request) {
+  const rateLimit = applyRateLimit(request, 'subscribe', 5, 60 * 1000);
+  if (!rateLimit.allowed) {
+    return rateLimit.response;
+  }
+
   try {
     await connectDB();
     
-    const { email, preferences } = await request.json();
-    
-    // Validate input
-    if (!email || typeof email !== 'string') {
+    const body = await request.json().catch(() => null);
+    if (!body || !body.email || typeof body.email !== 'string') {
       return NextResponse.json(
         { message: 'Valid email is required' },
         { status: 400 }
       );
     }
+
+    const { email, preferences } = body;
+    const normalizedEmail = email.trim().toLowerCase();
     
-    // Validate email format and MX records
-    const isValidEmail = await validateEmail(email);
+    const isValidEmail = await validateEmail(normalizedEmail);
     if (!isValidEmail) {
       return NextResponse.json(
         { message: 'Please provide a valid email address' },
@@ -46,40 +55,40 @@ export async function POST(request) {
       );
     }
     
-    // Generate verification token
-    const verificationToken = generateToken();
+    // Generate cryptographically secure token
+    const verificationToken = generateSecureToken();
     
-    // Check if subscriber already exists
-    let subscriber = await Subscriber.findOne({ email });
+    let subscriber = await Subscriber.findOne({ email: normalizedEmail });
     
     if (subscriber) {
-      // Update existing subscriber
-      subscriber.preferences = preferences;
+      subscriber.preferences = {
+        blog: Boolean(preferences.blog),
+        quill: Boolean(preferences.quill)
+      };
       subscriber.active = true;
       
-      // Only regenerate verification token if not already verified
       if (!subscriber.isVerified) {
         subscriber.verificationToken = verificationToken;
       }
       
       await subscriber.save();
     } else {
-      // Create new subscriber
       subscriber = await Subscriber.create({
-        email,
-        preferences,
+        email: normalizedEmail,
+        preferences: {
+          blog: Boolean(preferences.blog),
+          quill: Boolean(preferences.quill)
+        },
         verificationToken,
         isVerified: false,
         active: true
       });
     }
     
-    // Send verification email if not already verified
     if (!subscriber.isVerified) {
-      await sendVerificationEmail(email, verificationToken, preferences);
+      await sendVerificationEmail(normalizedEmail, verificationToken, subscriber.preferences);
     }
     
-    // Return success response
     return NextResponse.json({
       message: 'Subscription successful!',
       isVerified: subscriber.isVerified,
@@ -88,7 +97,6 @@ export async function POST(request) {
   } catch (error) {
     console.error('Subscription error:', error);
     
-    // Handle duplicate key error (email already exists)
     if (error.code === 11000) {
       return NextResponse.json(
         { message: 'You are already subscribed with this email address' },
@@ -96,7 +104,6 @@ export async function POST(request) {
       );
     }
     
-    // Handle validation errors
     if (error.name === 'ValidationError') {
       const errors = Object.values(error.errors).map(err => err.message);
       return NextResponse.json(
@@ -112,7 +119,6 @@ export async function POST(request) {
   }
 }
 
-// GET route for unsubscribing
 export async function GET(request) {
   try {
     await connectDB();
@@ -121,15 +127,14 @@ export async function GET(request) {
     const token = searchParams.get('token');
     const action = searchParams.get('action') || 'verify';
     
-    if (!token) {
+    if (!token || typeof token !== 'string' || token.length < 16) {
       return NextResponse.json(
-        { message: 'Token is required' },
+        { message: 'Valid token is required' },
         { status: 400 }
       );
     }
     
     if (action === 'verify') {
-      // Verify email
       const subscriber = await Subscriber.findOne({ verificationToken: token });
       
       if (!subscriber) {
@@ -143,7 +148,6 @@ export async function GET(request) {
       subscriber.verificationToken = null;
       await subscriber.save();
       
-      // Send welcome email
       try {
         await sendWelcomeEmail(
           subscriber.email, 
@@ -152,13 +156,10 @@ export async function GET(request) {
         );
       } catch (error) {
         console.error('Error sending welcome email:', error);
-        // Continue with verification even if welcome email fails
       }
       
-      // Redirect to thank you page
       return NextResponse.redirect(new URL('/subscription-verified', request.url));
     } else if (action === 'unsubscribe') {
-      // Unsubscribe
       const subscriber = await Subscriber.findOne({ unsubscribeToken: token });
       
       if (!subscriber) {
@@ -171,7 +172,6 @@ export async function GET(request) {
       subscriber.active = false;
       await subscriber.save();
       
-      // Redirect to unsubscribe confirmation page
       return NextResponse.redirect(new URL('/unsubscribed', request.url));
     }
     
@@ -181,7 +181,6 @@ export async function GET(request) {
     );
   } catch (error) {
     console.error('Token verification error:', error);
-    
     return NextResponse.json(
       { message: 'Failed to process request' },
       { status: 500 }

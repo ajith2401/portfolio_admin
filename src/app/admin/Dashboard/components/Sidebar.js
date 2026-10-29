@@ -9,7 +9,8 @@ import {
   Settings, 
   BarChart,
   Menu, 
-  X 
+  X,
+  LogOut 
 } from 'lucide-react';
 
 export const Sidebar = ({ 
@@ -26,6 +27,16 @@ export const Sidebar = ({
     { icon: BarChart, label: 'Analytics', section: 'analytics' },
     { icon: Settings, label: 'Settings', section: 'settings' },
   ];
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+      window.location.href = '/login';
+    } catch (err) {
+      console.error('Logout error:', err);
+      window.location.href = '/login';
+    }
+  };
 
   return (
     <div 
@@ -61,7 +72,7 @@ export const Sidebar = ({
         ))}
       </nav>
 
-      <div className="p-4 border-t">
+      <div className="p-4 border-t flex flex-col gap-3">
         <div className={`flex items-center ${collapsed ? 'justify-center' : ''}`}>
           <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-700">
             A
@@ -73,6 +84,16 @@ export const Sidebar = ({
             </div>
           )}
         </div>
+        <button
+          onClick={handleLogout}
+          className={`flex items-center py-2 px-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors ${
+            collapsed ? 'justify-center' : ''
+          }`}
+          title="Log out"
+        >
+          <LogOut size={18} />
+          {!collapsed && <span className="ml-3 text-sm font-medium">Logout</span>}
+        </button>
       </div>
     </div>
   );

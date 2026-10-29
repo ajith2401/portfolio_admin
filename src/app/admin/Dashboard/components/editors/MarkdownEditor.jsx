@@ -17,6 +17,7 @@ import {
 } from '@/components/ui';
 import { TECH_BLOG_CATEGORIES } from '../../lib/constants';
 import { ImageUpload } from '../ImageUpload';
+import { sanitizeAndRenderMarkdown } from './MarkdownRenderer';
 import { 
   Bold, 
   Italic, 
@@ -55,30 +56,7 @@ export const MarkdownEditor = ({ content, onSave, onClose }) => {
   const textareaRef = useRef(null);
 
   useEffect(() => {
-    // Simple markdown to HTML conversion for preview
-    let html = formData.content
-      .replace(/# (.*$)/gm, '<h1>$1</h1>')
-      .replace(/## (.*$)/gm, '<h2>$1</h2>')
-      .replace(/### (.*$)/gm, '<h3>$1</h3>')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/~~(.*?)~~/g, '<del>$1</del>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-      .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank">$1</a>')
-      .replace(/!\[(.*?)\]\((.*?)\)/g, '<img src="$2" alt="$1" style="max-width:100%">')
-      .replace(/^\> (.*$)/gm, '<blockquote>$1</blockquote>')
-      .replace(/^\- (.*$)/gm, '<ul><li>$1</li></ul>')
-      .replace(/^(\d+)\. (.*$)/gm, '<ol><li>$2</li></ol>')
-      .replace(/^\-\- (.*$)/gm, '<ul style="margin-left:20px"><li>$1</li></ul>')
-      .replace(/^---$/gm, '<hr>')
-      .replace(/\n/g, '<br>');
-      
-    // Fix lists (merge adjacent list items)
-    html = html.replace(/<\/ul><ul>/g, '')
-      .replace(/<\/ol><ol>/g, '');
-      
-    setPreview(html);
+    setPreview(sanitizeAndRenderMarkdown(formData.content));
   }, [formData.content]);
 
   const insertMarkdown = (markdownType) => {

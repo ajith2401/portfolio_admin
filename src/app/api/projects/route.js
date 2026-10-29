@@ -4,6 +4,9 @@ import connectDB from '@/lib/mongodb';
 import { Project } from '@/models';
 import { uploadImage } from '@/lib/cloudinary';
 import { generateSlug, ensureUniqueSlug } from '@/utils/slugGenerator';
+import { getAuthenticatedUser, requireAuth, validateOrigin } from '@/lib/auth';
+import { applyRateLimit } from '@/lib/rateLimit';
+import { sanitizeHtml } from '@/lib/sanitize';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,13 +16,23 @@ export async function GET(request) {
     await connectDB();
     const { searchParams } = new URL(request.url);
     
-    // Build query based on parameters
+    const auth = await getAuthenticatedUser(request);
+    const isAuthenticatedAdmin = auth.valid && ['admin', 'editor'].includes(auth.user.role);
+
     const query = {};
     const sort = {};
 
     // Category filter
     const category = searchParams.get('category');
     if (category) query.category = category;
+
+    // Status filter: enforce 'published' for unauthenticated requests
+    if (!isAuthenticatedAdmin) {
+      query.status = 'published';
+    } else {
+      const status = searchParams.get('status');
+      if (status) query.status = status;
+    }
 
     // Date filter
     const startDate = searchParams.get('startDate');
@@ -32,8 +45,8 @@ export async function GET(request) {
 
     // Search text
     const search = searchParams.get('search');
-    if (search) {
-      query.$text = { $search: search };
+    if (search && search.trim() !== '') {
+      query.$text = { $search: search.trim() };
     }
 
     // Sorting
@@ -42,17 +55,20 @@ export async function GET(request) {
       sort.averageRating = -1;
     } else if (sortBy === 'date') {
       sort.createdAt = -1;
+    } else {
+      sort.createdAt = -1;
     }
 
     // Pagination
-    const page = parseInt(searchParams.get('page')) || 1;
-    const limit = parseInt(searchParams.get('limit')) || 12;
+    const page = Math.max(1, parseInt(searchParams.get('page'), 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit'), 10) || 12));
     const skip = (page - 1) * limit;
 
     const projects = await Project.find(query)
       .sort(sort)
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .lean();
 
     const total = await Project.countDocuments(query);
 
@@ -67,47 +83,52 @@ export async function GET(request) {
   } catch (error) {
     console.error('Error fetching projects:', error);
     return NextResponse.json(
-      { error: error.message },
+      { error: 'Failed to fetch projects' },
       { status: 500 }
     );
   }
 }
 
 export async function POST(request) {
+  const auth = await requireAuth(request, ['admin', 'editor']);
+  if (!auth.authorized) {
+    return auth.response;
+  }
+
+  if (!validateOrigin(request)) {
+    return NextResponse.json({ error: 'Forbidden: Invalid request origin' }, { status: 403 });
+  }
+
+  const rateLimit = applyRateLimit(request, 'create-project', 30, 60 * 1000);
+  if (!rateLimit.allowed) {
+    return rateLimit.response;
+  }
+
   try {
     await connectDB();
 
-    // Check content type and handle accordingly
     const contentType = request.headers.get('content-type') || '';
-    
     let projectData = {};
     let imageFile = null;
     
     if (contentType.includes('multipart/form-data')) {
-      // Handle form data
       const formData = await request.formData();
-      
-      // Get content data
-      const contentData = formData.get('content');
+      const contentData = formData.get('content') || formData.get('project');
       if (contentData) {
         try {
-          projectData = JSON.parse(contentData);
-        } catch (error) {
-          console.error('Error parsing content JSON:', error);
+          projectData = typeof contentData === 'string' ? JSON.parse(contentData) : contentData;
+        } catch {
           return NextResponse.json(
             { error: 'Invalid content data format' },
             { status: 400 }
           );
         }
       }
-      
-      // Get image if present
       imageFile = formData.get('image');
-    } else {
-      // Assume JSON data
+    } else if (contentType.includes('application/json')) {
       try {
         projectData = await request.json();
-      } catch (error) {
+      } catch {
         return NextResponse.json(
           { error: 'Invalid JSON data' },
           { status: 400 }
@@ -115,7 +136,6 @@ export async function POST(request) {
       }
     }
 
-    // Validate required fields
     if (!projectData.title || !projectData.category) {
       return NextResponse.json(
         { error: 'Title and category are required' },
@@ -123,37 +143,47 @@ export async function POST(request) {
       );
     }
 
-    // Generate slug if not provided
+    // Sanitize text inputs
+    projectData.title = sanitizeHtml(projectData.title).trim();
+    if (projectData.shortDescription) projectData.shortDescription = sanitizeHtml(projectData.shortDescription).trim();
+    if (projectData.longDescription) projectData.longDescription = sanitizeHtml(projectData.longDescription);
+
+    // Generate slug
     if (!projectData.slug) {
       const baseSlug = generateSlug(projectData.title);
       if (baseSlug) {
         projectData.slug = await ensureUniqueSlug(
           baseSlug,
-          async (slug) => {
-            return await Project.findOne({ slug });
-          }
+          async (slug) => Project.findOne({ slug })
         );
+      } else {
+        projectData.slug = `project-${Date.now()}`;
       }
+    } else {
+      projectData.slug = await ensureUniqueSlug(
+        projectData.slug,
+        async (slug) => Project.findOne({ slug })
+      );
     }
 
     // Handle image upload if present
-    if (imageFile) {
+    if (imageFile && typeof imageFile === 'object' && imageFile.type) {
+      const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+      if (!allowedMimes.includes(imageFile.type)) {
+        return NextResponse.json({ error: 'Invalid image format. Allowed: JPEG, PNG, WEBP, GIF' }, { status: 400 });
+      }
+      if (imageFile.size > 5 * 1024 * 1024) {
+        return NextResponse.json({ error: 'Image size exceeds maximum allowed 5MB limit' }, { status: 400 });
+      }
+
       try {
-        // Convert file to buffer/base64 if needed by your cloudinary setup
         const buffer = await imageFile.arrayBuffer();
         const base64Image = Buffer.from(buffer).toString('base64');
         const dataURI = `data:${imageFile.type};base64,${base64Image}`;
-        
         const images = await uploadImage(dataURI);
-        projectData.images = {
-          ...projectData.images,
-          small: images.small,
-          medium: images.medium,
-          large: images.large,
-          thumbnail: images.small // Use small as thumbnail
-        };
+        projectData.images = images;
       } catch (error) {
-        console.error('Image upload error:', error);
+        console.error('Project image upload error:', error);
         return NextResponse.json(
           { error: 'Failed to upload image' },
           { status: 500 }
@@ -161,59 +191,15 @@ export async function POST(request) {
       }
     }
 
-    // Map longDescription from description if provided
-    if (projectData.description && !projectData.longDescription) {
-      projectData.longDescription = projectData.description;
-      delete projectData.description;
+    // Default status to draft if not valid
+    if (!['draft', 'published'].includes(projectData.status)) {
+      projectData.status = 'draft';
     }
 
-    // Ensure necessary arrays are initialized
-    projectData.technologies = projectData.technologies || [];
-    projectData.stack = projectData.stack || [];
-    projectData.features = projectData.features || [];
-    projectData.challenges = projectData.challenges || [];
-    
-    // If technologies is a string, convert to array
-    if (typeof projectData.technologies === 'string') {
-      projectData.technologies = projectData.technologies
-        .split(',')
-        .map(tech => tech.trim())
-        .filter(Boolean);
-    }
-
-    // If stack is a string, convert to array
-    if (typeof projectData.stack === 'string') {
-      projectData.stack = projectData.stack
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean);
-    }
-
-    // If features is a string, convert to array
-    if (typeof projectData.features === 'string') {
-      projectData.features = projectData.features
-        .split(',')
-        .map(f => f.trim())
-        .filter(Boolean);
-    }
-
-    // If challenges is a string, convert to array
-    if (typeof projectData.challenges === 'string') {
-      projectData.challenges = projectData.challenges
-        .split(',')
-        .map(c => c.trim())
-        .filter(Boolean);
-    }
-
-    // Create the project
-    const newProject = await Project.create(projectData);
-
-    return NextResponse.json(newProject, { status: 201 });
-
+    const project = await Project.create(projectData);
+    return NextResponse.json(project, { status: 201 });
   } catch (error) {
     console.error('Error creating project:', error);
-    
-    // Handle Mongoose validation errors
     if (error.name === 'ValidationError') {
       const validationErrors = Object.values(error.errors).map(err => err.message);
       return NextResponse.json(
@@ -221,15 +207,6 @@ export async function POST(request) {
         { status: 400 }
       );
     }
-
-    // Handle duplicate key error
-    if (error.code === 11000) {
-      return NextResponse.json(
-        { error: 'A project with this title already exists' },
-        { status: 400 }
-      );
-    }
-
     return NextResponse.json(
       { error: 'Failed to create project' },
       { status: 500 }

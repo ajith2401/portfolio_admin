@@ -2,11 +2,17 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { Writing, TechBlog, Project, Analytics } from '@/models';
+import { requireAuth } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request) {
+  const auth = await requireAuth(request, ['admin', 'editor']);
+  if (!auth.authorized) {
+    return auth.response;
+  }
+
   try {
     await connectDB();
     
@@ -97,53 +103,26 @@ export async function GET() {
       ])
     ]);
     
-    // Process ratings data
-    const processedRatings = {
-      writings: Array(5).fill(0),
-      techBlogs: Array(5).fill(0),
-      projects: Array(5).fill(0)
-    };
-    
-    ratingsDistribution[0].forEach(item => {
-      if (item._id >= 1 && item._id <= 5) {
-        processedRatings.writings[item._id - 1] = item.count;
-      }
-    });
-    
-    ratingsDistribution[1].forEach(item => {
-      if (item._id >= 1 && item._id <= 5) {
-        processedRatings.techBlogs[item._id - 1] = item.count;
-      }
-    });
-    
-    ratingsDistribution[2].forEach(item => {
-      if (item._id >= 1 && item._id <= 5) {
-        processedRatings.projects[item._id - 1] = item.count;
-      }
-    });
-    
-    // Return the analytics data
     return NextResponse.json({
       overview: {
         pageViews: totalPageViews,
         visitors: totalVisitors,
-        newContent: contentCreationStats.writings + contentCreationStats.techBlogs + contentCreationStats.projects
+        bounceRate: 42,
+        avgSessionDuration: '2m 45s'
       },
-      contentStats: {
-        writings: contentCreationStats.writings,
-        techBlogs: contentCreationStats.techBlogs,
-        projects: contentCreationStats.projects
-      },
+      pageViewsData: analyticsData.map(item => ({
+        date: item.date ? item.date.toISOString().split('T')[0] : '',
+        views: item.pageViews ? item.pageViews.reduce((a, b) => a + b, 0) : 0,
+        visitors: item.visitors || 0
+      })),
       popularContent: detailedPopularContent,
-      ratings: processedRatings,
-      // Include daily data for charts
-      dailyData: analyticsData.map(item => ({
-        date: item.date,
-        visitors: item.visitors || 0,
-        pageViews: item.pageViews ? Array.from(item.pageViews.values()).reduce((sum, val) => sum + val, 0) : 0
-      }))
+      contentCreation: contentCreationStats,
+      ratings: {
+        writings: ratingsDistribution[0],
+        techBlogs: ratingsDistribution[1],
+        projects: ratingsDistribution[2]
+      }
     });
-    
   } catch (error) {
     console.error('Error fetching analytics:', error);
     return NextResponse.json(
