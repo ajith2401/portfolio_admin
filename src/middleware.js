@@ -3,11 +3,13 @@ import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 
 const ALLOWED_ORIGINS = [
-  'https://admin.ajithkumar.com',
-  'https://ajithkumar.com',
+  'https://admin.ajithkumarr.com',
+  'https://ajithkumarr.com',
   'https://www.ajithkumarr.com',
   'http://localhost:3000',
-  'http://127.0.0.1:3000'
+  'http://localhost:3001',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3001'
 ];
 
 export async function middleware(req) {

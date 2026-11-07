@@ -9,11 +9,13 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 // Allowed origins for CORS and CSRF checks
 export const ALLOWED_ORIGINS = [
-  'https://admin.ajithkumar.com',
-  'https://ajithkumar.com',
+  'https://admin.ajithkumarr.com',
+  'https://ajithkumarr.com',
   'https://www.ajithkumarr.com',
   'http://localhost:3000',
-  'http://127.0.0.1:3000'
+  'http://localhost:3001',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3001'
 ];
 
 /**
