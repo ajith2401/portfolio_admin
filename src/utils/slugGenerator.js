@@ -1,95 +1,50 @@
 // src/utils/slugGenerator.js
+/**
+ * Generates SEO-friendly URL slugs from titles
+ * Thin wrapper over the shared slug contract (src/lib/content-contract/slug.js).
+ */
+
+export { generateSlug } from '../lib/content-contract/slug.js';
+
+import {
+  ensureUniqueSlug as contractEnsureUniqueSlug,
+  validateSlug as contractValidateSlug,
+} from '../lib/content-contract/slug.js';
 
 /**
- * Generate a URL-friendly slug from a string
- * @param {string} text - The text to convert to a slug
- * @returns {string} - The generated slug
+ * Legacy signature kept for existing callers: findFunction(slug, excludeId) resolves truthy if taken.
+ * Delegates to the shared contract (suffixes -2, -3 ...; never returns an invalid slug).
  */
-export function generateSlug(text) {
-  if (!text || typeof text !== 'string') {
-    return '';
-  }
-
-  return text
-    .toLowerCase()
-    .trim()
-    // Replace spaces and underscores with hyphens
-    .replace(/[\s_]+/g, '-')
-    // Remove special characters except hyphens, keeping alphanumeric and Tamil characters
-    .replace(/[^a-z0-9\u0B80-\u0BFF-]/g, '')
-    // Remove multiple consecutive hyphens
-    .replace(/-+/g, '-')
-    // Remove leading and trailing hyphens
-    .replace(/^-+|-+$/g, '')
-    // Limit length to 100 characters
-    .substring(0, 100);
+export async function ensureUniqueSlug(baseSlug, findFunction, excludeId = null) {
+  return contractEnsureUniqueSlug(baseSlug, async (slug) => Boolean(await findFunction(slug, excludeId)));
 }
 
-/**
- * Ensure a slug is unique by appending a number if necessary
- * @param {string} baseSlug - The base slug to check
- * @param {Function} checkExists - Function to check if slug exists (should return a document or null)
- * @param {string} excludeId - ID to exclude from uniqueness check (for updates)
- * @returns {Promise<string>} - The unique slug
- */
-export async function ensureUniqueSlug(baseSlug, checkExists, excludeId = null) {
-  if (!baseSlug) {
-    throw new Error('Base slug is required');
-  }
-
-  let slug = baseSlug;
-  let counter = 1;
-
-  // Keep trying until we find a unique slug
-  while (true) {
-    const existing = await checkExists(slug, excludeId);
-    
-    if (!existing) {
-      return slug;
-    }
-
-    // Append counter to make it unique
-    slug = `${baseSlug}-${counter}`;
-    counter++;
-
-    // Prevent infinite loops
-    if (counter > 1000) {
-      throw new Error('Unable to generate unique slug after 1000 attempts');
-    }
-  }
-}
-
-/**
- * Validate if a slug is properly formatted
- * @param {string} slug - The slug to validate
- * @returns {boolean} - True if valid, false otherwise
- */
+/** Boolean wrapper over the shared contract validator (Tamil letters allowed). */
 export function validateSlug(slug) {
-  if (!slug || typeof slug !== 'string') {
-    return false;
-  }
-
-  // Check if slug matches the required pattern (including Tamil characters)
-  const slugPattern = /^[a-z0-9\u0B80-\u0BFF]+(?:-[a-z0-9\u0B80-\u0BFF]+)*$/;
-  return slugPattern.test(slug) && slug.length <= 100;
+  return contractValidateSlug(slug).valid;
 }
 
 /**
- * Clean and normalize a slug
- * @param {string} slug - The slug to clean
- * @returns {string} - The cleaned slug
+ * Sanitizes user input for slug creation
+ * @param {string} input 
  */
-export function cleanSlug(slug) {
-  if (!slug || typeof slug !== 'string') {
-    return '';
-  }
-
-  return slug
-    .toLowerCase()
+export function sanitizeForSlug(input) {
+  if (!input) return '';
+  
+  return input
     .trim()
-    // Keep alphanumeric, Tamil characters, and hyphens only
-    .replace(/[^a-z0-9\u0B80-\u0BFF-]/g, '')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .substring(0, 100);
-} 
+    .substring(0, 200) // Limit input length
+    .replace(/[<>]/g, ''); // Remove potential XSS characters
+}
+
+/**
+ * Returns a safe URL for a content item, using slug if available, otherwise _id.
+ * @param {object} item - The content item (must have slug and _id fields)
+ * @param {string} section - The section (e.g., 'blog', 'quill', 'devfolio', 'spotlight')
+ * @returns {string} SEO-friendly URL
+ */
+export function getSafeUrl(item, section) {
+  if (!item || !section) return '/';
+  const identifier = item.slug || item._id;
+  return `/${section}/${identifier}`;
+}
