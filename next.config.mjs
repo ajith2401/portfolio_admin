@@ -47,13 +47,8 @@ const securityHeaders = [
 ];
 
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: false,
-  },
-  webpack: (config) => {
-    config.resolve.alias['@'] = path.resolve(__dirname, 'src');
-    return config;
-  },
+  // '@/' alias comes from jsconfig.json paths (supported by Turbopack and webpack).
+  turbopack: { root: __dirname },
   images: {
     remotePatterns: [
       {

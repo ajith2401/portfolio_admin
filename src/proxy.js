@@ -12,7 +12,7 @@ const ALLOWED_ORIGINS = [
   'http://127.0.0.1:3001'
 ];
 
-export async function middleware(req) {
+export async function proxy(req) {
   const origin = req.headers.get('origin');
   const isAllowedOrigin = origin && ALLOWED_ORIGINS.includes(origin);
 
