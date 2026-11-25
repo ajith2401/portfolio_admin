@@ -146,6 +146,12 @@ function ConflictDialog({
 export default function WritingStudio({ id: routeId }) {
   const isNew = routeId === "new";
   const [id, setId] = useState(isNew ? null : routeId);
+  // The id this page instance already holds in memory. After the first autosave creates the draft the URL is
+  // replaced with /admin/writings/<id>; that must NOT refetch and remount the editor (it would drop focus and
+  // could overwrite text typed meanwhile).
+  const knownId = useRef(isNew ? null : routeId);
+  const editorRef = useRef(null);
+  const pendingFocus = useRef(false);
   const [loading, setLoading] = useState(!isNew);
   const [loadError, setLoadError] = useState("");
   const [writing, setWriting] = useState(null); // server copy of meta
@@ -207,6 +213,10 @@ export default function WritingStudio({ id: routeId }) {
       hydrated.current = true;
       return;
     }
+    if (knownId.current === routeId && hydrated.current) {
+      setLoading(false);
+      return;
+    }
     let alive = true;
     (async () => {
       const r = await apiRequest("GET", `/api/writings/${routeId}`);
@@ -251,6 +261,7 @@ export default function WritingStudio({ id: routeId }) {
     if (r.ok) {
       const d = r.data;
       if (!cur.id) {
+        knownId.current = d._id;
         setId(d._id);
         window.history.replaceState(null, "", `/admin/writings/${d._id}`);
       }
@@ -421,6 +432,43 @@ export default function WritingStudio({ id: routeId }) {
 
   const onEditorChange = useCallback((s) => setDocState(s), []);
 
+  // Move focus into the real editor, retrying while it mounts or is replaced (hydration, reconfiguration).
+  const focusEditor = useCallback(() => {
+    pendingFocus.current = true;
+    let tries = 0;
+    const attempt = () => {
+      if (!pendingFocus.current) return;
+      const ed = editorRef.current;
+      if (ed && !ed.isDestroyed) {
+        ed.commands.focus("end");
+        const el = ed.view?.dom;
+        if (el && document.activeElement === el) {
+          pendingFocus.current = false;
+          return;
+        }
+      }
+      if (++tries < 40) setTimeout(attempt, 50);
+      else pendingFocus.current = false;
+    };
+    attempt();
+  }, []);
+  const onEditorReady = useCallback((ed) => {
+    editorRef.current = ed;
+    if (pendingFocus.current && ed && !ed.isDestroyed) {
+      ed.commands.focus("end");
+      if (document.activeElement === ed.view?.dom) pendingFocus.current = false;
+    }
+  }, []);
+  const onCategoryChange = (e) => {
+    const category = e.target.value;
+    setForm((f) => ({ ...f, category }));
+    if (category !== "poem") return;
+    const ed = editorRef.current;
+    // An empty page becomes a poem block; existing text is never rewritten by changing the category.
+    if (ed && !ed.isDestroyed && ed.getText().trim() === "" && !ed.isActive("poem")) ed.commands.togglePoem();
+    focusEditor();
+  };
+
   if (loading)
     return (
       <div className="p-8 text-gray-300" aria-busy="true">
@@ -556,9 +604,7 @@ export default function WritingStudio({ id: routeId }) {
               className={input}
               value={form.category}
               disabled={legacy || disabled}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, category: e.target.value }))
-              }
+              onChange={onCategoryChange}
             >
               {CATEGORIES.map((c) => (
                 <option key={c}>{c}</option>
@@ -631,6 +677,7 @@ export default function WritingStudio({ id: routeId }) {
                 language={form.language}
                 disabled={disabled}
                 onChange={onEditorChange}
+                onEditor={onEditorReady}
               />
               {!id && (
                 <p className="mt-2 text-xs text-gray-400">
