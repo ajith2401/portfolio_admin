@@ -283,6 +283,14 @@ export default function WritingStudio({ id: routeId }) {
         version: d.version ?? (cur.version || 0) + 1,
         at: Date.now(),
       });
+      // An edit can land between building the payload and the response (live.current is refreshed after commit,
+      // so the payload may be one keystroke behind). If the editor has moved past what was saved, stay dirty.
+      const now = live.current;
+      if (contentKey(now.form, now.doc) !== savedKey)
+        dispatch({
+          type: "EDIT",
+          valid: isSavable({ form: now.form, valid: now.valid }),
+        });
       const msgs = [...(d.warnings || [])];
       if (d.revalidate?.warning) msgs.push(d.revalidate.warning);
       if (msgs.length) setNotice(msgs);

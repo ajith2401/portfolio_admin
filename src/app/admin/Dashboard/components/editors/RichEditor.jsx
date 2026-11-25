@@ -1,6 +1,6 @@
 "use client";
 // Self-hosted Tiptap editor. Produces exactly the structured document defined by the shared contract.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { useDialog } from "@/lib/editor/use-dialog";
 import { buildExtensions } from "@/lib/editor/extensions";
@@ -365,14 +365,19 @@ export default function RichEditor({
     const json = canonicalizeDoc(editor.getJSON());
     const v = validateDoc(json);
     const a = analyzeWriting({ contentFormat: "tiptap", content: json });
-    setStats({ wordCount: a.wordCount, readTime: a.readTime });
-    setOutline(docHeadings(json));
-    setProblems(v.ok ? [] : v.errors);
-    onChangeRef.current?.({
-      doc: json,
-      valid: v.ok,
-      errors: v.errors,
-      stats: a,
+    // Derived panels and the parent's copy are low priority. Marking them as a transition keeps a burst of
+    // keystrokes (paste, speech input, a fast typist) from stacking synchronous renders until React aborts
+    // with "Maximum update depth exceeded", which silently dropped the last characters.
+    startTransition(() => {
+      setStats({ wordCount: a.wordCount, readTime: a.readTime });
+      setOutline(docHeadings(json));
+      setProblems(v.ok ? [] : v.errors);
+      onChangeRef.current?.({
+        doc: json,
+        valid: v.ok,
+        errors: v.errors,
+        stats: a,
+      });
     });
   }, []);
 
