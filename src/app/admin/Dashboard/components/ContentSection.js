@@ -40,10 +40,7 @@ import {
   TECH_BLOG_CATEGORIES, 
   PROJECT_CATEGORIES 
 } from '../lib/constants';
-import { useGetWritingsQuery,
-  useAddWritingMutation,
-  useUpdateWritingMutation,
-  useDeleteWritingMutation,
+import {
   useGetTechBlogsQuery,
   useAddTechBlogMutation,
   useUpdateTechBlogMutation,
@@ -56,9 +53,6 @@ import { useGetWritingsQuery,
 
 
 // Lazy-loaded editor components
-const WritingEditor = React.lazy(() => 
-  import('./editors/WritingEditor').then(mod => ({ default: mod.WritingEditor }))
-);
 const TechBlogEditor = React.lazy(() => 
   import('./editors/TechBlogEditor').then(mod => ({ default: mod.TechBlogEditor }))
 );
@@ -68,14 +62,6 @@ const ProjectEditor = React.lazy(() =>
 
 // Mapping of content types to queries and mutations
 const CONTENT_TYPE_MAPPING = {
-  [CONTENT_SECTIONS.WRITINGS]: {
-    getQuery: useGetWritingsQuery,
-    addMutation: useAddWritingMutation,
-    updateMutation: useUpdateWritingMutation,
-    deleteMutation: useDeleteWritingMutation,
-    editor: WritingEditor,
-    categories: WRITING_CATEGORIES
-  },
   [CONTENT_SECTIONS.TECH_BLOG]: {
     getQuery: useGetTechBlogsQuery,
     addMutation: useAddTechBlogMutation,

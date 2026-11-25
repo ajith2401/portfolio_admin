@@ -8,6 +8,13 @@ import { AnalyticsSection } from './components/AnalyticsSection';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui';
 
+function WritingsRedirect() {
+  useEffect(() => {
+    window.location.replace('/admin/writings');
+  }, []);
+  return <p className="p-4 text-gray-500">Opening the writing studio…</p>;
+}
+
 const Dashboard = () => {
   const [currentSection, setCurrentSection] = useState('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -87,7 +94,7 @@ const Dashboard = () => {
       case 'dashboard':
         return <DashboardStats stats={statsData || {}} />;
       case 'writings':
-        return <ContentSection type="writings" title="Writings" />;
+        return <WritingsRedirect />; // retired Markdown editor: the Tiptap studio owns writings
       case 'tech-blog':
         return <ContentSection type="tech-blog" title="Tech Blog" />;
       case 'projects':

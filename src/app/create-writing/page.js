@@ -1,12 +1,6 @@
-import WritingForm from "@/components/ui/form/WritingForm";
+import { redirect } from "next/navigation";
 
+// The old Markdown form is retired. The Tiptap studio is the only authoring path.
 export default function CreateWritingPage() {
-  return (
-    <div className="min-h-screen bg-background py-8">
-      <div className="container mx-auto">
-        <h1 className="text-3xl font-bold mb-8 text-center text-foreground">Create New Writing</h1>
-        <WritingForm />
-      </div>
-    </div>
-  );
+  redirect("/admin/writings/new");
 }
