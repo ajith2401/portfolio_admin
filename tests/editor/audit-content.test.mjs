@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { auditWritings, checkUriAllowed } from '../../src/lib/editor/audit-content.js';
 
 const codes = (r, id) => r.perDoc.find((d) => d.id === id)?.issues.map((i) => i.code) ?? [];
