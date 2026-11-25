@@ -16,9 +16,12 @@ export async function waitSavedId(page) {
   await page.waitForURL(/\/admin\/writings\/[0-9a-f]{24}$/, { timeout: 20000 });
   return page.url().split('/').pop();
 }
+// Runs fetch inside the page so the browser's own cookie rules apply (Playwright's request jar skips Secure cookies over http).
 export async function api(page, method, url, data) {
-  const r = await page.request.fetch(url, { method, data, headers: { Origin: new URL(page.url() === 'about:blank' ? 'http://127.0.0.1' : page.url()).origin } });
-  return { status: r.status(), body: await r.json().catch(() => null) };
+  return page.evaluate(async ([m, u, d]) => {
+    const r = await fetch(u, { method: m, credentials: 'include', headers: d ? { 'Content-Type': 'application/json' } : {}, body: d ? JSON.stringify(d) : undefined });
+    return { status: r.status, body: await r.json().catch(() => null) };
+  }, [method, url, data]);
 }
 export const doc = (...blocks) => ({ type: 'doc', content: blocks });
 export const para = (t) => ({ type: 'paragraph', content: t ? [{ type: 'text', text: t }] : undefined });

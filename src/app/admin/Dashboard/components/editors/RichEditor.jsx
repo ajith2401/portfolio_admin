@@ -2,6 +2,7 @@
 // Self-hosted Tiptap editor. Produces exactly the structured document defined by the shared contract.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
+import { useDialog } from "@/lib/editor/use-dialog";
 import { buildExtensions } from "@/lib/editor/extensions";
 import {
   analyzeWriting,
@@ -92,11 +93,7 @@ function Btn({ label, active, disabled, onClick, children, shortcut }) {
 }
 
 function Dialog({ title, onClose, children }) {
-  useEffect(() => {
-    const h = (e) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [onClose]);
+  const ref = useDialog(onClose);
   return (
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4"
@@ -104,9 +101,11 @@ function Dialog({ title, onClose, children }) {
       onMouseDown={onClose}
     >
       <div
+        ref={ref}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
         className="w-full max-w-md rounded-lg bg-gray-800 p-5 text-gray-100 shadow-xl"
       >
@@ -385,7 +384,8 @@ export default function RichEditor({
       setSlash(null);
       return;
     } // never disturb an IME composition
-    if (!empty && state.selection.constructor.name === "TextSelection") {
+    // Not constructor.name: class names are minified in production builds, which hid this toolbar.
+    if (!empty && !state.selection.node && $from.parent.inlineContent) {
       const a = view.coordsAtPos(from),
         b = view.coordsAtPos(to);
       setFloating({

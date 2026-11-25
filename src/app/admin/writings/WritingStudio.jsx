@@ -33,6 +33,7 @@ import {
   isSavable,
   excerptLine,
 } from "@/lib/editor/writing-client";
+import { useDialog } from "@/lib/editor/use-dialog";
 import SearchSharingPanel from "./SearchSharingPanel";
 import PreviewPane from "./PreviewPane";
 import LegacyView from "./LegacyView";
@@ -64,7 +65,9 @@ function ConflictDialog({
   onKeepMine,
   onCompare,
   loading,
+  onDismiss,
 }) {
+  const dialogRef = useDialog(onDismiss);
   const diffs = serverCopy ? diffFields(mine, serverCopy) : null;
   return (
     <div
@@ -72,6 +75,8 @@ function ConflictDialog({
       role="presentation"
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="conflict-title"
@@ -164,6 +169,7 @@ export default function WritingStudio({ id: routeId }) {
   });
   const [editorKey, setEditorKey] = useState(0);
   const [tab, setTab] = useState("write");
+  const [conflictOpen, setConflictOpen] = useState(true);
   const [notice, setNotice] = useState([]);
   const [busy, setBusy] = useState(false);
   const [convertError, setConvertError] = useState("");
@@ -430,6 +436,10 @@ export default function WritingStudio({ id: routeId }) {
     setServerCopy(null);
   };
 
+  useEffect(() => {
+    if (save.status === "conflict") setConflictOpen(true);
+  }, [save.status]);
+
   const onEditorChange = useCallback((s) => setDocState(s), []);
 
   // Move focus into the real editor, retrying while it mounts or is replaced (hydration, reconfiguration).
@@ -510,6 +520,15 @@ export default function WritingStudio({ id: routeId }) {
             {legacy ? "Legacy Markdown (read-only)" : saveLabel(save)}
             {save.error && !legacy ? `: ${save.error}` : ""}
           </span>
+          {save.status === "conflict" && !conflictOpen && (
+            <button
+              type="button"
+              className="rounded bg-red-700 px-3 py-1.5 text-sm"
+              onClick={() => setConflictOpen(true)}
+            >
+              Resolve conflict
+            </button>
+          )}
           <span className="ml-auto flex flex-wrap gap-2">
             {!legacy && id && (
               <>
@@ -711,7 +730,7 @@ export default function WritingStudio({ id: routeId }) {
         )}
       </main>
 
-      {save.status === "conflict" && (
+      {save.status === "conflict" && conflictOpen && (
         <ConflictDialog
           serverCopy={serverCopy}
           mine={form}
@@ -719,6 +738,7 @@ export default function WritingStudio({ id: routeId }) {
           onReload={onReload}
           onKeepMine={onKeepMine}
           onCompare={onCompare}
+          onDismiss={() => setConflictOpen(false)}
         />
       )}
     </div>
