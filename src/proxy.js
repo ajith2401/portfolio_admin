@@ -1,16 +1,8 @@
 // src/middleware.js
 import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
+import { ALLOWED_ORIGINS, getJwtSecretBytes } from '@/lib/auth';
 
-const ALLOWED_ORIGINS = [
-  'https://admin.ajithkumarr.com',
-  'https://ajithkumarr.com',
-  'https://www.ajithkumarr.com',
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'http://127.0.0.1:3000',
-  'http://127.0.0.1:3001'
-];
 
 export async function proxy(req) {
   const origin = req.headers.get('origin');
@@ -43,10 +35,7 @@ export async function proxy(req) {
     }
 
     try {
-      const secret = new TextEncoder().encode(
-        process.env.JWT_SECRET || 'dev-insecure-jwt-secret-replace-in-production'
-      );
-      await jwtVerify(tokenCookie.value, secret);
+      await jwtVerify(tokenCookie.value, getJwtSecretBytes(), { algorithms: ['HS256'] });
     } catch (err) {
       console.warn('Admin page access token verification failed:', err.message);
       return NextResponse.redirect(new URL('/login', req.url));

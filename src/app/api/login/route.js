@@ -9,6 +9,9 @@ import { applyRateLimit, globalRateLimiter, getClientIp } from '@/lib/rateLimit'
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// bcrypt hash of a random string; only used to equalise timing for unknown users.
+const DUMMY_HASH = '$2a$10$CwTycUXWue0Thq9StjUM0uJ8.yX5q3xV0z0iQ3k9m6bZ1bV0u6k4W';
+
 export async function POST(req) {
   // 1. Rate limiting on login: max 5 requests per 15 minutes per IP
   const rateLimitResult = applyRateLimit(req, 'login', 5, 15 * 60 * 1000);
@@ -28,11 +31,16 @@ export async function POST(req) {
     }
 
     const { email, password } = body;
-    const normalizedEmail = String(email).trim().toLowerCase();
+    if (typeof email !== 'string' || typeof password !== 'string' || password.length > 200) {
+      return NextResponse.json({ message: 'Invalid email or password' }, { status: 400 });
+    }
+    const normalizedEmail = email.trim().toLowerCase();
 
     // Find the user by normalized email
     const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
+      // Spend the same time as a real check so response timing does not reveal which e-mails exist
+      await bcrypt.compare(String(password), DUMMY_HASH);
       // Use generic error message to prevent user enumeration
       return NextResponse.json(
         { message: 'Invalid email or password' },

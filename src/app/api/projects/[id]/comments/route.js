@@ -27,12 +27,13 @@ export async function GET(request, { params }) {
     }
 
     const comments = await Comment.find(query)
+      .select(isAdmin ? '' : '-email -ipAddress')
       .sort({ createdAt: -1 })
       .lean();
 
     return NextResponse.json(comments);
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch comments' }, { status: 500 });
   }
 }
 

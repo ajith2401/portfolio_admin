@@ -40,7 +40,7 @@ describe('Security: CORS & Origin Validation', () => {
 
   it('validates referer origin correctly when origin header is omitted', () => {
     const validRefererReq = new Request('http://localhost:3000/api/writings', {
-      headers: { referer: 'https://admin.ajithkumar.com/dashboard/writings' }
+      headers: { referer: 'https://admin.ajithkumarr.com/dashboard/writings' }
     });
     assert.equal(validateOrigin(validRefererReq), true);
 

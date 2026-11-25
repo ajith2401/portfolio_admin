@@ -27,6 +27,7 @@ export async function GET(request, { params }) {
     }
 
     const comments = await Comment.find(query)
+      .select(isAdmin ? '' : '-email -ipAddress')
       .sort({ createdAt: -1 })
       .lean();
     

@@ -2,8 +2,22 @@
 import { jwtVerify, SignJWT } from 'jose';
 import { parse, serialize } from 'cookie';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-insecure-jwt-secret-replace-in-production';
-const SECRET_BYTES = new TextEncoder().encode(JWT_SECRET);
+const DEV_FALLBACK_SECRET = 'dev-insecure-jwt-secret-replace-in-production';
+
+/**
+ * Resolved lazily so that `next build` can import this module. In production a missing or
+ * placeholder JWT_SECRET is a hard failure (fail closed): nobody can forge a session with the
+ * well-known development fallback.
+ */
+export function getJwtSecretBytes(env = process.env) {
+  const secret = env.JWT_SECRET;
+  const production = env.NODE_ENV === 'production';
+  if (!secret || secret === DEV_FALLBACK_SECRET) {
+    if (production) throw new Error('JWT_SECRET is not configured');
+    return new TextEncoder().encode(DEV_FALLBACK_SECRET);
+  }
+  return new TextEncoder().encode(secret);
+}
 const COOKIE_NAME = 'token';
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
@@ -17,6 +31,12 @@ export const ALLOWED_ORIGINS = [
   'http://127.0.0.1:3000',
   'http://127.0.0.1:3001'
 ];
+
+// Extra origins (for example a local admin port) come from the environment, never from the request.
+for (const extra of String(process.env.ADMIN_ALLOWED_ORIGINS || '').split(',')) {
+  const o = extra.trim();
+  if (/^https?:\/\/[^/\s]+$/.test(o) && !ALLOWED_ORIGINS.includes(o)) ALLOWED_ORIGINS.push(o);
+}
 
 /**
  * Extracts and verifies JWT from Request cookies or Authorization header
@@ -46,7 +66,7 @@ export async function getAuthenticatedUser(request) {
       return { valid: false, user: null, error: 'No authentication token provided' };
     }
 
-    const { payload } = await jwtVerify(token, SECRET_BYTES);
+    const { payload } = await jwtVerify(token, getJwtSecretBytes(), { algorithms: ['HS256'] });
     return {
       valid: true,
       user: {
@@ -116,8 +136,10 @@ export function validateOrigin(request) {
     }
   }
 
-  // If neither Origin nor Referer is present, treat as local/same-origin or CLI
-  return true;
+  // Neither Origin nor Referer: acceptable for token-based CLI calls, but a request that carries the
+  // session cookie must prove where it came from (CSRF defence in depth).
+  const cookieHeader = request.headers.get('cookie') || '';
+  return !/(?:^|;\s*)token=/.test(cookieHeader);
 }
 
 /**
@@ -161,6 +183,6 @@ export async function signToken(payload, expiresIn = '1h') {
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(expiresIn)
-    .sign(SECRET_BYTES);
+    .sign(getJwtSecretBytes());
 }
 
