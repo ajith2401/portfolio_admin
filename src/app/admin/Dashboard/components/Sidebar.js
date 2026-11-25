@@ -58,7 +58,11 @@ export const Sidebar = ({
         {menuItems.map((item) => (
           <button
             key={item.section}
-            onClick={() => setCurrentSection(item.section)}
+            onClick={() =>
+              item.section === 'writings'
+                ? (window.location.href = '/admin/writings') // new structured editor + library
+                : setCurrentSection(item.section)
+            }
             className={`flex items-center w-full py-2 px-3 mb-2 rounded-lg transition-colors
               ${currentSection === item.section 
                 ? 'bg-blue-600 text-white' 
