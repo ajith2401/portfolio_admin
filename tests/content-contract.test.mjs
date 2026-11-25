@@ -344,3 +344,17 @@ test("document: headings and images extracted", () => {
   assert.deepEqual(docHeadings(d), [{ level: 2, text: "அத்தியாயம்" }]);
   assert.deepEqual(docImages(d), [{ url: "https://x.test/a.jpg", alt: "மழை", caption: "தலைப்பு" }]);
 });
+
+test("structured content flows through lifecycle, seo and public dto", () => {
+  const w = { _id: "507f1f77bcf86cd799439011", title: "மழை", slug: "மழை", category: "poem", language: "Tamil", status: "draft", body: "", contentFormat: "tiptap", content: POEM_DOC };
+  assert.ok(planTransition(w, "published", new Date()).ok); // empty legacy body does not block structured poem
+  assert.equal(planTransition({ ...w, content: { type: "doc", content: [{ type: "paragraph" }] } }, "published").ok, false);
+  const seo = resolveWritingSeo({ ...w, status: "published", publishedAt: new Date() });
+  assert.equal(seo.description, "மழை / இரவு / காற்று");
+  const pub = toPublicWriting({ ...w, status: "published", body: "ignored markdown", ratings: [{ email: "a@b.c" }] });
+  assert.equal(pub.body, null);
+  assert.equal(pub.content.content[0].attrs, undefined); // default align stripped
+  assert.ok(!JSON.stringify(pub).includes("a@b.c"));
+  assert.equal(toPublicWriting({ ...w, contentFormat: "markdown", body: "# x" }).content, null);
+  assert.ok(!checkSeo(w).some((i) => i.id === "body-empty"));
+});

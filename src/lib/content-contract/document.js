@@ -209,3 +209,9 @@ export function analyzeWriting(w) {
   const wordCount = countWords(plain);
   return { plain, wordCount, readTime: readingTimeMinutes(wordCount), characterCount: countGraphemes(plain), format: "tiptap" };
 }
+
+/** True when a writing has publishable content in either representation. */
+export function hasContent(w) {
+  if (resolveContentFormat(w) === "markdown") return Boolean(String(w?.body ?? "").trim());
+  return Boolean(docToPlainText(w.content).trim()) || docImages(w.content).length > 0;
+}
