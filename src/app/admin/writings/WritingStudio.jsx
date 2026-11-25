@@ -31,6 +31,7 @@ import {
   errorMessage,
   formFromServer,
   isSavable,
+  excerptLine,
 } from "@/lib/editor/writing-client";
 import SearchSharingPanel from "./SearchSharingPanel";
 import PreviewPane from "./PreviewPane";
@@ -371,12 +372,13 @@ export default function WritingStudio({ id: routeId }) {
     return true;
   };
 
-  const convert = async (doc) => {
+  const convert = async (doc, lineBreaks = "auto") => {
     setBusy(true);
     setConvertError("");
     const r = await apiRequest("PUT", `/api/writings/${id}`, {
       ...buildSavePayload({ form, doc, version: save.version }),
       confirmConversion: true,
+      conversionLineBreaks: lineBreaks,
     });
     setBusy(false);
     if (!r.ok) {
@@ -573,7 +575,7 @@ export default function WritingStudio({ id: routeId }) {
             <input
               id="w-excerpt"
               className={input}
-              value={form.excerpt}
+              value={excerptLine(form.excerpt)}
               disabled={legacy || disabled}
               maxLength={500}
               onChange={(e) =>

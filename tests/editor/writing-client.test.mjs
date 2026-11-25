@@ -28,3 +28,13 @@ describe('writing client helpers', () => {
     assert.equal((await apiRequest('GET', '/x', null, mk(200, { version: 2 }))).data.version, 2);
   });
 });
+
+import { excerptLine } from '../../src/lib/editor/writing-client.js';
+describe('excerpt display', () => {
+  it('shows stored multi-line excerpts with spaces, Tamil intact, stored value untouched', () => {
+    const stored = 'முதல் வரி\nஇரண்டாம் வரி\r\n\r\nமூன்றாம்';
+    assert.equal(excerptLine(stored), 'முதல் வரி இரண்டாம் வரி மூன்றாம்');
+    assert.equal(excerptLine('a '), 'a ');
+    assert.equal(stored.includes('\n'), true);
+  });
+});

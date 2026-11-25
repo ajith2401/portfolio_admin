@@ -8,6 +8,7 @@ export default function LegacyView({ writing, busy, error, onConvert }) {
   const [step, setStep] = useState("view"); // view | review
   const [result, setResult] = useState(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [lineBreaks, setLineBreaks] = useState("auto");
 
   useEffect(() => {
     if (step !== "review") return;
@@ -17,13 +18,14 @@ export default function LegacyView({ writing, busy, error, onConvert }) {
         setResult(
           m.markdownToDoc(String(writing.body || ""), {
             category: writing.category,
+            lineBreaks,
           }),
         );
     });
     return () => {
       live = false;
     };
-  }, [step, writing.body, writing.category]);
+  }, [step, writing.body, writing.category, lineBreaks]);
 
   const tree = useMemo(() => (result ? docToTree(result.doc) : null), [result]);
 
@@ -82,6 +84,29 @@ export default function LegacyView({ writing, busy, error, onConvert }) {
                   </ul>
                 )}
               </div>
+              <fieldset className="text-sm">
+                <legend className="font-semibold">Single line breaks inside a paragraph</legend>
+                {[
+                  ["auto", "Decide for me (verse keeps its lines, wrapped text is joined)"],
+                  ["keep", "Keep line breaks"],
+                  ["join", "Join wrapped lines"],
+                ].map(([v, label]) => (
+                  <label key={v} className="mr-4 mt-1 inline-flex items-center gap-1">
+                    <input
+                      type="radio"
+                      name="line-breaks"
+                      value={v}
+                      checked={lineBreaks === v}
+                      onChange={() => {
+                        setLineBreaks(v);
+                        setResult(null);
+                        setConfirmed(false);
+                      }}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </fieldset>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <h4 className="mb-1 text-sm font-semibold text-gray-300">
@@ -134,7 +159,7 @@ export default function LegacyView({ writing, busy, error, onConvert }) {
                   type="button"
                   disabled={!confirmed || busy || !tree?.ok}
                   className="rounded bg-blue-600 px-4 py-2 text-sm font-medium disabled:opacity-40"
-                  onClick={() => onConvert(result.doc)}
+                  onClick={() => onConvert(result.doc, lineBreaks)}
                 >
                   {busy ? "Converting…" : "Convert and save"}
                 </button>

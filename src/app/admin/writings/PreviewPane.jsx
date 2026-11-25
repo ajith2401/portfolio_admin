@@ -2,6 +2,7 @@
 // "As published" preview. Uses the same element tree builder as the HTML renderer
 // (src/lib/editor/doc-render.js); every string is escaped and only fixed tags are produced.
 import { createElement, useMemo } from "react";
+import { toOneLine } from "@/lib/content-contract";
 import { docToTree, treeToReact } from "@/lib/editor/doc-render";
 
 export default function PreviewPane({
@@ -21,7 +22,7 @@ export default function PreviewPane({
         {category}
       </p>
       <h1 className="mb-2 text-3xl font-bold">{title || "Untitled"}</h1>
-      {excerpt && <p className="mb-4 text-gray-600">{excerpt}</p>}
+      {excerpt && <p className="mb-4 text-gray-600">{toOneLine(excerpt)}</p>}
       {ok ? (
         <div className="published-body space-y-4 leading-relaxed">
           {treeToReact(tree, createElement)}

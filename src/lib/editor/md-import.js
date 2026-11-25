@@ -15,7 +15,29 @@ const short = (s, n = 40) =>
     .replace(/\s+/g, " ")
     .slice(0, n);
 
-export function markdownToDoc(markdown, { category } = {}) {
+export const LINE_BREAK_MODES = Object.freeze(["auto", "keep", "join"]);
+
+const TERMINAL = /[.!?…।"'”’)\]]\s*$/u;
+const gcount = (t) => [...t].length;
+
+/**
+ * Decide what single line breaks inside one Markdown paragraph mean.
+ *  - "keep": verse-like (short lines, most of which do not end a sentence) -> hard breaks
+ *  - "join": an ordinary wrapped paragraph -> spaces (CommonMark)
+ * Joins are always reported, so a person can choose "keep line breaks" for the whole writing.
+ */
+export function classifyParagraphBreaks(text) {
+  const lines = String(text).split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length < 2) return "join";
+  const lens = lines.map(gcount);
+  const max = Math.max(...lens);
+  const avg = lens.reduce((a, b) => a + b, 0) / lens.length;
+  const open = lines.slice(0, -1).filter((l) => !TERMINAL.test(l)).length;
+  if (max <= 55 && avg <= 40 && open / (lines.length - 1) >= 0.5) return "keep";
+  return "join";
+}
+
+export function markdownToDoc(markdown, { category, lineBreaks = "auto" } = {}) {
   const warnings = [];
   const seen = new Set();
   const warn = (msg) => {
@@ -25,6 +47,10 @@ export function markdownToDoc(markdown, { category } = {}) {
     }
   };
   const poem = category === "poem";
+  const mode = LINE_BREAK_MODES.includes(lineBreaks) ? lineBreaks : "auto";
+  let joinedParagraphs = 0;
+  let keptParagraphs = 0;
+  const ctx = { keep: false };
   let source = String(markdown ?? "")
     .normalize("NFC")
     .replace(/\r\n?/g, "\n");
@@ -53,7 +79,7 @@ export function markdownToDoc(markdown, { category } = {}) {
           return parts.flatMap((p, i) => [
             ...text(p, marks),
             ...(i < parts.length - 1
-              ? poem
+              ? poem || ctx.keep
                 ? [{ type: "hardBreak" }]
                 : text(" ", marks)
               : []),
@@ -115,8 +141,23 @@ export function markdownToDoc(markdown, { category } = {}) {
     };
   };
 
+  const rawText = (nodes) =>
+    (nodes || [])
+      .map((c) => (c.type === "text" ? c.value : c.children ? rawText(c.children) : c.type === "break" ? "\n" : "x"))
+      .join("");
+  const softBreaks = (nodes) =>
+    (nodes || []).reduce(
+      (a, c) => a + (c.type === "text" ? (c.value.match(/\n/g) || []).length : softBreaks(c.children)),
+      0,
+    );
   const para = (n) => {
     const out = [];
+    ctx.keep = false;
+    if (!poem && softBreaks(n.children) > 0) {
+      ctx.keep = mode === "keep" || (mode === "auto" && classifyParagraphBreaks(rawText(n.children)) === "keep");
+      if (ctx.keep) keptParagraphs += 1;
+      else joinedParagraphs += 1;
+    }
     const images = n.children.filter((c) => c.type === "image");
     const rest = n.children.filter((c) => c.type !== "image");
     const content = inline(rest);
@@ -235,6 +276,14 @@ export function markdownToDoc(markdown, { category } = {}) {
     }
     content = grouped;
   }
+  if (joinedParagraphs > 0)
+    warn(
+      `${joinedParagraphs} paragraph${joinedParagraphs === 1 ? " contains" : "s contain"} single line breaks that were joined into one line; check ${joinedParagraphs === 1 ? "it" : "them"} or choose "Keep line breaks".`,
+    );
+  if (keptParagraphs > 0 && mode === "auto")
+    warn(
+      `${keptParagraphs} paragraph${keptParagraphs === 1 ? " looks" : "s look"} like verse, so ${keptParagraphs === 1 ? "its" : "their"} line breaks were kept; check ${keptParagraphs === 1 ? "it" : "them"} or choose "Join wrapped lines".`,
+    );
   if (!content.length) content = [{ type: "paragraph" }];
   return { doc: { type: "doc", content }, warnings };
 }

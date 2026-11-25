@@ -111,3 +111,8 @@ export function diffFields(local, server) {
   }
   return out;
 }
+
+// An <input> silently deletes newlines, which would glue the words of a stored multi-line excerpt together.
+// Show line breaks as a space (same rule as toOneLine, without trimming so typing a trailing space works).
+export const excerptLine = (v) =>
+  String(v ?? "").replace(/[\s\u2028\u2029]*[\r\n\u2028\u2029]+[\s\u2028\u2029]*/g, " ");

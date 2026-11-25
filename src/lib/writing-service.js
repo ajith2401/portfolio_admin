@@ -353,6 +353,7 @@ export async function buildWritingChanges({ input, existing, helpers }) {
     const original = String(existing.body ?? "");
     const importerWarnings = markdownToDoc(original, {
       category: set.category ?? existing.category,
+      lineBreaks: input.conversionLineBreaks,
     }).warnings;
     set.importedFrom = {
       markdown: existing.importedFrom?.markdown ?? original,

@@ -17,8 +17,9 @@ describe('Markdown importer (Tamil story)', () => {
     for (const m of ['bold', 'italic', 'strike', 'link']) assert.ok(json.includes(`"type":"${m}"`), m);
   });
   it('soft line breaks become spaces in prose', () => {
-    const r = markdownToDoc('ஒரு\nவரி', { category: 'article' });
-    assert.equal(docToPlainText(r.doc), 'ஒரு வரி');
+    const t = 'ஒரு நீண்ட வாக்கியம் இங்கே தொடங்கி, அடுத்த வரியிலும் தொடர்ந்து\nமுடிவுக்கு வருகிறது.';
+    const r = markdownToDoc(t, { category: 'article' });
+    assert.equal(docToPlainText(r.doc), t.replace('\n', ' '));
   });
   it('reports no warnings for clean input', () => assert.deepEqual(warnings, []));
   it('is canonical already', () => assert.deepEqual(canonicalizeDoc(doc), doc));
@@ -72,5 +73,44 @@ describe('Markdown importer (hostile input)', () => {
     assert.ok(validateDoc(r.doc).ok);
     assert.ok(r.warnings.some((w) => /code block inside a list item/.test(w)));
     assert.ok(docToPlainText(r.doc).includes('code'));
+  });
+});
+
+describe('Markdown importer: single line breaks', () => {
+  const wrapped = 'அவன் காலையில் எழுந்து வயலுக்குச் சென்றான், அங்கே மழை பெய்து கொண்டிருந்தது என்பதை\nஅவன் கவனிக்கவே இல்லை; நீண்ட நேரம் கழித்து வீடு திரும்பிய போது அம்மா காத்திருந்தாள்.';
+  const verse = 'நிலவு மெல்ல\nஇரவு சொல்ல\nகனவு வந்து\nகதவு தட்ட';
+  it('joins a wrapped Tamil story paragraph and warns with an actionable message', () => {
+    const r = markdownToDoc(wrapped, { category: 'short story' });
+    assert.ok(!docToPlainText(r.doc).includes('\n'));
+    assert.ok(r.warnings.some((w) => /1 paragraph contains single line breaks that were joined/.test(w) && /Keep line breaks/.test(w)));
+  });
+  it('multiline English story is joined, counts paragraphs', () => {
+    const t = 'The rain kept falling on the old tin roof all through the long\nafternoon and nobody came.\n\nLater the lamp went out and the house was quiet for\nthe first time in years, so she slept.';
+    const r = markdownToDoc(t, { category: 'short story' });
+    assert.equal(docToPlainText(r.doc).split('\n').length, 3); // two paragraphs separated by one blank line
+    assert.ok(r.warnings.some((w) => /^2 paragraphs contain/.test(w)));
+  });
+  it('poem-like text classified as story keeps its lines and says so', () => {
+    const r = markdownToDoc(verse, { category: 'short story' });
+    assert.equal(docToPlainText(r.doc), verse);
+    assert.ok(r.warnings.some((w) => /look|looks like verse/.test(w) && /Join wrapped lines/.test(w)));
+  });
+  it('stanza boundaries are preserved either way', () => {
+    const r = markdownToDoc(verse + '\n\n' + verse, { category: 'article' });
+    assert.equal(r.doc.content.length, 2);
+  });
+  it('explicit modes override the guess; hard breaks always survive', () => {
+    assert.equal(docToPlainText(markdownToDoc(wrapped, { lineBreaks: 'keep' }).doc).split('\n').length, 2);
+    assert.ok(!docToPlainText(markdownToDoc(verse, { lineBreaks: 'join' }).doc).includes('\n'));
+    assert.equal(docToPlainText(markdownToDoc('ஒன்று  \nஇரண்டு\\\nமூன்று', { lineBreaks: 'join' }).doc), 'ஒன்று\nஇரண்டு\nமூன்று');
+  });
+  it('never drops text: all words survive every mode', () => {
+    for (const lineBreaks of ['auto', 'keep', 'join'])
+      assert.equal(docToPlainText(markdownToDoc(wrapped, { lineBreaks }).doc).replace(/\s+/g, ' '), wrapped.replace(/\s+/g, ' '));
+  });
+  it('output stays valid and canonical', () => {
+    const { doc } = markdownToDoc(verse + '\n\n' + wrapped, { category: 'essay' });
+    assert.ok(validateDoc(doc).ok);
+    assert.deepEqual(canonicalizeDoc(doc), doc);
   });
 });
