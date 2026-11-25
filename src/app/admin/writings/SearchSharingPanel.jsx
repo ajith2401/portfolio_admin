@@ -125,7 +125,7 @@ export default function SearchSharingPanel({
             <li className="text-sm text-green-300">Nothing to fix.</li>
           )}
         </ul>
-        <p className="mt-1 text-xs text-gray-500">
+        <p className="mt-1 text-xs text-gray-400">
           Only items marked “Blocks publishing” stop you from publishing.
         </p>
       </section>
@@ -142,7 +142,7 @@ export default function SearchSharingPanel({
         </h3>
         <div className="text-xs text-gray-600">
           {host}
-          <span className="text-gray-400">
+          <span className="text-gray-600">
             {" "}
             › {crumbs.split("/").filter(Boolean).join(" › ")}
           </span>

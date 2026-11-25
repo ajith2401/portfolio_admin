@@ -760,7 +760,7 @@ export default function RichEditor({
               Outline
             </h3>
             {outline.length === 0 ? (
-              <p className="text-gray-500">Headings you add appear here.</p>
+              <p className="text-gray-400">Headings you add appear here.</p>
             ) : (
               <ul className="space-y-1">
                 {outline.map((h, i) => (

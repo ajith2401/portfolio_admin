@@ -88,7 +88,7 @@ export default function Library() {
                 <span className="min-w-0 flex-1 truncate font-medium" lang={w.language === "Tamil" ? "ta" : undefined}>{w.title || "Untitled"}</span>
                 {w.contentFormat !== "tiptap" && <span className="rounded border border-amber-500 px-1.5 text-xs text-amber-200">Legacy</span>}
                 <span className="text-xs text-gray-400">{w.category} · {w.language}</span>
-                <span className="text-xs text-gray-500">{w.wordCount ? `${w.wordCount} words · ` : ""}{w.updatedAt ? new Date(w.updatedAt).toLocaleDateString() : ""}</span>
+                <span className="text-xs text-gray-400">{w.wordCount ? `${w.wordCount} words · ` : ""}{w.updatedAt ? new Date(w.updatedAt).toLocaleDateString() : ""}</span>
               </Link>
             </li>
           ))}

@@ -545,7 +545,7 @@ export default function WritingStudio({ id: routeId }) {
                     type="button"
                     disabled={busy || disabled}
                     onClick={() => transition("published")}
-                    className="rounded bg-green-600 px-3 py-1.5 text-sm font-medium disabled:opacity-40"
+                    className="rounded bg-green-700 px-3 py-1.5 text-sm font-medium disabled:opacity-40"
                   >
                     Publish
                   </button>
@@ -670,10 +670,26 @@ export default function WritingStudio({ id: routeId }) {
           ].map(([k, label]) => (
             <button
               key={k}
+              id={`tab-${k}`}
               role="tab"
               type="button"
               aria-selected={tab === k}
+              tabIndex={tab === k ? 0 : -1}
               onClick={() => setTab(k)}
+              onKeyDown={(e) => {
+                // WAI-ARIA tabs: arrows move between tabs, Home/End jump to the ends.
+                const keys = ["write", "preview", "search"];
+                const i = keys.indexOf(k);
+                let n = -1;
+                if (e.key === "ArrowRight") n = (i + 1) % keys.length;
+                else if (e.key === "ArrowLeft") n = (i + keys.length - 1) % keys.length;
+                else if (e.key === "Home") n = 0;
+                else if (e.key === "End") n = keys.length - 1;
+                if (n < 0) return;
+                e.preventDefault();
+                setTab(keys[n]);
+                document.getElementById(`tab-${keys[n]}`)?.focus();
+              }}
               className={`px-4 py-2 text-sm ${tab === k ? "border-b-2 border-blue-500 text-white" : "text-gray-400 hover:text-gray-200"}`}
             >
               {label}
