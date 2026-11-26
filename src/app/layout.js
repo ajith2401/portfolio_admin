@@ -1,7 +1,7 @@
 // src/app/layout.js
 import localFont from "next/font/local";
 import "./globals.css";
-import { Great_Vibes, Inter, Playfair_Display, Merriweather, DM_Sans, Work_Sans, Poppins } from 'next/font/google';
+import { Noto_Sans_Tamil, Great_Vibes, Inter, Playfair_Display, Merriweather, DM_Sans, Work_Sans, Poppins } from 'next/font/google';
 import { Providers } from './providers';
 
 // Initialize the fonts
@@ -36,6 +36,12 @@ const greatVibes = Great_Vibes({
   weight: '400',
   variable: '--font-great-vibes',
   display: 'swap', 
+});
+
+const notoTamil = Noto_Sans_Tamil({
+  subsets: ['tamil', 'latin'],
+  variable: '--font-noto-tamil',
+  display: 'swap',
 });
 
 const inter = Inter({
@@ -73,7 +79,8 @@ export default function RootLayout({ children }) {
       lang="en" 
       className={`
         ${greatVibes.variable} 
-        ${inter.variable} 
+        ${inter.variable}
+        ${notoTamil.variable} 
         ${playfair.variable}
         ${geistSans.variable} 
         ${merriweather.variable}
@@ -82,13 +89,9 @@ export default function RootLayout({ children }) {
         ${poppins.variable}
       `}
     >
-      <body className="min-h-screen bg-background">
+      <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
         <Providers>
-          <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8">
-            <main className="w-full">
-              {children}
-            </main>
-          </div>
+          {children}
         </Providers>
       </body>
     </html>

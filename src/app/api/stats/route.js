@@ -94,10 +94,34 @@ export async function GET(request) {
       projectsStats.total += item.count;
     });
     
+    // Most recently edited items across all three collections (titles only; no body text).
+    const recentOf = async (Model, type, href) => {
+      const rows = await Model.find({}).select('title status updatedAt').sort({ updatedAt: -1 }).limit(5).lean();
+      return rows.map((r) => ({
+        id: String(r._id),
+        type,
+        title: typeof r.title === 'string' && r.title.trim() ? r.title : 'Untitled',
+        status: r.status || 'published',
+        updatedAt: r.updatedAt || null,
+        href: href(r),
+      }));
+    };
+    const recent = (
+      await Promise.all([
+        recentOf(Writing, 'Writing', (r) => `/admin/writings/${r._id}`),
+        recentOf(TechBlog, 'Tech Blog', () => '/admin/tech-blog'),
+        recentOf(Project, 'Project', () => '/admin/projects'),
+      ])
+    )
+      .flat()
+      .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
+      .slice(0, 8);
+
     return NextResponse.json({
       writings: writingsStats,
       techblog: techBlogStats,
-      projects: projectsStats
+      projects: projectsStats,
+      recent,
     });
   } catch (error) {
     console.error('Error fetching stats:', error);

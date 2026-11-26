@@ -23,9 +23,9 @@ describe('retired Markdown writing editor (would hit HTTP 428 without version)',
   });
   it('/create-writing redirects to the studio and the dashboard Writings section redirects too', () => {
     assert.match(read('src/app/create-writing/page.js'), /redirect\("\/admin\/writings\/new"\)/);
-    const dash = read('src/app/admin/Dashboard/index.js');
-    assert.match(dash, /window\.location\.replace\('\/admin\/writings'\)/);
-    assert.doesNotMatch(dash, /<ContentSection type="writings"/);
+    assert.match(read('src/app/admin/AdminShell.jsx'), /href: '\/admin\/writings'/);
+    assert.doesNotMatch(read('src/app/admin/Dashboard/index.js'), /<ContentSection type="writings"/);
+    assert.ok(!fs.existsSync(path.join(root, 'src/app/admin/Dashboard/components/editors/MarkdownEditor.jsx')), 'retired Markdown editor must stay deleted');
   });
   it('the API still rejects an unversioned update (428), so no legacy path can silently overwrite', () => {
     assert.match(read('src/lib/writing-service.js'), /428/);

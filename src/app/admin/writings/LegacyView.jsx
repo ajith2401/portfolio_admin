@@ -30,15 +30,15 @@ export default function LegacyView({ writing, busy, error, onConvert }) {
   const tree = useMemo(() => (result ? docToTree(result.doc) : null), [result]);
 
   return (
-    <div className="space-y-4 text-gray-100">
+    <div className="space-y-4 text-gray-900">
       <div
         role="note"
-        className="rounded-lg border border-amber-500 bg-amber-900/30 p-4"
+        className="rounded-lg border border-amber-400 bg-amber-50 p-4 text-amber-900"
       >
-        <h2 className="font-semibold text-amber-100">
+        <h2 className="font-semibold text-amber-900">
           Legacy Markdown writing
         </h2>
-        <p className="mt-1 text-sm text-amber-100/90">
+        <p className="mt-1 text-sm text-amber-900">
           This writing was created with the old Markdown editor. It is shown
           here exactly as stored and has not been changed. You can convert it to
           the new editor when you are ready. The original Markdown is kept as a
@@ -47,7 +47,7 @@ export default function LegacyView({ writing, busy, error, onConvert }) {
         {step === "view" && (
           <button
             type="button"
-            className="mt-3 rounded bg-blue-600 px-4 py-2 text-sm font-medium"
+            className="mt-3 rounded bg-blue-600 text-white px-4 py-2 text-sm font-medium"
             onClick={() => setStep("review")}
           >
             Convert to the new editor
@@ -57,7 +57,7 @@ export default function LegacyView({ writing, busy, error, onConvert }) {
 
       {step === "view" && (
         <pre
-          className="max-h-[60vh] overflow-auto whitespace-pre-wrap rounded border border-gray-700 bg-gray-900 p-4 text-sm"
+          className="max-h-[60vh] overflow-auto whitespace-pre-wrap rounded border border-gray-200 bg-white p-4 text-sm"
           aria-label="Stored Markdown source"
         >
           {writing.body}
@@ -73,11 +73,11 @@ export default function LegacyView({ writing, busy, error, onConvert }) {
               <div>
                 <h3 className="font-semibold">What will change</h3>
                 {result.warnings.length === 0 ? (
-                  <p className="text-sm text-green-300">
+                  <p className="text-sm text-green-700">
                     No problems found. Formatting is carried over as is.
                   </p>
                 ) : (
-                  <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-amber-200">
+                  <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-amber-800">
                     {result.warnings.map((w, i) => (
                       <li key={i}>{w}</li>
                     ))}
@@ -109,15 +109,15 @@ export default function LegacyView({ writing, busy, error, onConvert }) {
               </fieldset>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <h4 className="mb-1 text-sm font-semibold text-gray-300">
+                  <h4 className="mb-1 text-sm font-semibold text-gray-600">
                     Original (Markdown source)
                   </h4>
-                  <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap rounded border border-gray-700 bg-gray-900 p-3 text-sm">
+                  <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap rounded border border-gray-200 bg-white p-3 text-sm">
                     {writing.body}
                   </pre>
                 </div>
                 <div>
-                  <h4 className="mb-1 text-sm font-semibold text-gray-300">
+                  <h4 className="mb-1 text-sm font-semibold text-gray-600">
                     After conversion
                   </h4>
                   <div
@@ -150,7 +150,7 @@ export default function LegacyView({ writing, busy, error, onConvert }) {
                 </span>
               </label>
               {error && (
-                <p role="alert" className="text-sm text-red-300">
+                <p role="alert" className="text-sm text-red-700">
                   {error}
                 </p>
               )}
@@ -158,14 +158,14 @@ export default function LegacyView({ writing, busy, error, onConvert }) {
                 <button
                   type="button"
                   disabled={!confirmed || busy || !tree?.ok}
-                  className="rounded bg-blue-600 px-4 py-2 text-sm font-medium disabled:opacity-40"
+                  className="rounded bg-blue-600 text-white px-4 py-2 text-sm font-medium disabled:opacity-40"
                   onClick={() => onConvert(result.doc, lineBreaks)}
                 >
                   {busy ? "Converting…" : "Convert and save"}
                 </button>
                 <button
                   type="button"
-                  className="rounded px-4 py-2 text-sm hover:bg-gray-700"
+                  className="rounded px-4 py-2 text-sm hover:bg-gray-100"
                   onClick={() => {
                     setStep("view");
                     setConfirmed(false);

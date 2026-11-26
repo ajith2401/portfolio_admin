@@ -84,7 +84,7 @@ function Btn({ label, active, disabled, onClick, children, shortcut }) {
       className={`min-w-9 h-9 px-2 rounded text-sm font-medium transition-colors disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
         active
           ? "bg-blue-600 text-white"
-          : "bg-transparent text-gray-200 hover:bg-gray-700"
+          : "bg-transparent text-gray-800 hover:bg-gray-100"
       }`}
     >
       {children}
@@ -107,7 +107,7 @@ function Dialog({ title, onClose, children }) {
         aria-label={title}
         tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-lg bg-gray-800 p-5 text-gray-100 shadow-xl"
+        className="w-full max-w-md rounded-lg bg-gray-50 p-5 text-gray-900 shadow-xl"
       >
         <h2 className="mb-3 text-lg font-semibold">{title}</h2>
         {children}
@@ -117,7 +117,7 @@ function Dialog({ title, onClose, children }) {
 }
 
 const field =
-  "w-full rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500";
+  "w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500";
 
 function LinkDialog({ initial, onSubmit, onRemove, onClose }) {
   const [href, setHref] = useState(initial || "");
@@ -149,7 +149,7 @@ function LinkDialog({ initial, onSubmit, onRemove, onClose }) {
         <div className="mt-4 flex justify-between">
           <button
             type="button"
-            className="text-sm text-red-300 disabled:opacity-40"
+            className="text-sm text-red-700 disabled:opacity-40"
             disabled={!initial}
             onClick={onRemove}
           >
@@ -158,7 +158,7 @@ function LinkDialog({ initial, onSubmit, onRemove, onClose }) {
           <span className="flex gap-2">
             <button
               type="button"
-              className="rounded px-3 py-1.5 text-sm hover:bg-gray-700"
+              className="rounded px-3 py-1.5 text-sm hover:bg-gray-100"
               onClick={onClose}
             >
               Cancel
@@ -166,7 +166,7 @@ function LinkDialog({ initial, onSubmit, onRemove, onClose }) {
             <button
               type="submit"
               disabled={!href || !ok}
-              className="rounded bg-blue-600 px-3 py-1.5 text-sm disabled:opacity-40"
+              className="rounded bg-blue-600 text-white px-3 py-1.5 text-sm disabled:opacity-40"
             >
               Apply
             </button>
@@ -257,7 +257,7 @@ function ImageDialog({ initial, onSubmit, onClose, onUpload }) {
             autoFocus={!!initial?.src}
           />
           {!alt.trim() && (
-            <p role="status" className="mt-1 text-sm text-amber-300">
+            <p role="status" className="mt-1 text-sm text-amber-700">
               No alt text. The image will be inaccessible to people using screen
               readers. You can still insert it.
             </p>
@@ -282,7 +282,7 @@ function ImageDialog({ initial, onSubmit, onClose, onUpload }) {
         <div className="flex justify-end gap-2">
           <button
             type="button"
-            className="rounded px-3 py-1.5 text-sm hover:bg-gray-700"
+            className="rounded px-3 py-1.5 text-sm hover:bg-gray-100"
             onClick={onClose}
           >
             Cancel
@@ -290,7 +290,7 @@ function ImageDialog({ initial, onSubmit, onClose, onUpload }) {
           <button
             type="submit"
             disabled={!src || !srcOk || busy}
-            className="rounded bg-blue-600 px-3 py-1.5 text-sm disabled:opacity-40"
+            className="rounded bg-blue-600 text-white px-3 py-1.5 text-sm disabled:opacity-40"
           >
             {busy ? "Uploading…" : "Save image"}
           </button>
@@ -433,7 +433,7 @@ export default function RichEditor({
     editorProps: {
       attributes: {
         class:
-          "rich-editor-content max-w-none min-h-[60vh] focus:outline-none px-4 py-3 text-gray-100",
+          "rich-editor-content max-w-none min-h-[60vh] focus:outline-none px-4 py-3 text-gray-900",
         role: "textbox",
         "aria-multiline": "true",
         "aria-label": "Writing content",
@@ -526,7 +526,7 @@ export default function RichEditor({
   if (!editor)
     return (
       <div
-        className="min-h-[60vh] animate-pulse rounded bg-gray-800/50"
+        className="min-h-[60vh] animate-pulse rounded bg-gray-50"
         aria-busy="true"
       />
     );
@@ -609,15 +609,15 @@ export default function RichEditor({
 
   return (
     <div
-      className={`${fullscreen ? "fixed inset-0 z-50 flex flex-col bg-gray-900" : "relative rounded-lg border border-gray-700 bg-gray-900"} ${className}`}
+      className={`${fullscreen ? "fixed inset-0 z-50 flex flex-col bg-white" : "relative rounded-lg border border-gray-200 bg-white"} ${className}`}
     >
       <div
         role="toolbar"
         aria-label="Formatting"
-        className="sticky top-0 z-10 flex flex-wrap items-center gap-1 border-b border-gray-700 bg-gray-800 p-1.5"
+        className="sticky top-0 z-10 flex flex-wrap items-center gap-1 border-b border-gray-200 bg-gray-50 p-1.5"
       >
         {inlineTools}
-        <span className="mx-1 h-6 w-px bg-gray-600" aria-hidden="true" />
+        <span className="mx-1 h-6 w-px bg-gray-200" aria-hidden="true" />
         <Btn
           label="Heading 2"
           active={active("heading", { level: 2 })}
@@ -706,7 +706,7 @@ export default function RichEditor({
         >
           Image
         </Btn>
-        <span className="mx-1 h-6 w-px bg-gray-600" aria-hidden="true" />
+        <span className="mx-1 h-6 w-px bg-gray-200" aria-hidden="true" />
         <Btn
           label="Undo"
           shortcut="Ctrl/Cmd+Z"
@@ -754,13 +754,13 @@ export default function RichEditor({
         {showOutline && (
           <nav
             aria-label="Document outline"
-            className="hidden w-56 shrink-0 overflow-y-auto border-l border-gray-700 p-3 text-sm md:block"
+            className="hidden w-56 shrink-0 overflow-y-auto border-l border-gray-200 p-3 text-sm md:block"
           >
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
               Outline
             </h3>
             {outline.length === 0 ? (
-              <p className="text-gray-400">Headings you add appear here.</p>
+              <p className="text-gray-500">Headings you add appear here.</p>
             ) : (
               <ul className="space-y-1">
                 {outline.map((h, i) => (
@@ -772,7 +772,7 @@ export default function RichEditor({
                   >
                     <button
                       type="button"
-                      className="w-full truncate text-left text-gray-300 hover:text-white"
+                      className="w-full truncate text-left text-gray-600 hover:text-white"
                       onClick={() => jumpToHeading(i)}
                     >
                       {h.text || "(empty heading)"}
@@ -786,7 +786,7 @@ export default function RichEditor({
       </div>
 
       <div
-        className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-gray-700 px-3 py-1.5 text-xs text-gray-400"
+        className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-gray-200 px-3 py-1.5 text-xs text-gray-500"
         aria-live="polite"
       >
         <span>
@@ -800,7 +800,7 @@ export default function RichEditor({
               : `${stats.readTime} min read`}
         </span>
         {problems.length > 0 && (
-          <span role="alert" className="text-red-300">
+          <span role="alert" className="text-red-700">
             Document problem: {problems[0]}
           </span>
         )}
@@ -811,7 +811,7 @@ export default function RichEditor({
           role="toolbar"
           aria-label="Selection formatting"
           style={{ position: "fixed", top: floating.top, left: floating.left }}
-          className="z-[60] flex gap-1 rounded-md border border-gray-600 bg-gray-800 p-1 shadow-lg"
+          className="z-[60] flex gap-1 rounded-md border border-gray-300 bg-gray-50 p-1 shadow-lg"
         >
           {inlineTools}
         </div>
@@ -822,7 +822,7 @@ export default function RichEditor({
           role="listbox"
           aria-label="Insert block"
           style={{ position: "fixed", top: slash.top, left: slash.left }}
-          className="z-[60] max-h-72 w-60 overflow-y-auto rounded-md border border-gray-600 bg-gray-800 py-1 shadow-lg"
+          className="z-[60] max-h-72 w-60 overflow-y-auto rounded-md border border-gray-300 bg-gray-50 py-1 shadow-lg"
         >
           {filteredSlash.map((item, i) => (
             <li key={item.id} role="option" aria-selected={i === slashIndex}>
@@ -830,7 +830,7 @@ export default function RichEditor({
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => runSlash(item, editor)}
-                className={`flex w-full flex-col px-3 py-1.5 text-left text-sm ${i === slashIndex ? "bg-blue-600 text-white" : "text-gray-200 hover:bg-gray-700"}`}
+                className={`flex w-full flex-col px-3 py-1.5 text-left text-sm ${i === slashIndex ? "bg-blue-600 text-white" : "text-gray-800 hover:bg-gray-100"}`}
               >
                 <span>{item.label}</span>
                 {item.hint && (

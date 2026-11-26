@@ -1,8 +1,6 @@
 // src/app/admin/layout.js
+import AdminShell from './AdminShell';
+
 export default function AdminLayout({ children }) {
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {children}
-    </div>
-  );
+  return <AdminShell>{children}</AdminShell>;
 }

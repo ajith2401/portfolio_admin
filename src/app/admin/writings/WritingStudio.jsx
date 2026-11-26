@@ -44,7 +44,7 @@ const RichEditor = dynamic(
     ssr: false,
     loading: () => (
       <div
-        className="min-h-[60vh] animate-pulse rounded bg-gray-800/50"
+        className="min-h-[60vh] animate-pulse rounded bg-gray-50"
         aria-busy="true"
       />
     ),
@@ -56,7 +56,7 @@ const contentKey = (f, doc) =>
   JSON.stringify([f.title, f.category, f.language, f.excerpt, f.tags, f.seo, f.images, doc]);
 const EMPTY_DOC = { type: "doc", content: [{ type: "paragraph" }] };
 const input =
-  "w-full rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500";
+  "w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500";
 
 function ConflictDialog({
   serverCopy,
@@ -80,17 +80,17 @@ function ConflictDialog({
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="conflict-title"
-        className="w-full max-w-lg rounded-lg bg-gray-800 p-5 text-gray-100 shadow-xl"
+        className="w-full max-w-lg rounded-lg bg-gray-50 p-5 text-gray-900 shadow-xl"
       >
         <h2 id="conflict-title" className="text-lg font-semibold">
           This writing was changed elsewhere
         </h2>
-        <p className="mt-2 text-sm text-gray-300">
+        <p className="mt-2 text-sm text-gray-600">
           Someone (or another tab) saved a newer version. Nothing of yours has
           been overwritten. Autosave is paused until you choose.
         </p>
         {diffs && (
-          <div className="mt-3 max-h-48 overflow-auto rounded bg-gray-900 p-3 text-sm">
+          <div className="mt-3 max-h-48 overflow-auto rounded bg-white p-3 text-sm">
             {diffs.length === 0 ? (
               <p>
                 Title, category, language and excerpt are the same. The text or
@@ -100,14 +100,14 @@ function ConflictDialog({
               diffs.map((d) => (
                 <div key={d.field} className="mb-2">
                   <strong>{d.field}</strong>
-                  <div className="text-red-300">Yours: {String(d.mine)}</div>
-                  <div className="text-green-300">
+                  <div className="text-red-700">Yours: {String(d.mine)}</div>
+                  <div className="text-green-700">
                     Saved version: {String(d.theirs)}
                   </div>
                 </div>
               ))
             )}
-            <p className="mt-2 text-gray-400">
+            <p className="mt-2 text-gray-500">
               Saved version:{" "}
               {serverCopy.wordCount ?? analyzeWriting(serverCopy).wordCount}{" "}
               words.
@@ -118,7 +118,7 @@ function ConflictDialog({
           {!serverCopy && (
             <button
               type="button"
-              className="rounded px-3 py-1.5 text-sm hover:bg-gray-700"
+              className="rounded px-3 py-1.5 text-sm hover:bg-gray-100"
               disabled={loading}
               onClick={onCompare}
             >
@@ -127,7 +127,7 @@ function ConflictDialog({
           )}
           <button
             type="button"
-            className="rounded bg-gray-600 px-3 py-1.5 text-sm"
+            className="rounded bg-gray-200 px-3 py-1.5 text-sm"
             disabled={loading}
             onClick={onReload}
           >
@@ -135,7 +135,7 @@ function ConflictDialog({
           </button>
           <button
             type="button"
-            className="rounded bg-blue-600 px-3 py-1.5 text-sm disabled:opacity-40"
+            className="rounded bg-blue-600 text-white px-3 py-1.5 text-sm disabled:opacity-40"
             disabled={loading || !serverCopy}
             onClick={onKeepMine}
             title={serverCopy ? "" : "Compare first"}
@@ -489,13 +489,13 @@ export default function WritingStudio({ id: routeId }) {
 
   if (loading)
     return (
-      <div className="p-8 text-gray-300" aria-busy="true">
+      <div className="p-8 text-gray-600" aria-busy="true">
         Loading…
       </div>
     );
   if (loadError)
     return (
-      <div className="p-8 text-red-300" role="alert">
+      <div className="p-8 text-red-700" role="alert">
         {loadError}{" "}
         <Link className="underline" href="/admin/writings">
           Back to library
@@ -506,24 +506,24 @@ export default function WritingStudio({ id: routeId }) {
   const disabled = save.status === "conflict";
 
   return (
-    <div className="min-h-screen bg-gray-900 pb-16 text-gray-100">
-      <header className="sticky top-0 z-30 border-b border-gray-700 bg-gray-800/95 px-4 py-2 backdrop-blur">
+    <div className="min-h-screen bg-white pb-16 text-gray-900">
+      <header className="sticky top-14 z-10 border-b lg:top-0 border-gray-200 bg-gray-50 px-4 py-2 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3">
           <Link
             href="/admin/writings"
-            className="text-sm text-blue-300 underline"
+            className="text-sm text-blue-700 underline"
           >
             Library
           </Link>
           <span
-            className={`rounded px-2 py-0.5 text-xs font-semibold uppercase ${status === "published" ? "bg-green-700" : status === "archived" ? "bg-gray-600" : "bg-amber-700"}`}
+            className={`rounded px-2 py-0.5 text-xs font-semibold uppercase ${status === "published" ? "bg-emerald-100 text-emerald-800" : status === "archived" ? "bg-gray-200 text-gray-700" : "bg-amber-100 text-amber-800"}`}
           >
             {status}
           </span>
           <span
             role="status"
             aria-live="polite"
-            className={`text-sm ${save.status === "error" || save.status === "conflict" || save.status === "invalid" ? "text-red-300" : "text-gray-300"}`}
+            className={`text-sm ${save.status === "error" || save.status === "conflict" || save.status === "invalid" ? "text-red-700" : "text-gray-600"}`}
           >
             {legacy ? "Legacy Markdown (read-only)" : saveLabel(save)}
             {save.error && !legacy ? `: ${save.error}` : ""}
@@ -531,7 +531,7 @@ export default function WritingStudio({ id: routeId }) {
           {save.status === "conflict" && !conflictOpen && (
             <button
               type="button"
-              className="rounded bg-red-700 px-3 py-1.5 text-sm"
+              className="rounded bg-red-700 text-white px-3 py-1.5 text-sm"
               onClick={() => setConflictOpen(true)}
             >
               Resolve conflict
@@ -545,7 +545,7 @@ export default function WritingStudio({ id: routeId }) {
                     type="button"
                     disabled={busy || disabled}
                     onClick={() => transition("published")}
-                    className="rounded bg-green-700 px-3 py-1.5 text-sm font-medium disabled:opacity-40"
+                    className="rounded bg-green-700 text-white px-3 py-1.5 text-sm font-medium disabled:opacity-40"
                   >
                     Publish
                   </button>
@@ -555,7 +555,7 @@ export default function WritingStudio({ id: routeId }) {
                     type="button"
                     disabled={busy || disabled}
                     onClick={() => transition("draft")}
-                    className="rounded bg-amber-600 px-3 py-1.5 text-sm font-medium disabled:opacity-40"
+                    className="rounded bg-amber-600 text-white px-3 py-1.5 text-sm font-medium disabled:opacity-40"
                   >
                     Unpublish
                   </button>
@@ -565,7 +565,7 @@ export default function WritingStudio({ id: routeId }) {
                     type="button"
                     disabled={busy || disabled}
                     onClick={() => transition("archived")}
-                    className="rounded bg-gray-600 px-3 py-1.5 text-sm disabled:opacity-40"
+                    className="rounded bg-gray-200 px-3 py-1.5 text-sm disabled:opacity-40"
                   >
                     Archive
                   </button>
@@ -577,7 +577,7 @@ export default function WritingStudio({ id: routeId }) {
                 type="button"
                 disabled={disabled}
                 onClick={() => doSave()}
-                className="rounded bg-blue-600 px-3 py-1.5 text-sm disabled:opacity-40"
+                className="rounded bg-blue-600 text-white px-3 py-1.5 text-sm disabled:opacity-40"
               >
                 Save now
               </button>
@@ -590,7 +590,7 @@ export default function WritingStudio({ id: routeId }) {
         {notice.length > 0 && (
           <div
             role="status"
-            className="mb-3 flex items-start justify-between gap-3 rounded border border-amber-500 bg-amber-900/30 p-3 text-sm text-amber-100"
+            className="mb-3 flex items-start justify-between gap-3 rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900"
           >
             <ul className="list-disc pl-5">
               {notice.map((n, i) => (
@@ -617,13 +617,13 @@ export default function WritingStudio({ id: routeId }) {
           onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
           placeholder="Title"
           lang={form.language === "Tamil" ? "ta" : undefined}
-          className="mb-3 w-full border-0 border-b border-gray-700 bg-transparent px-1 py-2 text-3xl font-bold text-gray-100 placeholder:text-gray-500 focus:outline-none focus:ring-0"
+          className="mb-3 w-full border-0 border-b border-gray-200 bg-transparent px-1 py-2 text-3xl font-bold text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-0"
           maxLength={200}
         />
 
         <div className="mb-3 grid gap-3 md:grid-cols-3">
           <div>
-            <label htmlFor="w-cat" className="mb-1 block text-xs text-gray-400">
+            <label htmlFor="w-cat" className="mb-1 block text-xs text-gray-500">
               Category
             </label>
             <select
@@ -641,7 +641,7 @@ export default function WritingStudio({ id: routeId }) {
           <div className="md:col-span-2">
             <label
               htmlFor="w-excerpt"
-              className="mb-1 block text-xs text-gray-400"
+              className="mb-1 block text-xs text-gray-500"
             >
               Excerpt (optional)
             </label>
@@ -661,7 +661,7 @@ export default function WritingStudio({ id: routeId }) {
         <div
           role="tablist"
           aria-label="Sections"
-          className="mb-3 flex gap-1 border-b border-gray-700"
+          className="mb-3 flex gap-1 border-b border-gray-200"
         >
           {[
             ["write", "Write"],
@@ -690,7 +690,7 @@ export default function WritingStudio({ id: routeId }) {
                 setTab(keys[n]);
                 document.getElementById(`tab-${keys[n]}`)?.focus();
               }}
-              className={`px-4 py-2 text-sm ${tab === k ? "border-b-2 border-blue-500 text-white" : "text-gray-400 hover:text-gray-200"}`}
+              className={`px-4 py-2 text-sm ${tab === k ? "border-b-2 border-blue-600 font-medium text-blue-700" : "text-gray-500 hover:text-gray-200"}`}
             >
               {label}
               {k === "search" && blockers.length > 0 ? " •" : ""}
@@ -707,7 +707,7 @@ export default function WritingStudio({ id: routeId }) {
               onConvert={convert}
             />
           ) : (
-            <p className="text-sm text-gray-300">
+            <p className="text-sm text-gray-600">
               Convert this writing to edit its search and sharing fields.
             </p>
           )
@@ -723,7 +723,7 @@ export default function WritingStudio({ id: routeId }) {
                 onEditor={onEditorReady}
               />
               {!id && (
-                <p className="mt-2 text-xs text-gray-400">
+                <p className="mt-2 text-xs text-gray-500">
                   A draft is created automatically once you add a title and some
                   text.
                 </p>

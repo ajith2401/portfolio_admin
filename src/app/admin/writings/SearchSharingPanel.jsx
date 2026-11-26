@@ -11,19 +11,19 @@ import {
 } from "@/lib/content-contract";
 
 const input =
-  "w-full rounded border border-gray-600 bg-gray-900 px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500";
+  "w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500";
 
 function Field({ id, label, hint, counter, limit, children }) {
   const over = limit && counter > limit;
   return (
     <div>
       <div className="mb-1 flex items-baseline justify-between gap-2">
-        <label htmlFor={id} className="text-sm font-medium text-gray-200">
+        <label htmlFor={id} className="text-sm font-medium text-gray-800">
           {label}
         </label>
         {counter != null && (
           <span
-            className={`text-xs ${over ? "text-amber-300" : "text-gray-400"}`}
+            className={`text-xs ${over ? "text-amber-700" : "text-gray-500"}`}
             aria-live="polite"
           >
             {counter}
@@ -32,15 +32,15 @@ function Field({ id, label, hint, counter, limit, children }) {
         )}
       </div>
       {children}
-      {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
     </div>
   );
 }
 
 const LEVEL_STYLE = {
-  error: "border-red-500 text-red-200",
-  warning: "border-amber-500 text-amber-200",
-  info: "border-gray-600 text-gray-300",
+  error: "border-red-500 text-red-800",
+  warning: "border-amber-500 text-amber-800",
+  info: "border-gray-300 text-gray-600",
 };
 
 export default function SearchSharingPanel({
@@ -101,11 +101,11 @@ export default function SearchSharingPanel({
   })();
 
   return (
-    <div className="space-y-5 text-gray-100">
+    <div className="space-y-5 text-gray-900">
       <section aria-labelledby="ss-checks">
         <h3
           id="ss-checks"
-          className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-400"
+          className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500"
         >
           Checks
         </h3>
@@ -113,7 +113,7 @@ export default function SearchSharingPanel({
           {checks.map((c) => (
             <li
               key={c.id}
-              className={`rounded border-l-4 bg-gray-800 px-3 py-1.5 text-sm ${LEVEL_STYLE[c.level]}`}
+              className={`rounded border-l-4 bg-gray-50 px-3 py-1.5 text-sm ${LEVEL_STYLE[c.level]}`}
             >
               <span className="mr-2 text-xs font-semibold uppercase">
                 {c.level === "error" ? "Blocks publishing" : c.level}
@@ -122,10 +122,10 @@ export default function SearchSharingPanel({
             </li>
           ))}
           {checks.length === 0 && (
-            <li className="text-sm text-green-300">Nothing to fix.</li>
+            <li className="text-sm text-green-700">Nothing to fix.</li>
           )}
         </ul>
-        <p className="mt-1 text-xs text-gray-400">
+        <p className="mt-1 text-xs text-gray-500">
           Only items marked “Blocks publishing” stop you from publishing.
         </p>
       </section>
@@ -163,31 +163,31 @@ export default function SearchSharingPanel({
 
       <section
         aria-labelledby="ss-social"
-        className="overflow-hidden rounded-lg border border-gray-600 bg-gray-800"
+        className="overflow-hidden rounded-lg border border-gray-300 bg-gray-50"
       >
         <h3
           id="ss-social"
-          className="px-4 pt-3 text-xs font-semibold uppercase tracking-wide text-gray-400"
+          className="px-4 pt-3 text-xs font-semibold uppercase tracking-wide text-gray-500"
         >
           Social card
         </h3>
-        <div className="m-3 overflow-hidden rounded-lg border border-gray-600 bg-gray-900">
+        <div className="m-3 overflow-hidden rounded-lg border border-gray-300 bg-white">
           {resolved.og.image ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={resolved.og.image}
               alt={resolved.og.imageAlt}
-              className="aspect-[1.91/1] w-full bg-gray-700 object-cover"
+              className="aspect-[1.91/1] w-full bg-gray-100 object-cover"
             />
           ) : (
-            <div className="flex aspect-[1.91/1] items-center justify-center bg-gray-700 text-sm text-gray-400">
+            <div className="flex aspect-[1.91/1] items-center justify-center bg-gray-100 text-sm text-gray-500">
               No image
             </div>
           )}
           <div className="p-3" lang={resolved.lang}>
-            <div className="text-xs uppercase text-gray-400">{host}</div>
+            <div className="text-xs uppercase text-gray-500">{host}</div>
             <div className="font-semibold">{resolved.og.title}</div>
-            <div className="line-clamp-2 text-sm text-gray-300">
+            <div className="line-clamp-2 text-sm text-gray-600">
               {resolved.og.description}
             </div>
           </div>
@@ -265,7 +265,7 @@ export default function SearchSharingPanel({
             placeholder="https://"
           />
           {seo.ogImage && !isSafeUrl(seo.ogImage) && (
-            <p role="alert" className="mt-1 text-xs text-red-300">
+            <p role="alert" className="mt-1 text-xs text-red-700">
               This address is not allowed.
             </p>
           )}
@@ -273,7 +273,7 @@ export default function SearchSharingPanel({
         {form.images?.large && (
           <button
             type="button"
-            className="text-sm text-blue-300 underline disabled:opacity-40"
+            className="text-sm text-blue-700 underline disabled:opacity-40"
             disabled={disabled}
             onClick={() => setSeo({ ogImage: form.images.large })}
           >
@@ -330,7 +330,7 @@ export default function SearchSharingPanel({
       <section aria-labelledby="ss-lang" className="space-y-2">
         <h3
           id="ss-lang"
-          className="text-sm font-semibold uppercase tracking-wide text-gray-400"
+          className="text-sm font-semibold uppercase tracking-wide text-gray-500"
         >
           Language
         </h3>
@@ -345,7 +345,7 @@ export default function SearchSharingPanel({
           <option>English</option>
         </select>
         {suggested && suggested !== form.language && (
-          <p className="text-sm text-amber-200" role="status">
+          <p className="text-sm text-amber-800" role="status">
             The text looks like {suggested}.{" "}
             <button
               type="button"
@@ -362,12 +362,12 @@ export default function SearchSharingPanel({
       <section aria-labelledby="ss-slug" className="space-y-2">
         <h3
           id="ss-slug"
-          className="text-sm font-semibold uppercase tracking-wide text-gray-400"
+          className="text-sm font-semibold uppercase tracking-wide text-gray-500"
         >
           Web address (slug)
         </h3>
         {!currentSlug ? (
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-gray-500">
             The address is created from the title when you first save. Editing
             the title later never changes it.
           </p>
@@ -385,7 +385,7 @@ export default function SearchSharingPanel({
                 {published && (
                   <p
                     role="alert"
-                    className="rounded bg-amber-900/40 p-2 text-sm text-amber-100"
+                    className="rounded bg-amber-50 p-2 text-sm text-amber-900"
                   >
                     This writing is published. Changing the address keeps the
                     old one as a redirect, but links shared elsewhere may take
@@ -396,7 +396,7 @@ export default function SearchSharingPanel({
                   <button
                     type="button"
                     disabled={slugBusy || disabled}
-                    className="rounded bg-blue-600 px-3 py-1.5 text-sm disabled:opacity-40"
+                    className="rounded bg-blue-600 text-white px-3 py-1.5 text-sm disabled:opacity-40"
                     onClick={async () => {
                       const ok = await onSlugApply(slugDraft);
                       if (ok) setSlugDraft(null);
@@ -406,7 +406,7 @@ export default function SearchSharingPanel({
                   </button>
                   <button
                     type="button"
-                    className="rounded px-3 py-1.5 text-sm hover:bg-gray-700"
+                    className="rounded px-3 py-1.5 text-sm hover:bg-gray-100"
                     onClick={() => setSlugDraft(null)}
                   >
                     Cancel
@@ -415,7 +415,7 @@ export default function SearchSharingPanel({
               </div>
             )}
             {(writing?.slugHistory || []).length > 0 && (
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-500">
                 Previous addresses (redirected):{" "}
                 {(writing.slugHistory || []).map((h) => h.slug || h).join(", ")}
               </p>
