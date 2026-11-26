@@ -42,7 +42,7 @@ export default function QuotePicker() {
           <div key={s} className="grid gap-1">
             {st.map((text, l) =>
               text === "" ? null : (
-                <label key={l} className="flex items-start gap-2 text-sm">
+                <label key={l} className="flex min-h-11 items-center gap-2 text-sm">
                   <input
                     type="checkbox"
                     checked={picked.includes(`${s}:${l}`)}
@@ -61,7 +61,7 @@ export default function QuotePicker() {
         {tooMany ? ` — at most ${QUOTE_MAX_LINES} lines` : ""}
       </p>
       <Field label="Quote format">
-        <select value={format} onChange={(e) => setFormat(e.target.value)}>
+        <select className="pms-field" value={format} onChange={(e) => setFormat(e.target.value)}>
           {Object.entries(FORMAT_LABEL).map(([k, v]) => (
             <option key={k} value={k}>
               {v}
