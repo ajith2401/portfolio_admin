@@ -60,8 +60,9 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Valid email is required' }, { status: 400 });
     }
 
-    const project = await Project.findById(id);
-    if (!project) {
+    const project = /^[0-9a-f]{24}$/i.test(String(id)) ? await Project.findById(id) : null;
+    // Only published projects accept comments (a missing status is not published).
+    if (!project || project.status !== 'published') {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
