@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { LayoutDashboard, PenTool, BookOpen, Code2, BarChart3, Settings, LogOut, Menu, X, ExternalLink } from 'lucide-react';
+import { LayoutDashboard, PenTool, BookOpen, Code2, BarChart3, Film, Settings, LogOut, Menu, X, ExternalLink } from 'lucide-react';
 
 const NAV = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/admin/writings', label: 'Writings', icon: PenTool },
+  { href: '/admin/poem-motion-studio', label: 'Poem Motion', icon: Film },
   { href: '/admin/tech-blog', label: 'Tech Blog', icon: BookOpen },
   { href: '/admin/projects', label: 'Projects', icon: Code2 },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },

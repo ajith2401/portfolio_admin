@@ -33,3 +33,4 @@ export function poemFromWriting(w) {
   const res = markdownToDoc(String(w?.body || ""), { category: "poem" });
   return { ...extractPoem(res.doc), warnings: res.warnings || [], legacy: true };
 }
+
