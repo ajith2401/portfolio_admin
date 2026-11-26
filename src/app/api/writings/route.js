@@ -341,14 +341,21 @@ export async function POST(request) {
     doc.version = 1;
     let claimed = null;
     if (doc.slug) {
-      const c = await claimSlug(doc.slug, doc._id);
-      if (!c.ok) {
+      // Lost a race for this slug? Take the next free suffix instead of failing the author's save.
+      const base = doc.slug;
+      for (let attempt = 0; attempt < 6 && !claimed; attempt++) {
+        if (attempt > 0) {
+          doc.slug = `${base}-${Math.floor(Math.random() * 90000 + 10000)}`;
+        }
+        const c = await claimSlug(doc.slug, doc._id);
+        if (c.ok) claimed = doc.slug;
+      }
+      if (!claimed) {
         return NextResponse.json(
-          { error: "A writing with this slug already exists" },
+          { error: "Could not reserve a unique slug; try again" },
           { status: 409 },
         );
       }
-      claimed = doc.slug;
     }
     try {
       await doc.save();

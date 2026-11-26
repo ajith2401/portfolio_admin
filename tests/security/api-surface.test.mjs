@@ -36,6 +36,8 @@ describe('API surface guard', () => {
       const isPublic = PUBLIC_MUTATIONS.some((r) => r.test(file));
       it(`${method} ${rel} is protected or explicitly public + rate limited`, () => {
         if (/logout\/route\.js$/.test(file)) return; // only clears the caller's own cookie
+        // A retired endpoint (pure 410, no data access) cannot be abused, so it needs no limiter.
+        if (/status:\s*410/.test(body) && !/connectDB|mongoose|\.save\(|addRating|findOne|find\(/.test(body)) return;
         if (isPublic) assert.match(body, /applyRateLimit|globalRateLimiter|export async function POST/, 'public mutation must be rate limited');
         else {
           assert.match(body, /requireAuth\(/, 'needs authentication');

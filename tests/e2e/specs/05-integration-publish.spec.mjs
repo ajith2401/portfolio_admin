@@ -20,7 +20,9 @@ async function until(fn, { timeout = 30000, step = 500 } = {}) {
   }
   throw new Error("condition not met in time; last=" + JSON.stringify(last));
 }
-const TITLE = "மழை இரவு";
+// Unique per run: the Portfolio's on-disk ISR cache outlives its process, so a reused slug would serve the previous run's redirect.
+const RUN = Date.now().toString(36);
+const TITLE = `மழை இரவு ${RUN}`;
 const L1 = "வானம் அழுதது",
   L2 = "மண் சிரித்தது",
   S2 = "இரண்டாம் பத்தி",
@@ -30,7 +32,7 @@ const SEO_DESC = "ஒரு மழை இரவு பற்றிய சிற�
 
 test.describe.serial("admin -> shared DB -> portfolio", () => {
   let id, slug, oldSlug;
-  const newSlug = "rain-night-integration";
+  const newSlug = `rain-night-${RUN}`;
   let page;
   test.beforeAll(async ({ browser }) => {
     const ctx = await browser.newContext({

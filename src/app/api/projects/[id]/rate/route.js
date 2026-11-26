@@ -1,65 +1,13 @@
-// src/app/api/projects/[id]/rate/route.js
+// Retired. This endpoint applied unmoderated ratings keyed by a self-reported email directly to the
+// public aggregate. Ratings now arrive only as `pending` comments that an admin approves.
 import { NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import { Project } from '@/models';
-import { applyRateLimit } from '@/lib/rateLimit';
-import { sanitizeHtml } from '@/lib/sanitize';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST(request, { params }) {
-  const rateLimit = applyRateLimit(request, 'rate-project', 10, 60 * 1000);
-  if (!rateLimit.allowed) {
-    return rateLimit.response;
-  }
-
-  try {
-    await connectDB();
-    const { id } = await params;
-    const body = await request.json().catch(() => null);
-    if (!body || !body.email || body.rating === undefined) {
-      return NextResponse.json({ error: 'Email and rating are required' }, { status: 400 });
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(body.email)) {
-      return NextResponse.json({ error: 'Valid email is required' }, { status: 400 });
-    }
-
-    const ratingNum = Math.max(1, Math.min(5, Math.round(Number(body.rating))));
-    const sanitizedName = sanitizeHtml(String(body.name || 'Anonymous')).trim();
-
-    // Only published work can be rated or commented on; drafts/archived/malformed ids are a plain 404.
-    const project = /^[0-9a-f]{24}$/i.test(String(id)) ? await Project.findById(id) : null;
-    if (!project || (project.status && project.status !== 'published')) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-    }
-
-    if (!project.ratings) {
-      project.ratings = [];
-    }
-
-    const normalizedEmail = String(body.email).trim().toLowerCase();
-    const existingRating = project.ratings.find(r => r.email === normalizedEmail);
-    if (existingRating) {
-      existingRating.rating = ratingNum;
-      existingRating.name = sanitizedName;
-    } else {
-      project.ratings.push({ name: sanitizedName, email: normalizedEmail, rating: ratingNum });
-    }
-
-    const totalRating = project.ratings.reduce((sum, r) => sum + r.rating, 0);
-    project.averageRating = totalRating / project.ratings.length;
-    project.totalRatings = project.ratings.length;
-
-    await project.save();
-
-    return NextResponse.json({
-      averageRating: project.averageRating,
-      totalRatings: project.totalRatings
-    });
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed to record rating' }, { status: 500 });
-  }
+export async function POST() {
+  return NextResponse.json(
+    { error: 'Gone. Ratings are submitted as comments and moderated before they count.' },
+    { status: 410, headers: { 'Cache-Control': 'no-store' } }
+  );
 }

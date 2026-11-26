@@ -21,7 +21,7 @@ start_portfolio() {
   PUB_PID=$!
 }
 start_admin() { # $1 = revalidate URL
-  (NODE_ENV=production ADMIN_ALLOWED_ORIGINS=http://127.0.0.1:$ADM_PORT PORTFOLIO_REVALIDATE_URL=$1 REVALIDATE_SECRET=$RSECRET \
+  (NODE_ENV=production CLOUDINARY_CLOUD_NAME=e2etestcloud CLOUDINARY_API_KEY=000000000000000 CLOUDINARY_API_SECRET=e2e-not-a-real-secret ADMIN_ALLOWED_ORIGINS=http://127.0.0.1:$ADM_PORT PORTFOLIO_REVALIDATE_URL=$1 REVALIDATE_SECRET=$RSECRET \
     npx next start -p $ADM_PORT) > "${TMPDIR}int-admin.log" 2>&1 &
   ADM_PID=$!
 }
@@ -31,8 +31,9 @@ for P in $PUB_PORT $ADM_PORT; do lsof -nP -iTCP:$P -sTCP:LISTEN -t >/dev/null 2>
 start_portfolio; start_admin "http://127.0.0.1:$PUB_PORT/api/revalidate"
 trap 'killtree $PUB_PID; killtree $ADM_PID' EXIT
 wait_for http://127.0.0.1:$PUB_PORT/ && wait_for http://127.0.0.1:$ADM_PORT/login || exit 1
+export E2E_REVALIDATE_SECRET=$RSECRET
 export E2E_BAD_SECRET=$(openssl rand -hex 16)   # guaranteed different from the real secret
-( cd tests/e2e && npx playwright test specs/05-integration-publish.spec.mjs "$@" ); RC1=$?
+( cd tests/e2e && npx playwright test specs/05-integration-publish.spec.mjs specs/07-security-negatives.spec.mjs "$@" ); RC1=$?
 # Phase 2: restart admin pointing at a dead revalidate URL to prove a failed revalidation never fails the save.
 killtree $ADM_PID; sleep 2
 start_admin "http://127.0.0.1:1/api/revalidate"; wait_for http://127.0.0.1:$ADM_PORT/login || exit 1
