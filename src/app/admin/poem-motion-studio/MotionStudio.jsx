@@ -43,6 +43,7 @@ import {
   recordingSupport,
 } from "@/lib/motion-studio/audio";
 import { FONT_CSS } from "./fonts";
+import TemplatePicker from "./TemplatePicker";
 import {
   parsePoemText,
   poemToText,
@@ -74,8 +75,21 @@ const THEME_CSS = `
 .pms-field{width:100%;min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:0 10px;font-size:14px}
 .pms-card{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:12px}
 .pms-lbl{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
-.pms-tabs{position:sticky;bottom:0;z-index:20;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
-@media (min-width:1024px){.pms-tabs{position:static;border-top:0;border-bottom:1px solid var(--line)}}
+.pms-tabs .pms-btn{flex:0 0 auto;white-space:nowrap}
+.pms-handle,.pms-grip{display:none}
+@media (max-width:1023px){
+.pms-sheet{position:fixed;left:0;right:0;bottom:var(--kb,0px);z-index:30;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-bottom:0;border-radius:16px 16px 0 0;box-shadow:0 -8px 24px rgba(0,0,0,.18);max-height:min(62dvh,calc(var(--vvh,100dvh)*.62));padding-bottom:env(safe-area-inset-bottom)}
+.pms-sheet [role=tabpanel]{overflow-y:auto;overscroll-behavior:contain;padding:0 12px 12px;margin-top:8px}
+.pms-sheet[data-open=false] [role=tabpanel]{display:none}
+.pms-handle{display:flex;flex-direction:column;align-items:center;gap:4px;min-height:44px;width:100%;justify-content:center;font-size:12px;font-weight:600;color:var(--mute);background:transparent;border:0}
+.pms-grip{display:block;width:40px;height:4px;border-radius:2px;background:var(--line)}
+.pms-tabs{padding-bottom:0}
+.pms[data-sheet=open]{padding-bottom:calc(62dvh + 16px)}
+.pms[data-sheet=open] canvas[aria-label^=Preview]{height:34dvh!important;width:auto!important;aspect-ratio:9/16}
+.pms[data-sheet=closed]{padding-bottom:calc(120px + env(safe-area-inset-bottom))}
+}
+@media (min-width:1024px){.pms-tabs{border-bottom:1px solid var(--line)}}
+@media (prefers-reduced-motion:reduce){.pms *{scroll-behavior:auto!important}}
 `;
 const cx = (...a) => a.filter(Boolean).join(" ");
 const slug = (s) => (s || "poem").replace(/[^\w஀-௿-]+/g, "-");
@@ -172,6 +186,29 @@ export default function MotionStudio() {
   const [poemText, setPoemText] = useState("");
   const [poemTitle, setPoemTitle] = useState("");
   const [fontTick, setFontTick] = useState(0);
+  const mainRef = useRef(null);
+  const [wide, setWide] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [vv, setVv] = useState({ kb: 0, h: 0 });
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    // three panes need ~1000px of CONTENT width (the admin sidebar eats 240px of the viewport), so measure the container
+    const f = () => setWide(el.clientWidth >= 1056);
+    f();
+    const ro = new ResizeObserver(f);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  useEffect(() => {
+    const v = window.visualViewport;
+    if (!v) return;
+    const f = () => setVv({ kb: Math.max(0, Math.round(window.innerHeight - v.height - v.offsetTop)), h: Math.round(v.height) });
+    f();
+    v.addEventListener("resize", f);
+    v.addEventListener("scroll", f);
+    return () => { v.removeEventListener("resize", f); v.removeEventListener("scroll", f); };
+  }, []);
   const [draftSaved, setDraftSaved] = useState(null);
   const draftId = useRef(null);
   const fullCanvasRef = useRef(null);
@@ -905,7 +942,9 @@ export default function MotionStudio() {
           ["project", "Project"],
           ["export", "Export"],
         ];
-  const activeTab = tabs.some(([k]) => k === tab) ? tab : tabs[0][0];
+  const three = wide && mode === "advanced"; // desktop 3-pane: poem + scenes live in the left pane
+  const tabsShown = three ? tabs.filter(([k]) => k !== "poem" && k !== "scenes") : tabs;
+  const activeTab = tabsShown.some(([k]) => k === tab) ? tab : tabsShown[0][0];
 
   const fullPoem = useMemo(() => {
     if (!comp) return { title: "", stanzas: [] };
@@ -1006,9 +1045,303 @@ export default function MotionStudio() {
     </div>
   );
 
+  const pickTemplate = (id) =>
+    update((c) => ({
+      ...defaultComposition({ format: c.format, templateId: id, scenes: c.scenes, signature: c.branding.signature }),
+      originalScenes: c.originalScenes,
+      audio: c.audio,
+      poster: c.poster,
+      export: c.export,
+    }));
+  const scenesPanel = comp ? (
+                <section aria-label="Scenes">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="text-lg font-semibold">
+                      Scenes ({comp.scenes.length})
+                    </h2>
+                    <Btn
+                      onClick={() => {
+                        if (comp.originalScenes.length) {
+                          setScenes(() => structuredClone(comp.originalScenes));
+                          flash(
+                            "ok",
+                            "Restored the original automatic arrangement.",
+                          );
+                        }
+                      }}
+                      disabled={!comp.originalScenes.length}
+                    >
+                      Restore original arrangement
+                    </Btn>
+                  </div>
+                  {poemMissing.length > 0 && (
+                    <p
+                      role="alert"
+                      className="mt-2 rounded-lg px-3 py-2 text-sm"
+                      style={{
+                        background: "var(--warn-bg)",
+                        color: "var(--warn-ink)",
+                      }}
+                    >
+                      {poemMissing.length} line(s) from the poem are not in any
+                      scene: “{poemMissing[0]}”
+                      {poemMissing.length > 1 ? "…" : ""}
+                    </p>
+                  )}
+                  <ol className="mt-2 space-y-3">
+                    {comp.scenes.map((s, i) => (
+                      <li
+                        key={s.id}
+                        className="pms-card"
+                        style={
+                          i === S
+                            ? {
+                                borderColor: "var(--accent)",
+                                boxShadow: "0 0 0 2px var(--accent)",
+                              }
+                            : undefined
+                        }
+                        aria-current={i === S ? "true" : undefined}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            className="pms-btn"
+                            onClick={() => seekScene(i)}
+                            aria-label={`Preview scene ${i + 1}`}
+                          >
+                            {i === S ? "● " : ""}Scene {i + 1} ·{" "}
+                            {s.kind === "title" ? "Title" : "Stanza"} ·{" "}
+                            {(s.durationMs / 1000).toFixed(1)}s
+                          </button>
+                          <div className="flex gap-1">
+                            <Btn
+                              aria-label={`Move scene ${i + 1} up`}
+                              disabled={i === 0}
+                              onClick={() => {
+                                setScenes((x) => E.moveScene(x, i, -1));
+                                setSel(i - 1);
+                              }}
+                            >
+                              ↑
+                            </Btn>
+                            <Btn
+                              aria-label={`Move scene ${i + 1} down`}
+                              disabled={i === comp.scenes.length - 1}
+                              onClick={() => {
+                                setScenes((x) => E.moveScene(x, i, 1));
+                                setSel(i + 1);
+                              }}
+                            >
+                              ↓
+                            </Btn>
+                          </div>
+                        </div>
+                        <div className="mt-2 space-y-2">
+                          {s.lines.map((l, li) => (
+                            <div key={li} className="flex items-center gap-1">
+                              <input
+                                aria-label={`Scene ${i + 1} line ${li + 1}`}
+                                className="pms-field"
+                                lang="ta"
+                                value={l}
+                                maxLength={400}
+                                onFocus={() => setSel(i)}
+                                onChange={(e) =>
+                                  setScenes(
+                                    (x) => E.editLine(x, i, li, e.target.value),
+                                    `line-${i}-${li}`,
+                                  )
+                                }
+                              />
+                              <select
+                                aria-label={`Move scene ${i + 1} line ${li + 1} to`}
+                                className="pms-field"
+                                style={{ width: 92 }}
+                                value=""
+                                onChange={(e) => {
+                                  if (e.target.value !== "")
+                                    setScenes((x) =>
+                                      E.moveLine(
+                                        x,
+                                        i,
+                                        li,
+                                        Number(e.target.value),
+                                        1e6,
+                                      ),
+                                    );
+                                }}
+                              >
+                                <option value="">Move…</option>
+                                {comp.scenes.map(
+                                  (_, j) =>
+                                    j !== i && (
+                                      <option key={j} value={j}>
+                                        → Scene {j + 1}
+                                      </option>
+                                    ),
+                                )}
+                              </select>
+                              {li > 0 && (
+                                <Btn
+                                  aria-label={`Split scene ${i + 1} before line ${li + 1}`}
+                                  onClick={() =>
+                                    setScenes((x) => E.splitScene(x, i, li))
+                                  }
+                                >
+                                  Split
+                                </Btn>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          <Range
+                            label={`Scene ${i + 1} seconds`}
+                            value={s.durationMs / 1000}
+                            min={3}
+                            max={12}
+                            step={0.5}
+                            onChange={(v) =>
+                              setScenes(
+                                (x) => E.setDuration(x, i, v * 1000),
+                                `dur-${i}`,
+                              )
+                            }
+                            fmt={(v) => `${v}s`}
+                          />
+                          <Range
+                            label={`Scene ${i + 1} text position`}
+                            value={s.offsetY || 0}
+                            min={-30}
+                            max={30}
+                            onChange={(v) =>
+                              setScenes(
+                                (x) =>
+                                  E.setScenePresentation(x, i, { offsetY: v }),
+                                `off-${i}`,
+                              )
+                            }
+                            fmt={(v) =>
+                              v === 0
+                                ? "auto"
+                                : `${v > 0 ? "↓" : "↑"}${Math.abs(v)}%`
+                            }
+                          />
+                          <Range
+                            label={`Scene ${i + 1} text size`}
+                            value={s.scale || 1}
+                            min={0.6}
+                            max={1.4}
+                            step={0.05}
+                            onChange={(v) =>
+                              setScenes(
+                                (x) =>
+                                  E.setScenePresentation(x, i, { scale: v }),
+                                `sc-${i}`,
+                              )
+                            }
+                            fmt={(v) => `${Math.round(v * 100)}%`}
+                          />
+                          <Field label={`Scene ${i + 1} alignment`}>
+                            <select
+                              aria-label={`Scene ${i + 1} alignment`}
+                              className="pms-field"
+                              value={s.align || ""}
+                              onChange={(e) =>
+                                setScenes((x) =>
+                                  E.setScenePresentation(x, i, {
+                                    align: e.target.value || null,
+                                  }),
+                                )
+                              }
+                            >
+                              <option value="">Use style default</option>
+                              <option value="left">Left</option>
+                              <option value="center">Center</option>
+                              <option value="right">Right</option>
+                            </select>
+                          </Field>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {i < comp.scenes.length - 1 && (
+                            <Btn
+                              onClick={() =>
+                                setScenes((x) => E.mergeNext(x, i))
+                              }
+                            >
+                              Merge with next
+                            </Btn>
+                          )}
+                          <Btn
+                            onClick={() =>
+                              setScenes((x) => E.duplicateScene(x, i))
+                            }
+                          >
+                            Duplicate
+                          </Btn>
+                          <Btn
+                            onClick={() =>
+                              setScenes((x) => E.removeScene(x, i))
+                            }
+                            aria-label={`Remove scene ${i + 1} from the video`}
+                          >
+                            Remove from video
+                          </Btn>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+  ) : null;
+  const poemPanel = comp ? (
+                <section aria-label="Poem" className="pms-card space-y-3">
+                  <h2 className="text-lg font-semibold">Poem text</h2>
+                  {source?.kind === "writing" ? (
+                    <>
+                      <p className="text-sm" style={{ color: "var(--mute)" }}>
+                        This poem comes from your Portfolio and is read-only
+                        here. To change the words, start a new poem by pasting
+                        a copy, or edit the original in Writings.
+                      </p>
+                      <pre lang="ta" className="max-h-80 overflow-auto whitespace-pre-wrap break-words text-sm">{poemText}</pre>
+                    </>
+                  ) : source?.poem ? (
+                    <>
+                      <Field label="Title">
+                        <input className="pms-field" lang="ta" value={poemTitle} maxLength={300} onChange={(e) => setPoemTitle(e.target.value)} />
+                      </Field>
+                      <Field label="Poem text (blank line = new stanza)">
+                        <textarea
+                          aria-label="Poem text"
+                          className="pms-field"
+                          lang="ta"
+                          rows={14}
+                          value={poemText}
+                          style={{ fontSize: 16, lineHeight: 1.7, whiteSpace: "pre-wrap", resize: "vertical" }}
+                          onChange={(e) => setPoemText(e.target.value)}
+                        />
+                      </Field>
+                      <Btn primary onClick={applyPoemEdit}>
+                        Apply and rebuild scenes
+                      </Btn>
+                      <p className="text-xs" style={{ color: "var(--mute)" }}>
+                        Rebuilding replaces your scene edits. You can Undo.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm" style={{ color: "var(--mute)" }}>
+                      This project has no stored poem text to edit.
+                    </p>
+                  )}
+                </section>
+  ) : null;
+
   return (
     <main
-      className="pms mx-auto min-h-screen max-w-6xl p-4 sm:p-6"
+      ref={mainRef}
+      className="pms mx-auto min-h-screen max-w-6xl p-4 sm:p-6 xl:max-w-[1600px]"
+      data-sheet={comp ? (sheetOpen ? "open" : "closed") : undefined}
       data-theme={theme}
     >
       <style>{THEME_CSS}</style>
@@ -1287,7 +1620,13 @@ export default function MotionStudio() {
       )}
 
       {!comp ? null : (
-        <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
+        <div className={`mt-5 grid gap-6 ${three ? "grid-cols-[280px_minmax(270px,1fr)_360px]" : "grid-cols-[minmax(0,1fr)] lg:grid-cols-[300px_minmax(0,1fr)]"}`}>
+          {three && (
+            <div className="min-w-0 space-y-4" aria-label="Source poem and scenes" role="region">
+              {poemPanel}
+              {scenesPanel}
+            </div>
+          )}
           <div className="min-w-0 lg:sticky lg:top-4 lg:self-start">
             {previewBlock("main")}
             <label className="mt-2 flex min-h-11 items-center gap-2 text-sm">
@@ -1316,14 +1655,18 @@ export default function MotionStudio() {
             </div>
           </div>
 
-          <div className="min-w-0">
+          <div className="min-w-0 pms-sheet" data-open={sheetOpen ? "true" : "false"} style={{ "--kb": `${vv.kb}px`, "--vvh": vv.h ? `${vv.h}px` : "100dvh" }}>
+            <button type="button" className="pms-handle" aria-expanded={sheetOpen} aria-controls="pms-panel" onClick={() => setSheetOpen((o) => !o)}>
+              <span aria-hidden="true" className="pms-grip" />
+              {sheetOpen ? "Hide panel to see the full preview" : "Show editing panel"}
+            </button>
             <div
               className="pms-tabs"
               role="tablist"
               aria-label="Studio sections"
               style={{ display: "flex", gap: 4, overflowX: "auto", padding: 4 }}
             >
-              {tabs.map(([k, l]) => (
+              {tabsShown.map(([k, l]) => (
                 <button
                   key={k}
                   id={`tab-${k}`}
@@ -1339,7 +1682,7 @@ export default function MotionStudio() {
                         }
                       : { border: 0 }
                   }
-                  onClick={() => setTab(k)}
+                  onClick={() => { setTab(k); setSheetOpen(activeTab === k && sheetOpen ? false : true); }}
                 >
                   {l}
                 </button>
@@ -1369,46 +1712,7 @@ export default function MotionStudio() {
                   </fieldset>
                   <fieldset>
                     <legend className="pms-lbl">Template</legend>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      {TEMPLATES.map((x) => (
-                        <button
-                          type="button"
-                          key={x.id}
-                          aria-pressed={comp.templateId === x.id}
-                          onClick={() =>
-                            update((c) => ({
-                              ...defaultComposition({
-                                format: c.format,
-                                templateId: x.id,
-                                scenes: c.scenes,
-                                signature: c.branding.signature,
-                              }),
-                              originalScenes: c.originalScenes,
-                              audio: c.audio,
-                              poster: c.poster,
-                              export: c.export,
-                            }))
-                          }
-                          className="min-h-11 rounded-lg border px-3 py-2 text-left text-sm"
-                          style={{
-                            background: `linear-gradient(135deg, ${x.bg.a}, ${x.bg.b})`,
-                            color: x.style.color,
-                            borderColor:
-                              comp.templateId === x.id
-                                ? "var(--accent)"
-                                : "var(--line)",
-                            boxShadow:
-                              comp.templateId === x.id
-                                ? "0 0 0 3px var(--accent)"
-                                : "none",
-                          }}
-                        >
-                          <span className="font-semibold">{x.name}</span>
-                          <br />
-                          <span className="text-xs">{x.mood}</span>
-                        </button>
-                      ))}
-                    </div>
+                    <TemplatePicker comp={comp} tick={fontTick} onPick={pickTemplate} />
                   </fieldset>
                   {mode === "advanced" && (
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -1617,247 +1921,7 @@ export default function MotionStudio() {
                 </>
               )}
 
-              {activeTab === "scenes" && (
-                <section aria-label="Scenes">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h2 className="text-lg font-semibold">
-                      Scenes ({comp.scenes.length})
-                    </h2>
-                    <Btn
-                      onClick={() => {
-                        if (comp.originalScenes.length) {
-                          setScenes(() => structuredClone(comp.originalScenes));
-                          flash(
-                            "ok",
-                            "Restored the original automatic arrangement.",
-                          );
-                        }
-                      }}
-                      disabled={!comp.originalScenes.length}
-                    >
-                      Restore original arrangement
-                    </Btn>
-                  </div>
-                  {poemMissing.length > 0 && (
-                    <p
-                      role="alert"
-                      className="mt-2 rounded-lg px-3 py-2 text-sm"
-                      style={{
-                        background: "var(--warn-bg)",
-                        color: "var(--warn-ink)",
-                      }}
-                    >
-                      {poemMissing.length} line(s) from the poem are not in any
-                      scene: “{poemMissing[0]}”
-                      {poemMissing.length > 1 ? "…" : ""}
-                    </p>
-                  )}
-                  <ol className="mt-2 space-y-3">
-                    {comp.scenes.map((s, i) => (
-                      <li
-                        key={s.id}
-                        className="pms-card"
-                        style={
-                          i === S
-                            ? {
-                                borderColor: "var(--accent)",
-                                boxShadow: "0 0 0 2px var(--accent)",
-                              }
-                            : undefined
-                        }
-                        aria-current={i === S ? "true" : undefined}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <button
-                            type="button"
-                            className="pms-btn"
-                            onClick={() => seekScene(i)}
-                            aria-label={`Preview scene ${i + 1}`}
-                          >
-                            {i === S ? "● " : ""}Scene {i + 1} ·{" "}
-                            {s.kind === "title" ? "Title" : "Stanza"} ·{" "}
-                            {(s.durationMs / 1000).toFixed(1)}s
-                          </button>
-                          <div className="flex gap-1">
-                            <Btn
-                              aria-label={`Move scene ${i + 1} up`}
-                              disabled={i === 0}
-                              onClick={() => {
-                                setScenes((x) => E.moveScene(x, i, -1));
-                                setSel(i - 1);
-                              }}
-                            >
-                              ↑
-                            </Btn>
-                            <Btn
-                              aria-label={`Move scene ${i + 1} down`}
-                              disabled={i === comp.scenes.length - 1}
-                              onClick={() => {
-                                setScenes((x) => E.moveScene(x, i, 1));
-                                setSel(i + 1);
-                              }}
-                            >
-                              ↓
-                            </Btn>
-                          </div>
-                        </div>
-                        <div className="mt-2 space-y-2">
-                          {s.lines.map((l, li) => (
-                            <div key={li} className="flex items-center gap-1">
-                              <input
-                                aria-label={`Scene ${i + 1} line ${li + 1}`}
-                                className="pms-field"
-                                lang="ta"
-                                value={l}
-                                maxLength={400}
-                                onFocus={() => setSel(i)}
-                                onChange={(e) =>
-                                  setScenes(
-                                    (x) => E.editLine(x, i, li, e.target.value),
-                                    `line-${i}-${li}`,
-                                  )
-                                }
-                              />
-                              <select
-                                aria-label={`Move scene ${i + 1} line ${li + 1} to`}
-                                className="pms-field"
-                                style={{ width: 92 }}
-                                value=""
-                                onChange={(e) => {
-                                  if (e.target.value !== "")
-                                    setScenes((x) =>
-                                      E.moveLine(
-                                        x,
-                                        i,
-                                        li,
-                                        Number(e.target.value),
-                                        1e6,
-                                      ),
-                                    );
-                                }}
-                              >
-                                <option value="">Move…</option>
-                                {comp.scenes.map(
-                                  (_, j) =>
-                                    j !== i && (
-                                      <option key={j} value={j}>
-                                        → Scene {j + 1}
-                                      </option>
-                                    ),
-                                )}
-                              </select>
-                              {li > 0 && (
-                                <Btn
-                                  aria-label={`Split scene ${i + 1} before line ${li + 1}`}
-                                  onClick={() =>
-                                    setScenes((x) => E.splitScene(x, i, li))
-                                  }
-                                >
-                                  Split
-                                </Btn>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                          <Range
-                            label={`Scene ${i + 1} seconds`}
-                            value={s.durationMs / 1000}
-                            min={3}
-                            max={12}
-                            step={0.5}
-                            onChange={(v) =>
-                              setScenes(
-                                (x) => E.setDuration(x, i, v * 1000),
-                                `dur-${i}`,
-                              )
-                            }
-                            fmt={(v) => `${v}s`}
-                          />
-                          <Range
-                            label={`Scene ${i + 1} text position`}
-                            value={s.offsetY || 0}
-                            min={-30}
-                            max={30}
-                            onChange={(v) =>
-                              setScenes(
-                                (x) =>
-                                  E.setScenePresentation(x, i, { offsetY: v }),
-                                `off-${i}`,
-                              )
-                            }
-                            fmt={(v) =>
-                              v === 0
-                                ? "auto"
-                                : `${v > 0 ? "↓" : "↑"}${Math.abs(v)}%`
-                            }
-                          />
-                          <Range
-                            label={`Scene ${i + 1} text size`}
-                            value={s.scale || 1}
-                            min={0.6}
-                            max={1.4}
-                            step={0.05}
-                            onChange={(v) =>
-                              setScenes(
-                                (x) =>
-                                  E.setScenePresentation(x, i, { scale: v }),
-                                `sc-${i}`,
-                              )
-                            }
-                            fmt={(v) => `${Math.round(v * 100)}%`}
-                          />
-                          <Field label={`Scene ${i + 1} alignment`}>
-                            <select
-                              aria-label={`Scene ${i + 1} alignment`}
-                              className="pms-field"
-                              value={s.align || ""}
-                              onChange={(e) =>
-                                setScenes((x) =>
-                                  E.setScenePresentation(x, i, {
-                                    align: e.target.value || null,
-                                  }),
-                                )
-                              }
-                            >
-                              <option value="">Use style default</option>
-                              <option value="left">Left</option>
-                              <option value="center">Center</option>
-                              <option value="right">Right</option>
-                            </select>
-                          </Field>
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {i < comp.scenes.length - 1 && (
-                            <Btn
-                              onClick={() =>
-                                setScenes((x) => E.mergeNext(x, i))
-                              }
-                            >
-                              Merge with next
-                            </Btn>
-                          )}
-                          <Btn
-                            onClick={() =>
-                              setScenes((x) => E.duplicateScene(x, i))
-                            }
-                          >
-                            Duplicate
-                          </Btn>
-                          <Btn
-                            onClick={() =>
-                              setScenes((x) => E.removeScene(x, i))
-                            }
-                            aria-label={`Remove scene ${i + 1} from the video`}
-                          >
-                            Remove from video
-                          </Btn>
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                </section>
-              )}
+              {activeTab === "scenes" && scenesPanel}
 
               {activeTab === "bg" && (
                 <section aria-label="Background" className="space-y-3">
@@ -2294,48 +2358,7 @@ export default function MotionStudio() {
                 </section>
               )}
 
-              {activeTab === "poem" && (
-                <section aria-label="Poem" className="pms-card space-y-3">
-                  <h2 className="text-lg font-semibold">Poem text</h2>
-                  {source?.kind === "writing" ? (
-                    <>
-                      <p className="text-sm" style={{ color: "var(--mute)" }}>
-                        This poem comes from your Portfolio and is read-only
-                        here. To change the words, start a new poem by pasting
-                        a copy, or edit the original in Writings.
-                      </p>
-                      <pre lang="ta" className="max-h-80 overflow-auto whitespace-pre-wrap break-words text-sm">{poemText}</pre>
-                    </>
-                  ) : source?.poem ? (
-                    <>
-                      <Field label="Title">
-                        <input className="pms-field" lang="ta" value={poemTitle} maxLength={300} onChange={(e) => setPoemTitle(e.target.value)} />
-                      </Field>
-                      <Field label="Poem text (blank line = new stanza)">
-                        <textarea
-                          aria-label="Poem text"
-                          className="pms-field"
-                          lang="ta"
-                          rows={14}
-                          value={poemText}
-                          style={{ fontSize: 16, lineHeight: 1.7, whiteSpace: "pre-wrap", resize: "vertical" }}
-                          onChange={(e) => setPoemText(e.target.value)}
-                        />
-                      </Field>
-                      <Btn primary onClick={applyPoemEdit}>
-                        Apply and rebuild scenes
-                      </Btn>
-                      <p className="text-xs" style={{ color: "var(--mute)" }}>
-                        Rebuilding replaces your scene edits. You can Undo.
-                      </p>
-                    </>
-                  ) : (
-                    <p className="text-sm" style={{ color: "var(--mute)" }}>
-                      This project has no stored poem text to edit.
-                    </p>
-                  )}
-                </section>
-              )}
+              {activeTab === "poem" && poemPanel}
 
               {activeTab === "full" && (
                 <section aria-label="Full poem" className="space-y-3">

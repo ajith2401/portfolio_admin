@@ -8,7 +8,8 @@ import { api, checkViewport } from '../helpers.mjs';
 const URL_ = '/admin/poem-motion-studio';
 const SHORT = 'அன்பே சிவம்\nஅறமே துணை\n\nஇன்றே செய்\nஒன்றே குலம்';
 const long = (stanzas, n) => Array.from({ length: stanzas }, (_, s) => Array.from({ length: n }, (_, l) => `வரி ${s + 1}.${l + 1} தமிழ் கவிதை வரி`).join('\n')).join('\n\n');
-const tab = (page, n) => page.getByRole('tab', { name: n, exact: true }).click();
+// ≥1280px advanced mode is 3-pane: Poem and Scenes live in the always-visible left pane instead of tabs.
+const tab = async (page, n) => { const t = page.getByRole('tab', { name: n, exact: true }); if ((n === 'Poem' || n === 'Scenes') && (await t.count()) === 0) return; await t.click(); };
 const route = (page, n) => page.getByRole('button', { name: n }).first().click();
 const begin = async (page, text, title = 'என் கவிதை', via = 'Write a poem') => {
   await page.goto(URL_);

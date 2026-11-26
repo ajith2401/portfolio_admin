@@ -27,7 +27,8 @@ test.beforeAll(async ({ browser }) => {
 const wav = (sec = 4, sr = 44100) => { const n = sec * sr, b = Buffer.alloc(44 + n * 2); b.write('RIFF', 0); b.writeUInt32LE(36 + n * 2, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(sr, 24); b.writeUInt32LE(sr * 2, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(n * 2, 40); for (let i = 0; i < n; i++) b.writeInt16LE(Math.round(Math.sin(i / sr * 2 * Math.PI * 440) * 9000), 44 + i * 2); return b; };
 const probe = (f) => JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', f]).toString());
 const open = async (page) => { await page.goto('/admin/poem-motion-studio'); await expect(page.getByRole('heading', { name: 'Poem Motion Studio' })).toBeVisible(); await page.getByRole('button', { name: /Portfolio poem/ }).click(); await page.getByLabel('Start from a poem').selectOption(poemId); await expect(page.getByText(/Created \d+ scenes/)).toBeVisible(); };
-const tab = (page, n) => page.getByRole('tab', { name: n, exact: true }).click();
+// ≥1280px advanced mode is 3-pane: Poem and Scenes live in the always-visible left pane instead of tabs.
+const tab = async (page, n) => { const t = page.getByRole('tab', { name: n, exact: true }); if ((n === 'Poem' || n === 'Scenes') && (await t.count()) === 0) return; await t.click(); };
 const advanced = (page) => page.getByRole('button', { name: 'Advanced Studio' }).click();
 
 test('quick create: Tamil poem → style → preview → export (Poster PNG + Reel MP4), light and dark a11y', async ({ page }, info) => {
@@ -36,8 +37,8 @@ test('quick create: Tamil poem → style → preview → export (Poster PNG + Re
   await tab(page, 'Look');
   const tpls = page.locator('fieldset:has(legend:text("Template")) button[aria-pressed]');
   await expect(tpls).toHaveCount(6);
-  await page.getByRole('button', { name: /Monsoon Memories/ }).click();
-  await expect(page.getByRole('button', { name: /Monsoon Memories/ })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Use template Monsoon Memories' }).click();
+  await expect(page.getByRole('button', { name: 'Use template Monsoon Memories' })).toHaveAttribute('aria-pressed', 'true');
   const painted = await page.locator('canvas').first().evaluate((c) => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4000) if (d[i] + d[i + 1] + d[i + 2] > 30) n++; return n; });
   expect(painted).toBeGreaterThan(10);
   for (const theme of ['light', 'dark']) {
