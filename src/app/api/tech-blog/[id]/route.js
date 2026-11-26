@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { TechBlog, Comment } from "@/models";
 import { generateSlug, ensureUniqueSlug } from '@/utils/slugGenerator';
-import { deleteImage } from '@/lib/cloudinary';
+import { deleteOwnedImages } from '@/lib/image-cleanup';
 import { getAuthenticatedUser, requireAuth, validateOrigin } from '@/lib/auth';
 import { sanitizeHtml } from '@/lib/sanitize';
 
@@ -139,10 +139,10 @@ export async function DELETE(request, { params }) {
     }
 
     if (blog.images) {
-      const imagePromises = Object.values(blog.images)
-        .filter(url => url && typeof url === 'string')
-        .map(url => deleteImage(url));
-      await Promise.all(imagePromises);
+      await deleteOwnedImages(
+        Object.values(blog.images).filter(url => url && typeof url === 'string'),
+        { ownerModel: 'TechBlog', ownerId: blog._id },
+      );
     }
 
     await Comment.deleteMany({ parentId: id });

@@ -2,7 +2,8 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import { Comment, Project } from '@/models';
-import { deleteImage, uploadImage } from '@/lib/cloudinary';
+import { uploadImage } from '@/lib/cloudinary';
+import { deleteOwnedImages } from '@/lib/image-cleanup';
 import { generateSlug, ensureUniqueSlug } from '@/utils/slugGenerator';
 import { getAuthenticatedUser, requireAuth, validateOrigin } from '@/lib/auth';
 import { sanitizeHtml } from '@/lib/sanitize';
@@ -87,10 +88,10 @@ export async function PUT(request, { params }) {
 
       try {
         if (existingProject.images) {
-          const deletePromises = Object.values(existingProject.images)
-            .filter(url => url && typeof url === 'string')
-            .map(url => deleteImage(url));
-          await Promise.all(deletePromises);
+          await deleteOwnedImages(
+            Object.values(existingProject.images).filter(url => url && typeof url === 'string'),
+            { ownerModel: 'Project', ownerId: existingProject._id },
+          );
         }
 
         const buffer = await image.arrayBuffer();
@@ -176,10 +177,10 @@ export async function DELETE(request, { params }) {
     }
 
     if (project.images) {
-      const imagePromises = Object.values(project.images)
-        .filter(url => url && typeof url === 'string')
-        .map(url => deleteImage(url));
-      await Promise.all(imagePromises);
+      await deleteOwnedImages(
+        Object.values(project.images).filter(url => url && typeof url === 'string'),
+        { ownerModel: 'Project', ownerId: project._id },
+      );
     }
 
     await Comment.deleteMany({ parentId: id });

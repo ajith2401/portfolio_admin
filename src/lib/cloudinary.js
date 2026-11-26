@@ -175,19 +175,22 @@ export const uploadImage = async (file) => {
   }
 };
 
+// Destroys one asset by an already-validated public id (see image-ownership.js). Callers must not pass user input.
+export const destroyAsset = async (publicId) => {
+  if (typeof publicId !== 'string' || !/^writings\/[A-Za-z0-9_-]{1,100}$/.test(publicId)) {
+    throw new Error('Refusing to delete: invalid public id');
+  }
+  return cloudinary.uploader.destroy(publicId);
+};
+
+// Legacy signature kept for callers; now strict: only our own Cloudinary URLs, never an arbitrary path segment.
+// Prefer deleteOwnedImages() (image-cleanup.js), which also checks that the asset is not shared.
 export const deleteImage = async (imageUrl) => {
   try {
-    if (!imageUrl) return;
-    
-    // Extract public_id from the URL
-    const publicId = imageUrl
-      .split('/')
-      .slice(-1)[0]
-      .split('.')[0];
-      
-    await cloudinary.uploader.destroy(`writings/${publicId}`);
+    const publicId = cloudinaryPublicId(imageUrl);
+    if (!publicId) return;
+    await destroyAsset(publicId);
   } catch (error) {
-    console.error('Error deleting image from Cloudinary:', error);
-    // We don't throw here as this is cleanup operation
+    console.error('Error deleting image from Cloudinary:', error?.message);
   }
 };

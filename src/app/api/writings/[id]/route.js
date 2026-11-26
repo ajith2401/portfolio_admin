@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import connectDB from "@/lib/mongodb";
 import { Writing, Comment } from "@/models";
-import { deleteImage, uploadImage } from "@/lib/cloudinary";
+import { uploadImage } from "@/lib/cloudinary";
+import { deleteOwnedImages } from "@/lib/image-cleanup";
 import { getAuthenticatedUser, requireAuth, validateOrigin } from "@/lib/auth";
 import { applyRateLimit } from "@/lib/rateLimit";
 import { sanitizeHtml } from "@/lib/sanitize";
@@ -184,7 +185,7 @@ export async function PUT(request, { params }) {
 
     if (oldImages) {
       // Old files are removed only after the new version is safely stored
-      Promise.all(
+      deleteOwnedImages(
         Object.entries(oldImages)
           .filter(
             ([k, url]) =>
@@ -192,7 +193,8 @@ export async function PUT(request, { params }) {
               typeof url === "string" &&
               !Object.values(set).includes(url),
           )
-          .map(([, url]) => deleteImage(url)),
+          .map(([, url]) => url),
+        { ownerModel: "Writing", ownerId: id },
       ).catch((error) =>
         console.error("Failed to delete replaced image:", error),
       );
@@ -258,10 +260,10 @@ export async function DELETE(request, { params }) {
     if (!writing) return notFound();
 
     if (writing.images) {
-      const imagePromises = Object.values(writing.images)
-        .filter((url) => url && typeof url === "string")
-        .map((url) => deleteImage(url));
-      await Promise.all(imagePromises);
+      await deleteOwnedImages(
+        Object.values(writing.images).filter((url) => url && typeof url === "string"),
+        { ownerModel: "Writing", ownerId: writing._id },
+      );
     }
 
     const wasPublished = writing.status === "published";
