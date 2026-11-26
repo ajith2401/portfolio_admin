@@ -8,6 +8,8 @@ import { signatureBox, textRect, signatureBoundsIssues, overlapsSignature } from
 // Reel/Story floor comes from MIN_TEXT_PX; poster paths pass POSTER_MIN explicitly and keep their legacy default here.
 export const defaultMinSize = (format) => (format === "poster" ? 28 : MIN_TEXT_PX[format] ?? MIN_TEXT_PX.reel);
 import { totalDuration } from "./scenes.js";
+import { rowState } from "./animation.js";
+import { runFx } from "./fx/registry.js";
 
 export const FONT_FAMILY = {
   "noto-serif": '"Noto Serif Tamil", serif',
@@ -19,7 +21,6 @@ export const FONT_FAMILY = {
 /** next/font hashes family names; the page registers the real ones here before drawing. */
 export const setFontFamilies = (m) => Object.assign(FONT_FAMILY, m);
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
-const ease = (x) => 1 - Math.pow(1 - clamp01(x), 3);
 const rnd = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 
 export function sceneAt(comp, tMs) {
@@ -117,48 +118,52 @@ export function layoutScene(ctx, c, scene, rect, { minSize = defaultMinSize(c.fo
 /** Anchor x of a row after its layout indent: left/right anchors move by the indent, a centred row by half of it. */
 export const rowAnchor = (align, ax, ipx = 0) => (align === "left" ? ax + ipx : align === "right" ? ax - ipx : ax + ipx / 2);
 
-export function drawFrame(ctx, comp, tMs, { w, h, assets = {}, still = false, scene: forced = null, minSize = defaultMinSize(comp.format) } = {}) {
-  const fmt = FORMATS[comp.format] || FORMATS.reel;
-  w = w || fmt.w; h = h || fmt.h;
-  ctx.save(); ctx.scale(w / fmt.w, w / fmt.w);
-  const W = fmt.w, H = fmt.h, st = comp.style, total = compDuration(comp);
-  const rect = textRect(comp, fmt, ctx);
-  paintBackground(ctx, comp, W, H, still ? 0 : tMs, total, assets);
-  if (!still) paintParticles(ctx, comp, W, H, tMs);
-  const at = forced ? { scene: forced, index: 0, local: 1e6, last: true } : sceneAt(comp, tMs);
-  if (at) {
-    const sc = at.scene;
-    const { rows, size, total: blockH } = layoutScene(ctx, comp, sc, rect, { minSize });
-    const isTitle = sc.kind === "title";
-    const align = sc.align || st.align;
-    const fadeIn = still ? 1 : ease(at.local / 700);
-    const fadeOut = still || at.last ? 1 : 1 - clamp01((at.local - (sc.durationMs - 500)) / 500);
-    const shift = ((sc.offsetY || 0) / 100) * rect.h;
-    let y = st.vAlign === "top" ? rect.y : st.vAlign === "bottom" ? rect.y + rect.h - blockH : rect.y + (rect.h - blockH) / 2;
-    y = Math.max(rect.y, Math.min(rect.y + rect.h - blockH, y + shift));
-    ctx.textBaseline = "middle"; ctx.textAlign = align;
-    const ax = align === "left" ? rect.x : align === "right" ? rect.x + rect.w : rect.x + rect.w / 2;
-    let i = 0;
-    for (const r of rows) {
-      const top = y; y += r.h;
-      if (r.gap) continue;
-      let a = fadeIn * fadeOut, dy = 0;
-      if (!still) {
-        if (comp.motion.textIn === "line") a = ease((at.local - r.line * 450) / 600) * fadeOut;
-        else if (comp.motion.textIn === "rise") { const p = ease((at.local - i * 150) / 800); a = p * fadeOut; dy = (1 - p) * 40 * (0.4 + comp.motion.intensity); }
-        else if (comp.motion.textIn === "none") a = fadeOut;
-      } else a = 1;
-      ctx.globalAlpha = clamp01(a);
-      ctx.font = `${isTitle ? 700 : st.weight} ${size}px ${FONT_FAMILY[st.font]}`;
-      if (st.shadow) { ctx.shadowColor = "rgba(0,0,0,0.45)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 3; } else ctx.shadowColor = "transparent";
-      ctx.fillStyle = st.color;
-      ctx.fillText(r.text, rowAnchor(align, ax, r.indentPx), top + r.h / 2 + dy);
-      i++;
-    }
-    ctx.globalAlpha = 1; ctx.shadowColor = "transparent";
+// ---------------------------------------------------------------- layers
+// drawFrame paints explicit ordered layers: bg -> material -> atmosphere (under text) -> text -> surface (over text) ->
+// signature. material/atmosphere/surface accept registered effects (fx/registry.js, empty by default). The text layer
+// takes no state from any effect: effects run isolated, and the text state is re-asserted before the text is drawn.
+export const LAYERS = Object.freeze(["bg", "material", "atmosphere", "text", "surface", "signature"]);
+const resetTextState = (ctx) => { ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.filter = "none"; ctx.shadowColor = "transparent"; };
+function layerBg(ctx, env) { paintBackground(ctx, env.comp, env.W, env.H, env.still ? 0 : env.tMs, env.total, env.assets); }
+function layerMaterial(ctx, env) { return runFx("material", ctx, env); }
+function layerAtmosphere(ctx, env) {
+  if (!env.still) paintParticles(ctx, env.comp, env.W, env.H, env.tMs);
+  return runFx("atmosphere", ctx, env);
+}
+function layerText(ctx, env) {
+  const { comp, rect, still, minSize } = env, st = comp.style;
+  const at = env.forced ? { scene: env.forced, index: 0, local: 1e6, last: true } : sceneAt(comp, env.tMs);
+  if (!at) return;
+  const sc = at.scene;
+  const { rows, size, total: blockH } = layoutScene(ctx, comp, sc, rect, { minSize });
+  const isTitle = sc.kind === "title";
+  const align = sc.align || st.align;
+  const shift = ((sc.offsetY || 0) / 100) * rect.h;
+  let y = st.vAlign === "top" ? rect.y : st.vAlign === "bottom" ? rect.y + rect.h - blockH : rect.y + (rect.h - blockH) / 2;
+  y = Math.max(rect.y, Math.min(rect.y + rect.h - blockH, y + shift));
+  ctx.textBaseline = "middle"; ctx.textAlign = align;
+  const ax = align === "left" ? rect.x : align === "right" ? rect.x + rect.w : rect.x + rect.w / 2;
+  let i = 0;
+  for (const r of rows) {
+    const top = y; y += r.h;
+    if (r.gap) continue;
+    const s = rowState(comp, sc, r, at.local, { still, last: at.last, index: i });
+    ctx.globalAlpha = clamp01(s.alpha);
+    ctx.font = `${isTitle ? 700 : st.weight} ${size}px ${FONT_FAMILY[st.font]}`;
+    if (st.shadow) { ctx.shadowColor = "rgba(0,0,0,0.45)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 3; } else ctx.shadowColor = "transparent";
+    ctx.fillStyle = st.color;
+    ctx.fillText(r.text, rowAnchor(align, ax, r.indentPx) + s.dx, top + r.h / 2 + s.dy);
+    i++;
   }
-  paintVignette(ctx, W, H, st.vignette);
-  paintGrain(ctx, W, H, st.grain, still ? 0 : tMs);
+  ctx.globalAlpha = 1; ctx.shadowColor = "transparent";
+}
+function layerSurface(ctx, env) {
+  paintVignette(ctx, env.W, env.H, env.comp.style.vignette);
+  paintGrain(ctx, env.W, env.H, env.comp.style.grain, env.still ? 0 : env.tMs);
+  return runFx("surface", ctx, env);
+}
+function layerSignature(ctx, env) {
+  const { comp, fmt } = env;
   const sg = signatureBox(comp, fmt, ctx);
   if (sg) {
     ctx.globalAlpha = 0.85; ctx.fillStyle = comp.branding.color; ctx.textAlign = sg.align; ctx.textBaseline = "middle";
@@ -166,6 +171,19 @@ export function drawFrame(ctx, comp, tMs, { w, h, assets = {}, still = false, sc
     ctx.fillText(sg.text, sg.x, sg.y);
     ctx.globalAlpha = 1;
   }
+}
+
+export function drawFrame(ctx, comp, tMs, { w, h, assets = {}, still = false, scene: forced = null, minSize = defaultMinSize(comp.format) } = {}) {
+  const fmt = FORMATS[comp.format] || FORMATS.reel;
+  w = w || fmt.w; h = h || fmt.h;
+  ctx.save(); ctx.scale(w / fmt.w, w / fmt.w);
+  const env = { comp, fmt, W: fmt.w, H: fmt.h, tMs, still, assets, forced, minSize, total: compDuration(comp), rect: textRect(comp, fmt, ctx) };
+  layerBg(ctx, env);
+  const under = layerMaterial(ctx, env) + layerAtmosphere(ctx, env);
+  if (under) resetTextState(ctx);
+  layerText(ctx, env);
+  if (layerSurface(ctx, env)) resetTextState(ctx);
+  layerSignature(ctx, env);
   ctx.restore();
 }
 
