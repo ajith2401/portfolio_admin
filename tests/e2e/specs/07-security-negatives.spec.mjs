@@ -36,33 +36,35 @@ test.afterAll(async () => {
 
 // ------------------------------------------------------------------ Books
 test.describe.serial("Book visibility on every public surface", () => {
-  const T = { pub: "ZZPubBook", draft: "ZZDraftBook", arch: "ZZArchBook", legacy: "ZZLegacyBook" };
+  const T = { pub: "ZZPubBook", draft: "ZZDraftBook", arch: "ZZArchBook", legacy: "ZZLegacyBook", nul: "ZZNullBook", unk: "ZZFutureBook" };
   const B = {};
   test.beforeAll(async () => {
     const mk = (key, title, slug, status, code) => ({
       _id: oid(), title, slug, shortCode: code, description: `${title} description text`, publishYear: 2020,
       language: "Tamil", poems: [], genre: ["Poetry"], slugHistory: [], createdAt: new Date(), publishedAt: new Date(),
-      ...(status ? { status } : {}),
+      ...(status === undefined ? {} : { status }),
     });
     B.pub = mk("pub", T.pub, "zz-pub-book", "published", "ZzPub01");
     B.draft = mk("draft", T.draft, "zz-draft-book", "draft", "ZzDft01");
     B.arch = mk("arch", T.arch, "zz-arch-book", "archived", "ZzArc01");
     B.legacy = mk("legacy", T.legacy, "zz-legacy-book", undefined, "ZzLeg01");
+    B.nul = mk("nul", T.nul, "zz-null-book", null, "ZzNul01");
+    B.unk = mk("unk", T.unk, "zz-future-book", "in-review", "ZzUnk01");
     await db.collection("books").deleteMany({ slug: /^zz-/ });
     await db.collection("books").insertMany(Object.values(B));
     const r = await pub("/api/revalidate", {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${RSECRET}` },
-      body: JSON.stringify({ slug: "zz-pub-book", section: "book", previousSlugs: ["zz-draft-book", "zz-arch-book", "zz-legacy-book"] }),
+      body: JSON.stringify({ slug: "zz-pub-book", section: "book", previousSlugs: ["zz-draft-book", "zz-arch-book", "zz-legacy-book", "zz-null-book", "zz-future-book"] }),
     });
     expect(r.status).toBe(200);
   });
-  const hidden = () => [["draft", T.draft], ["archived", T.arch]];
+  const hidden = () => [["draft", T.draft], ["arch", T.arch], ["nul", T.nul], ["unk", T.unk]];
 
   test("positive control: published and legacy (no status) books are visible everywhere", async () => {
     for (const k of ["pub", "legacy"]) {
       expect((await pub(`/spotlight/${B[k].slug}`)).status, `detail ${k}`).toBe(200);
-      expect((await pub(`/api/books/${B[k].slug}`)).status, `api ${k}`).toBe(k === "legacy" ? 404 : 200); // API is published-only by design
+      expect((await pub(`/api/books/${B[k].slug}`)).status, `api ${k}`).toBe(200); // same shared rule as every other surface
     }
     // revalidatePath serves the stale page once and regenerates; poll like spec 05 does.
     // /books renders a hardcoded bibliography (DB books are not displayed there), so no positive control.
@@ -74,7 +76,7 @@ test.describe.serial("Book visibility on every public surface", () => {
 
   test("direct detail URLs by slug and by id are 404 and leak no title (metadata included)", async () => {
     for (const [k, title] of hidden()) {
-      for (const p of [`/spotlight/${B[k === "draft" ? "draft" : "arch"].slug}`, `/spotlight/${B[k === "draft" ? "draft" : "arch"]._id}`]) {
+      for (const p of [`/spotlight/${B[k].slug}`, `/spotlight/${B[k]._id}`]) {
         const r = await pub(p);
         expect(r.status, p).toBe(404);
         expect(await r.text(), `${p} leaked`).not.toContain(title);
@@ -84,7 +86,7 @@ test.describe.serial("Book visibility on every public surface", () => {
 
   test("short links (/s/<code>) do not resolve or leak draft/archived books", async () => {
     for (const [k, title] of hidden()) {
-      const code = k === "draft" ? B.draft.shortCode : B.arch.shortCode;
+      const code = B[k].shortCode;
       const r = await pub(`/s/${code}`);
       expect([404], `/s/${code} -> ${r.status}`).toContain(r.status);
       expect(await r.text()).not.toContain(title);
@@ -95,7 +97,7 @@ test.describe.serial("Book visibility on every public surface", () => {
   test("public API: list, detail by slug/id, related", async () => {
     const list = JSON.stringify(await json(await pub("/api/books")));
     for (const [, title] of hidden()) expect(list).not.toContain(title);
-    for (const k of ["draft", "arch"]) {
+    for (const k of ["draft", "arch", "nul", "unk"]) {
       for (const idOrSlug of [B[k].slug, String(B[k]._id)]) {
         const r = await pub(`/api/books/${idOrSlug}`);
         expect(r.status, `/api/books/${idOrSlug}`).toBe(404);
@@ -124,7 +126,7 @@ test.describe.serial("Book visibility on every public surface", () => {
       for (const [, title] of hidden()) expect(body, `page ${page}`).not.toContain(title);
       seen.add(body);
     }
-    for (const t of ["ZZDraftBook", "ZZArchBook"]) {
+    for (const t of ["ZZDraftBook", "ZZArchBook", "ZZNullBook", "ZZFutureBook"]) {
       const r = await json(await pub(`/api/search?q=${t}&type=spotlight`));
       expect(JSON.stringify(r.results ?? []), `results for ${t}`).not.toContain(t);
     }
