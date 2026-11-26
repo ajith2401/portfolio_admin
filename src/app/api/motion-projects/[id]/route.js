@@ -11,6 +11,9 @@ import { requireAuth, validateOrigin } from "@/lib/auth";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Editors may only change or delete their own projects; admins may manage any. Legacy rows without an owner stay open.
+const owns = (auth, p) => auth.user.role === "admin" || !p.createdBy || p.createdBy === String(auth.user.userId);
+const denied = () => NextResponse.json({ error: "Forbidden: not your project" }, { status: 403 });
 const bad = () => NextResponse.json({ error: "Project not found" }, { status: 404 });
 
 export async function GET(request, { params }) {
@@ -23,7 +26,7 @@ export async function GET(request, { params }) {
   if (!p) return bad();
   let sourceChanged = false, sourceMissing = false;
   if (p.sourceWritingId) {
-    const w = await Writing.findById(p.sourceWritingId).select("title body content contentFormat").lean();
+    const w = await Writing.findById(p.sourceWritingId).select("title body content contentFormat version").lean();
     if (!w) sourceMissing = true;
     else sourceChanged = poemHash(poemFromWriting(w)) !== p.sourceHash;
   }
@@ -46,13 +49,16 @@ export async function PUT(request, { params }) {
     }
     if (body?.composition !== undefined) set.composition = normalizeComposition(body.composition);
     await connectDB();
+    const existing = await MotionProject.findById(id).select("createdBy").lean();
+    if (!existing) return bad();
+    if (!owns(auth, existing)) return denied();
     // acknowledgeSource: re-sync the stored hash after the author reviewed a changed poem
     if (body?.acknowledgeSource === true) {
       const cur = await MotionProject.findById(id).select("sourceWritingId").lean();
       if (!cur) return bad();
       if (cur.sourceWritingId) {
-        const w = await Writing.findById(cur.sourceWritingId).select("title body content contentFormat").lean();
-        if (w) set.sourceHash = poemHash(poemFromWriting(w));
+        const w = await Writing.findById(cur.sourceWritingId).select("title body content contentFormat version").lean();
+        if (w) { set.sourceHash = poemHash(poemFromWriting(w)); if (Number.isFinite(w.version)) set.sourceVersion = w.version; }
       }
     }
     const p = await MotionProject.findByIdAndUpdate(id, { $set: set, $inc: { revision: 1 } }, { new: true }).lean();
@@ -71,6 +77,9 @@ export async function DELETE(request, { params }) {
   const { id } = await params;
   if (!mongoose.isValidObjectId(id)) return bad();
   await connectDB();
+  const existing = await MotionProject.findById(id).select("createdBy").lean();
+  if (!existing) return bad();
+  if (!owns(auth, existing)) return denied();
   const r = await MotionProject.findByIdAndDelete(id);
   return r ? NextResponse.json({ ok: true }) : bad();
 }

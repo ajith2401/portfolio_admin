@@ -181,6 +181,25 @@ test('Tamil: all five fonts load, shape mixed Tamil-English, and render distinct
   expect(new Set(sigs).size).toBe(5); // five visibly different faces: no silent substitution to one fallback
 });
 
+test('benchmark: startup, preview fps, export time, responsiveness during export, heap', async ({ page }) => {
+  test.setTimeout(180_000);
+  const t0 = Date.now();
+  await open(page);
+  const startup = Date.now() - t0;
+  const fps = await page.evaluate(() => new Promise((res) => { let n = 0; const t = performance.now(); const f = () => { n++; if (performance.now() - t < 2000) requestAnimationFrame(f); else res(n / 2); }; requestAnimationFrame(f); }));
+  await tab(page, 'Export');
+  await expect(page.getByRole('button', { name: /Export Reel MP4/ })).toBeEnabled({ timeout: 30_000 });
+  // longest main-thread stall while exporting (editor must stay responsive)
+  await page.evaluate(() => { window.__stall = 0; let l = performance.now(); window.__iv = setInterval(() => { const n = performance.now(); window.__stall = Math.max(window.__stall, n - l - 50); l = n; }, 50); });
+  const dl = page.waitForEvent('download', { timeout: 150_000 });
+  const t1 = Date.now();
+  await page.getByRole('button', { name: /Export Reel MP4/ }).click();
+  await dl; const exportMs = Date.now() - t1;
+  const m = await page.evaluate(() => { clearInterval(window.__iv); return { stall: Math.round(window.__stall), heapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null }; });
+  console.log('BENCH', JSON.stringify({ startupMs: startup, previewFps: Math.round(fps), reel11sExportMs: exportMs, longestMainThreadStallMs: m.stall, heapMB: m.heapMB }));
+  expect(exportMs).toBeLessThan(90_000);
+});
+
 test('project API: auth required, origin enforced, normalisation, source change', async ({ page, browser }) => {
   await page.goto('/admin');
   const anon = await pwRequest.newContext({ baseURL: BASE, storageState: { cookies: [], origins: [] }, extraHTTPHeaders: { Origin: BASE } });

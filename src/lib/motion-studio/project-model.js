@@ -7,6 +7,8 @@ const MotionProjectSchema = new mongoose.Schema(
     sourceWritingId: { type: mongoose.Schema.Types.ObjectId, index: true },
     sourceTitle: { type: String, maxlength: 300 },
     sourceHash: { type: String, maxlength: 64 }, // hash of poem lines when the project was last synced
+    sourceVersion: { type: Number }, // Writing.version when last synced (reference only; Writing is never mutated)
+    createdBy: { type: String, index: true, maxlength: 64 },
     composition: { type: mongoose.Schema.Types.Mixed, required: true },
     revision: { type: Number, default: 1 },
   },

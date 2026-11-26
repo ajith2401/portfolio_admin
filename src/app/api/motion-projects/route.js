@@ -39,11 +39,11 @@ export async function POST(request) {
     let source = {};
     if (body?.sourceWritingId != null) {
       if (!mongoose.isValidObjectId(body.sourceWritingId)) return NextResponse.json({ error: "Invalid source writing" }, { status: 400 });
-      const w = await Writing.findById(body.sourceWritingId).select("title body content contentFormat").lean();
+      const w = await Writing.findById(body.sourceWritingId).select("title body content contentFormat version").lean();
       if (!w) return NextResponse.json({ error: "Source writing not found" }, { status: 404 });
-      source = { sourceWritingId: w._id, sourceTitle: String(w.title || "").slice(0, 300), sourceHash: poemHash(poemFromWriting(w)) };
+      source = { sourceWritingId: w._id, sourceTitle: String(w.title || "").slice(0, 300), sourceHash: poemHash(poemFromWriting(w)), sourceVersion: Number.isFinite(w.version) ? w.version : undefined };
     }
-    const doc = await MotionProject.create({ name, ...source, composition: normalizeComposition(body?.composition) });
+    const doc = await MotionProject.create({ name, ...source, createdBy: String(auth.user.userId || "").slice(0, 64), composition: normalizeComposition(body?.composition) });
     return NextResponse.json({ project: doc }, { status: 201 });
   } catch (e) {
     if (e instanceof SyntaxError) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
