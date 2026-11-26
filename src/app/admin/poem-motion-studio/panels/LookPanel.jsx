@@ -4,6 +4,7 @@ import { selectableFonts, resolveFonts, CANDIDATE_TOGGLE_LABEL } from "@/lib/mot
 import { BG_MOTION, PARTICLES, TEXT_IN } from "@/lib/motion-studio/composition";
 import SignaturePanel from "./SignaturePanel";
 import MaterialPanel from "./MaterialPanel";
+import MotionPanel from "./MotionPanel";
 import TemplatePicker from "../TemplatePicker";
 import { Btn, Field, Range } from "../studio-ui";
 import { useStudio } from "../studio-context";
@@ -37,6 +38,7 @@ export default function LookPanel() {
                     <TemplatePicker comp={comp} tick={fontTick} onPick={pickTemplate} />
                   </fieldset>
                   <MaterialPanel />
+                  <MotionPanel />
 
                   {mode === "advanced" && (
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -204,6 +206,9 @@ export default function LookPanel() {
                           {TEXT_IN.map((k) => (
                             <option key={k}>{k}</option>
                           ))}
+                          {!TEXT_IN.includes(comp.motion.textIn) && (
+                            <option value={comp.motion.textIn}>{comp.motion.textIn} (see Text animation)</option>
+                          )}
                         </select>
                       </Field>
                       <Field label="Background motion">

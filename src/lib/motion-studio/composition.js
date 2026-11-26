@@ -7,9 +7,17 @@ import { parsePoemText, MAX_POEM_CHARS } from "./poem-input.js";
 import { SIG_SIZE_MIN, SIG_SIZE_MAX, SIG_Y_MIN, SIG_Y_MAX, newSignatureDefaults, isLegacySignature } from "./signature.js";
 import { sceneDuration, attachStanzaMeta, MIN_SCENE_MS, MAX_SCENE_MS } from "./scenes.js";
 import { normalizeMaterial } from "./materials.js";
+import { LIBRARY_IDS, MOTION_PREFS } from "./animation.js";
 
 export const FORMAT_KEYS = ["reel", "story", "poster", "square"];
 export const TEXT_IN = ["fade", "line", "rise", "none"];
+/** Every text-in id a composition may store: the four classic behaviours + the animation library (animation.js). */
+export const TEXT_IN_ALL = [...TEXT_IN, ...LIBRARY_IDS];
+/** Motion preference + reduce-motion, stored only when set (legacy projects normalize unchanged). */
+export const motionPrefsOf = (m) => ({
+  ...(MOTION_PREFS.includes(m?.pref) ? { pref: m.pref } : {}),
+  ...(m?.reduceMotion === true ? { reduceMotion: true } : {}),
+});
 export const BG_MOTION = ["none", "zoom", "drift"];
 export const PARTICLES = ["none", "dust", "rain", "stars", "light"];
 export const ALIGN = ["left", "center", "right"];
@@ -132,7 +140,7 @@ export function normalizeComposition(input) {
       particles: oneOf(s.particles, PARTICLES, t.fx.particles),
       geometry: !!s.geometry,
     },
-    motion: { textIn: oneOf(m.textIn, TEXT_IN, t.motion.textIn), bgMotion: oneOf(m.bgMotion, BG_MOTION, t.motion.bgMotion), intensity: num(m.intensity, 0, 1, 0.5) },
+    motion: { textIn: oneOf(m.textIn, TEXT_IN_ALL, t.motion.textIn), bgMotion: oneOf(m.bgMotion, BG_MOTION, t.motion.bgMotion), intensity: num(m.intensity, 0, 1, 0.5), ...motionPrefsOf(m) },
     branding: {
       show: b.show !== false, signature: str(b.signature, 60, "Ajithkumar R."), watermark: !!b.watermark, color: hex(b.color, t.signatureColor),
       // WP6 fields are stored only when the input has them; absent = legacy geometry (30px, centred, 0.8 / 0.955)

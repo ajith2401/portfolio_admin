@@ -95,7 +95,7 @@ const blobBytes = async (b) => new Uint8Array(await b.arrayBuffer());
 /** One still frame per scene (Story sequence). */
 export async function renderSceneStills(comp, { format = "story", type = "image/png", assets = {}, signal, onProgress } = {}) {
   await fontsFor({ ...comp, format });
-  assertOk("Story images", checkScenes(probeCtx(), { ...comp, format }, comp.scenes));
+  assertOk("Story images", checkScenes(probeCtx(), { ...comp, format }, comp.scenes, { animated: false })); // stills: HOLD
   const fmt = FORMATS[format], out = [];
   const c = mkCanvas(fmt.w, fmt.h), ctx = c.getContext("2d");
   for (let i = 0; i < comp.scenes.length; i++) {
@@ -164,7 +164,7 @@ export async function exportQuoteMp4(comp, poem, selection, { format = "reel", .
   const scene = quoteScene(poem, selection);
   const qc = { ...comp, format, scenes: scene ? [scene] : [] };
   await fontsFor(qc, { extraText: scene ? scene.lines.join("\n") : "" });
-  const v = assertOk("Animated quote (excerpt)", checkQuote(probeCtx(), comp, poem, selection, { format }));
+  const v = assertOk("Animated quote (excerpt)", checkQuote(probeCtx(), comp, poem, selection, { format, animated: true }));
   const blob = await encodeMp4({ ...qc, format: v.format, scenes: [v.scene] }, { ...opts, minSize: quoteMin(v.format) });
   return { blob, excerpt: true, complete: false, coverage: v.coverage, format: v.format, ...fontReviewFor(comp) };
 }

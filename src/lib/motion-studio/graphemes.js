@@ -118,6 +118,20 @@ export function wrapSpans(line, maxWidth, measure, from = 0) {
   return rows;
 }
 
+/**
+ * Word units of `line.slice(start, end)` as SOURCE ranges [{start, end}]: maximal runs of non-breakable-whitespace.
+ * Units are separated ONLY by breakable whitespace, so a conjunct, vowel sign, pulli or NBSP-joined pair is never
+ * separated. A range with no breakable whitespace is one unit. Used by word-level animations (animation.js).
+ */
+export function wordRanges(line, start = 0, end = String(line ?? "").length) {
+  const s = String(line ?? "").slice(0, end);
+  const out = [];
+  WORD_RE.lastIndex = start;
+  for (let m = WORD_RE.exec(s); m; m = WORD_RE.exec(s))
+    out.push({ start: m.index, end: m.index + m[0].length });
+  return out;
+}
+
 /** Row texts only (kept for callers that do not need source ranges). A line with no visible text yields [""]. */
 export function wrapLine(line, maxWidth, measure) {
   const rows = wrapSpans(line, maxWidth, measure, 0);

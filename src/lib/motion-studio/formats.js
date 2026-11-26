@@ -35,7 +35,7 @@ export const ROUTES = Object.freeze([
   {
     id: "animated-quote", label: "Animated quote MP4 (excerpt)", format: "any", kind: "video", group: "quote", excerpt: true, exportFn: exportQuoteMp4,
     scenesFor: (comp, input = {}) => [quoteScene(input.poem, input.lines)].filter(Boolean),
-    validate: (ctx, comp, input = {}) => checkQuote(ctx, comp, input.poem, input.lines, { format: input.format || "reel", mutate: input.mutate }),
+    validate: (ctx, comp, input = {}) => checkQuote(ctx, comp, input.poem, input.lines, { format: input.format || "reel", mutate: input.mutate, animated: true }),
     render: (comp, input = {}, opts = {}) => exportQuoteMp4(comp, input.poem, input.lines, { format: input.format || "reel", ...opts }),
     ui: { panel: "quote", action: "quote-mp4" },
   },
@@ -76,7 +76,7 @@ export const ROUTES = Object.freeze([
   {
     id: "story-stills", label: "Story frames", format: "story", kind: "set", exportFn: renderSceneStills,
     scenesFor: (comp) => comp.scenes,
-    validate: (ctx, comp, input = {}) => checkScenes(ctx, withFormat(comp, "story"), comp.scenes, { mutate: input.mutate }),
+    validate: (ctx, comp, input = {}) => checkScenes(ctx, withFormat(comp, "story"), comp.scenes, { mutate: input.mutate, animated: false }), // stills: HOLD
     render: (comp, input, opts = {}) => renderSceneStills(comp, { format: "story", ...opts }),
     ui: { panel: "export", action: "story-zip", label: () => "Export Story frames (ZIP)" },
   },

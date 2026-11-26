@@ -2,7 +2,8 @@
 // ensureFonts) and returns the shared result shape ({ok, messages, ...} from validateScene(s) / validateFullPoem /
 // newResult()). export.js runs them before drawing; formats.js exposes them per route; tests run them directly.
 // `mutate` is for negative controls only: it transforms a COPY of each layout before it is checked.
-import { validateScene, validateScenes, posterCards, POSTER_MIN, pageLabelBox } from "./render.js";
+import { validateScene, validateScenes, posterCards, POSTER_MIN, pageLabelBox, sceneGeometry } from "./render.js";
+import { activeBehaviour, validateAnimation, prefParams } from "./animation.js";
 import { layoutFullPoem, validateFullPoem } from "./full-poem.js";
 import { MIN_TEXT_PX, QUOTE_MIN_PX, FORMATS } from "./safe-zone.js";
 import { newResult, note, TOLERANCE } from "./coverage.js";
@@ -66,9 +67,33 @@ export function sceneDraws(comp, scenes, minSize, extra = {}) {
   });
 }
 
-/** Every scene a scene-based route draws, validated exactly as drawFrame lays it out. */
-export function checkScenes(ctx, comp, scenes = comp.scenes, { minSize = sceneMin(comp.format), mutate = null } = {}) {
-  return withMaterial(validateScenes(ctx, comp, scenes, { minSize, mutate }), ctx, comp, sceneDraws(comp, scenes, minSize));
+// ---------------------------------------------------------------- text animation (animation.js), every ANIMATED route
+// A video route also proves its text animation for every scene it draws (validateAnimation: hold reached and held,
+// every line/word fully shown in reading order, offsets/zoom bounded and inside the safe area, deterministic). Routes that
+// draw stills (poster, cover, carousel, story frames, quote image, full poem) always draw the HOLD state instead.
+// `scenes` are the scenes in play order: the last one has no out phase.
+export function checkAnimation(ctx, comp, scenes, { minSize = sceneMin(comp.format), behaviour = activeBehaviour(comp) } = {}) {
+  const messages = [], results = [];
+  scenes.forEach((sc, i) => {
+    const v = validateAnimation(behaviour, sc, sceneGeometry(ctx, comp, sc, { minSize }), {
+      last: i === scenes.length - 1, p: prefParams(comp), intensity: comp.motion?.intensity, label: `Scene ${i + 1}`,
+    });
+    results.push(v);
+    messages.push(...v.messages);
+  });
+  return { ok: messages.length === 0, id: behaviour?.id, messages, warnings: [...new Set(results.flatMap((x) => x.warnings || []))], results };
+}
+function withAnimation(result, ctx, comp, scenes, opts) {
+  const a = checkAnimation(ctx, comp, scenes, opts);
+  const warn = a.warnings.length ? { animationWarnings: a.warnings } : {};
+  if (a.ok) return { ...result, animation: a, ...warn };
+  return { ...result, ok: false, messages: [...new Set([...(result.messages || []), ...a.messages])], animation: a, ...warn };
+}
+
+/** Every scene a scene-based route draws, validated exactly as drawFrame lays it out. `animated:false` = stills only. */
+export function checkScenes(ctx, comp, scenes = comp.scenes, { minSize = sceneMin(comp.format), mutate = null, animated = true } = {}) {
+  const v = validateScenes(ctx, comp, scenes, { minSize, mutate });
+  return withMaterial(animated ? withAnimation(v, ctx, comp, scenes, { minSize }) : v, ctx, comp, sceneDraws(comp, scenes, minSize));
 }
 
 /** The scene a Reel cover draws: the title card, else the first scene. */
@@ -76,7 +101,7 @@ export const coverScene = (comp) => comp.scenes.find((x) => x.kind === "title") 
 export function checkCover(ctx, comp, opts = {}) {
   const sc = coverScene(comp);
   if (!sc) return { ok: false, messages: ["There are no scenes to make a cover from."], results: [] };
-  return checkScenes(ctx, { ...comp, format: "reel" }, [sc], opts);
+  return checkScenes(ctx, { ...comp, format: "reel" }, [sc], { ...opts, animated: false }); // a cover is a still
 }
 
 /** Poster cards a Feed poster (single or set) will draw, and the selected scenes they must reproduce. */
@@ -122,7 +147,7 @@ export function quoteScene(poem, selection) {
  * duplicates; a `text` it carries must equal the source byte for byte), and the drawn scene must pass validateScene at
  * the quote floor in any format. The result never claims completeness: excerpt:true, complete:false, coverage.partial.
  */
-export function checkQuote(ctx, comp, poem, selection, { format = comp.format, mutate = null } = {}) {
+export function checkQuote(ctx, comp, poem, selection, { format = comp.format, mutate = null, animated = false } = {}) {
   const total = (poem?.stanzas || []).flat().filter((l) => l !== "").length;
   const sel = Array.isArray(selection) ? selection : [];
   const r = newResult();
@@ -147,7 +172,7 @@ export function checkQuote(ctx, comp, poem, selection, { format = comp.format, m
     coverage: { selected: sel.length, total, partial: true } };
   if (!scene) return out;
   const qMin = quoteMin(fc.format);
-  return withMaterial(out, ctx, fc, [
+  return withMaterial(animated ? withAnimation(out, ctx, fc, [scene], { minSize: qMin }) : out, ctx, fc, [
     (c, cm, x) => drawFrame(c, cm, 0, { still: true, scene, minSize: qMin, ...x }),
     (c, cm, x) => drawFrame(c, cm, QUOTE_MS * 0.5, { scene, minSize: qMin, ...x }),
   ]);

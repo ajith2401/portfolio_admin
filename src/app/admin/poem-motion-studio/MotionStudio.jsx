@@ -10,6 +10,7 @@ import { ensureFonts, canvasMeasure } from "@/lib/motion-studio/font-ready";
 import {
   defaultComposition,
   normalizeComposition,
+  motionPrefsOf,
   MAX_SCENES,
 } from "@/lib/motion-studio/composition";
 import {
@@ -1041,9 +1042,11 @@ export default function MotionStudio() {
     </div>
   );
 
+  // a template sets its own text animation, but the author's motion feel / reduce-motion choice is kept
+  const withMotionPrefs = (d, m) => ({ ...d, motion: { ...d.motion, ...motionPrefsOf(m) } });
   const pickTemplate = (id) =>
     update((c) => ({
-      ...defaultComposition({ format: c.format, templateId: id, scenes: c.scenes, signature: c.branding.signature, branding: c.branding }),
+      ...withMotionPrefs(defaultComposition({ format: c.format, templateId: id, scenes: c.scenes, signature: c.branding.signature, branding: c.branding }), c.motion),
       originalScenes: c.originalScenes,
       audio: c.audio,
       poster: c.poster,

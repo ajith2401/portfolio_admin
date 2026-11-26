@@ -8,7 +8,7 @@ import { signatureBox, textRect, signatureBoundsIssues, overlapsSignature } from
 // Reel/Story floor comes from MIN_TEXT_PX; poster paths pass POSTER_MIN explicitly and keep their legacy default here.
 export const defaultMinSize = (format) => (format === "poster" ? 28 : MIN_TEXT_PX[format] ?? MIN_TEXT_PX.reel);
 import { totalDuration } from "./scenes.js";
-import { rowState } from "./animation.js";
+import { rowState, activeBehaviour, buildPlan, animFrame, prefParams } from "./animation.js";
 import { runFx, runMaterial } from "./fx/registry.js";
 import { materialPlan, effectiveIntensity } from "./materials.js";
 import { registryFamilies } from "./font-registry.js";
@@ -43,9 +43,10 @@ function drawCover(ctx, img, x, y, w, h) {
 }
 export function paintBackground(ctx, c, w, h, tMs, totalMs, assets) {
   const st = c.style, p = clamp01(tMs / Math.max(1, totalMs)), k = c.motion.intensity;
+  const bgMotion = c.motion.reduceMotion === true ? "none" : c.motion.bgMotion; // reduce motion also stills the background
   ctx.save();
-  if (c.motion.bgMotion === "zoom") { const z = 1 + 0.06 * k * p; ctx.translate(w / 2, h / 2); ctx.scale(z, z); ctx.translate(-w / 2, -h / 2); }
-  if (c.motion.bgMotion === "drift") ctx.translate(-30 * k * p, -20 * k * p);
+  if (bgMotion === "zoom") { const z = 1 + 0.06 * k * p; ctx.translate(w / 2, h / 2); ctx.scale(z, z); ctx.translate(-w / 2, -h / 2); }
+  if (bgMotion === "drift") ctx.translate(-30 * k * p, -20 * k * p);
   if (assets.bg) drawCover(ctx, assets.bg, -30, -30, w + 60, h + 60);
   else {
     const g = ctx.createLinearGradient(0, 0, w * 0.3, h);
@@ -114,6 +115,35 @@ export function layoutScene(ctx, c, scene, rect, { minSize = defaultMinSize(c.fo
   return { rows: [], size, lh: size * st.lineHeight, total: 0, maxW, fits: false };
 }
 
+/** Rows of a layout with their drawn boxes (top/bottom/left/right) for a block starting at y0. Pure: no ctx calls. */
+export function rowBoxes(rows, align, ax, y0) {
+  let y = y0;
+  return rows.map((r) => {
+    const top = y; y += r.h;
+    if (r.gap) return { ...r, top, bottom: y };
+    const [left, right] = rowExtent(align, rowAnchor(align, ax, r.indentPx), r.w);
+    return { ...r, top, bottom: y, left, right };
+  });
+}
+/**
+ * Geometry of ONE scene exactly as drawFrame lays it out (for validateAnimation): rows with boxes, the text rect, the
+ * canvas size, the signature box and a measure() bound to the drawn font. Pass a measuring ctx (fonts proven ready).
+ */
+export function sceneGeometry(ctx, comp, scene, { minSize = defaultMinSize(comp.format) } = {}) {
+  const fmt = FORMATS[comp.format] || FORMATS.reel, st = comp.style;
+  const rect = textRect(comp, fmt, ctx);
+  const lay = layoutScene(ctx, comp, scene, rect, { minSize });
+  const align = scene.align || st.align;
+  const ax = align === "left" ? rect.x : align === "right" ? rect.x + rect.w : rect.x + rect.w / 2;
+  const shift = ((scene.offsetY || 0) / 100) * rect.h;
+  let y = st.vAlign === "top" ? rect.y : st.vAlign === "bottom" ? rect.y + rect.h - lay.total : rect.y + (rect.h - lay.total) / 2;
+  y = Math.max(rect.y, Math.min(rect.y + rect.h - lay.total, y + shift));
+  const isTitle = scene.kind === "title";
+  const font = `${isTitle ? 700 : st.weight} ${lay.size}px ${familyFor(st, isTitle ? "title" : "body")}`;
+  const measure = (t) => { ctx.font = font; return ctx.measureText(t).width; };
+  return { rows: rowBoxes(lay.rows, align, ax, y), rect, W: fmt.w, H: fmt.h, sig: signatureBox(comp, fmt, ctx), measure, fits: lay.fits };
+}
+
 /** Anchor x of a row after its layout indent: left/right anchors move by the indent, a centred row by half of it. */
 export const rowAnchor = (align, ax, ipx = 0) => (align === "left" ? ax + ipx : align === "right" ? ax - ipx : ax + ipx / 2);
 
@@ -142,6 +172,38 @@ function layerText(ctx, env) {
   y = Math.max(rect.y, Math.min(rect.y + rect.h - blockH, y + shift));
   ctx.textBaseline = "middle"; ctx.textAlign = align;
   const ax = align === "left" ? rect.x : align === "right" ? rect.x + rect.w : rect.x + rect.w / 2;
+  // library animations (animation.js LIBRARY) draw through animFrame, the same function validateAnimation checks; the four
+  // classic behaviours and every still keep the original per-row path below, call for call.
+  const b = activeBehaviour(comp);
+  if (b.library && !still) {
+    const geo = { rows: rowBoxes(rows, align, ax, y), rect, measure: (t) => ctx.measureText(t).width };
+    const plan = buildPlan(b, sc, geo);
+    const f = animFrame(b, sc, plan, at.local, { last: at.last, p: prefParams(comp), intensity: comp.motion?.intensity });
+    const font = `${isTitle ? 700 : st.weight} ${size}px ${familyFor(st, isTitle ? "title" : "body")}`;
+    if (f.scale !== 1 && plan.block) { ctx.save(); ctx.translate(plan.block.cx, plan.block.cy); ctx.scale(f.scale, f.scale); ctx.translate(-plan.block.cx, -plan.block.cy); }
+    for (const fr of f.rows) {
+      const r = fr.u.row, mid = r.top + r.h / 2;
+      ctx.font = font;
+      if (st.shadow) { ctx.shadowColor = "rgba(0,0,0,0.45)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 3; } else ctx.shadowColor = "transparent";
+      ctx.fillStyle = st.color;
+      if (fr.whole) {
+        ctx.globalAlpha = clamp01(fr.state.alpha);
+        ctx.fillText(r.text, rowAnchor(align, ax, r.indentPx) + fr.state.dx, mid + fr.state.dy);
+        continue;
+      }
+      // whole WORDS only (split at breakable whitespace), each one fillText so its shaping is untouched
+      ctx.textAlign = "left";
+      for (const wd of fr.words) {
+        if (wd.state.alpha <= 0) continue;
+        ctx.globalAlpha = clamp01(wd.state.alpha);
+        ctx.fillText(wd.w.text, wd.w.left + wd.state.dx, mid + wd.state.dy);
+      }
+      ctx.textAlign = align;
+    }
+    if (f.scale !== 1 && plan.block) ctx.restore();
+    ctx.globalAlpha = 1; ctx.shadowColor = "transparent";
+    return;
+  }
   let i = 0;
   for (const r of rows) {
     const top = y; y += r.h;
