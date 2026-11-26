@@ -2,6 +2,7 @@
 // (family + weight, at the real size, with the poem's own text so the Tamil subset is requested) must be loaded AND proven
 // to cover the glyphs. No silent fallback measurement: if a face cannot be loaded in time, the export stops with an error.
 import { FONT_FAMILY } from "./render.js";
+import { fontById, canBody, canTitle, fontReviewOf } from "./font-registry.js";
 import { graphemes } from "./graphemes.js";
 import { signatureBox } from "./signature.js";
 import { FORMATS } from "./safe-zone.js";
@@ -28,6 +29,21 @@ export const sampleText = (...parts) => {
 };
 
 /**
+ * CSS family for a registry font id in `role`. Every face ensureFonts loads comes from here, so an id outside the
+ * registry, a font that cannot be loaded, or a display-only font used for body text is refused (never a silent fallback).
+ */
+export function registryFamily(id, role = "body") {
+  const f = fontById(id);
+  if (!f || !FONT_FAMILY[id])
+    throw new FontReadinessError(`The font "${id}" is not in the Studio font list. Nothing was exported.`);
+  if (!f.loadable)
+    throw new FontReadinessError(`The font "${f.label}" cannot be loaded in this Studio (${f.why}). Nothing was exported.`);
+  if (role === "body" ? !canBody(id) : !canTitle(id))
+    throw new FontReadinessError(`"${f.label}" is a display (title-only) font and cannot be used for poem text. Nothing was exported.`);
+  return FONT_FAMILY[id];
+}
+
+/**
  * The faces a composition needs, as {key, font, text, role}. `font` is a CSS shorthand `weight size family` that is
  * exactly what the renderers set on the canvas. Only the families actually used are listed.
  */
@@ -37,6 +53,8 @@ export function requiredFaces(
 ) {
   const st = comp.style;
   const px = sizePx || st.sizePx || 40;
+  const bodyFamily = registryFamily(st.font, "body");
+  const titleFamily = st.titleFont ? registryFamily(st.titleFont, "title") : bodyFamily;
   const body = sampleText(
     poemText,
     ...(comp.scenes || []).flatMap((s) => s.lines),
@@ -44,7 +62,7 @@ export function requiredFaces(
   const faces = [
     {
       role: "body",
-      font: `${st.weight} ${px}px ${FONT_FAMILY[st.font]}`,
+      font: `${st.weight} ${px}px ${bodyFamily}`,
       text: body,
     },
   ];
@@ -52,7 +70,7 @@ export function requiredFaces(
   if (title || titleScene)
     faces.push({
       role: "title",
-      font: `${titleWeight} ${px}px ${FONT_FAMILY[st.font]}`,
+      font: `${titleWeight} ${px}px ${titleFamily}`,
       text: sampleText(
         title,
         ...(comp.scenes || [])
@@ -117,6 +135,10 @@ export async function ensureFonts(comp, opts = {}, deps = {}) {
       "This browser cannot load web fonts, so the poem cannot be measured safely. Nothing was exported.",
     );
   const faces = requiredFaces(comp, opts);
+  const fontReview = fontReviewOf(comp);
+  // a candidate (unreviewed) font must PROVE Tamil glyph coverage by measurement: no measuring function, no export
+  if (fontReview && !deps.measure)
+    throw new FontReadinessError("A candidate (unreviewed) font needs a glyph measurement check, which is not available here. Nothing was exported.");
   const report = [];
   for (const f of faces) {
     let loaded;
@@ -152,7 +174,50 @@ export async function ensureFonts(comp, opts = {}, deps = {}) {
     }
     report.push({ role: f.role, font: f.font, files: loaded.length });
   }
-  return { ok: true, faces: report };
+  return { ok: true, faces: report, ...(fontReview ? { fontReview } : {}) };
+}
+
+/** Clusters the verification harness measures one by one: conjuncts and two-part vowel signs that break first. */
+export const TAMIL_CLUSTERS = ["க்ஷ", "ஶ்ரீ", "கொ", "கோ", "கௌ", "தமிழ்", "ஸ்ரீ", "ஜ", "ஷ", "ஸ", "ஹ", "ழ", "ள", "ற", "ன"];
+
+/**
+ * Font verification harness (pure; inject deps {fonts, measure} like ensureFonts). Runs ensureFonts for the font at
+ * 400 and 700 (body and title faces) with the Tamil fixture, then checks every cluster individually: fonts.check must
+ * pass and the cluster must measure > 0 and differently from the generic fallback alone. Returns
+ * { fontId, ok, reasons, checked }. `ok` is a TECHNICAL pre-check only: it never marks a font verified (that needs a
+ * Tamil-literate human review of real rendering).
+ */
+export async function fontVerification(fontId, deps = {}) {
+  const reasons = [], checked = [];
+  const f = fontById(fontId);
+  if (!f) return { fontId, ok: false, reasons: [`"${fontId}" is not in the font registry.`], checked };
+  if (!f.loadable) return { fontId, ok: false, reasons: [`not loadable: ${f.why}`], checked };
+  if (!deps.measure) return { fontId, ok: false, reasons: ["no measuring function: glyph coverage cannot be proven"], checked };
+  const display = f.role === "display";
+  const comp = {
+    format: "reel",
+    style: { font: display ? "noto-sans" : fontId, ...(display ? { titleFont: fontId } : {}), weight: 400, sizePx: 40 },
+    scenes: [{ kind: display ? "title" : "stanza", lines: [TAMIL_FIXTURE] }],
+    branding: { show: false },
+  };
+  try {
+    await ensureFonts(comp, { poemText: TAMIL_FIXTURE, title: display ? TAMIL_FIXTURE : "", timeoutMs: deps.timeoutMs }, deps);
+  } catch (e) {
+    reasons.push(e?.message || String(e));
+  }
+  const family = FONT_FAMILY[fontId];
+  const generic = family.split(",").pop().trim();
+  for (const wt of display ? [400] : [400, 700]) {
+    const font = `${wt} 40px ${family}`;
+    for (const cl of TAMIL_CLUSTERS) {
+      const w = deps.measure(font, cl), fb = deps.measure(`${wt} 40px ${generic}`, cl);
+      const inSet = deps.fonts?.check ? deps.fonts.check(font, cl) : true;
+      const ok = w > 0 && Math.abs(w - fb) >= 0.01 && inSet;
+      checked.push({ cluster: cl, weight: wt, width: w, fallback: fb, ok });
+      if (!ok) reasons.push(`"${cl}" at weight ${wt} ${!inSet ? "is not covered by the font" : "measures like the fallback (not drawn by this font)"}`);
+    }
+  }
+  return { fontId, ok: reasons.length === 0, reasons, checked, humanReview: "pending" };
 }
 
 /** Canvas-based glyph probe used in the browser: width of `text` in the CSS `font`. */

@@ -4,6 +4,7 @@
 import { drawFrame, compDuration } from "./render.js";
 import { ensureFonts, canvasMeasure } from "./font-ready.js";
 import { FORMATS } from "./safe-zone.js";
+import { fontReviewOf, CANDIDATE_EXPORT_WARNING } from "./font-registry.js";
 import { zipStore } from "./zip.js";
 import { drawFullPoem, FULL_W } from "./full-poem.js";
 import { checkScenes, checkCover, coverScene, checkPoster, checkFull, FULL_NO_FIT, checkQuote, quoteScene, quoteMin, checkCarousel } from "./route-checks.js";
@@ -22,6 +23,8 @@ export class ExportValidationError extends Error {
 const probeCtx = () => mkCanvas(16, 16).getContext("2d");
 /** Fonts first: nothing may be measured against a fallback face. */
 const fontsFor = (comp, { extraText = "", title = "" } = {}) => ensureFonts(comp, { poemText: extraText, title }, { measure: canvasMeasure() });
+/** Object results of a route say fontReview:'unreviewed' (+ the warning) whenever a candidate font was used. */
+export const fontReviewFor = (comp) => (fontReviewOf(comp) ? { fontReview: fontReviewOf(comp), fontWarning: CANDIDATE_EXPORT_WARNING } : {});
 const assertOk = (what, v) => { if (!v.ok) throw new ExportValidationError(what, v.messages); return v; };
 const mkCanvas = (w, h) => Object.assign(document.createElement("canvas"), { width: w, height: h });
 const tick = () => new Promise((r) => setTimeout(r));
@@ -117,7 +120,7 @@ export async function renderPosters(comp, { type = "image/png", assets = {}, sca
     drawFrame(ctx, { ...comp, format: "poster" }, 0, { w: c.width, h: c.height, assets, still: true, scene: { kind: "stanza", lines: card.lines, durationMs: 1, id: "p" }, minSize: 46 });
     blobs.push(await toBlob(c, type, 0.94)); await tick();
   }
-  return { blobs, overflow };
+  return { blobs, overflow, ...fontReviewFor(comp) };
 }
 
 export async function zipBlobs(blobs, stem, ext) {
@@ -140,7 +143,7 @@ export async function renderFullPoem(comp, poem, { preset = "balanced", height =
   const k = Math.min(scale, layout.maxScale);
   const c = mkCanvas(Math.round(FULL_W * k), Math.round(layout.height * k)), ctx = c.getContext("2d");
   drawFullPoem(ctx, comp, layout, { assets, scale: k });
-  return { blob: await toBlob(c, type, 0.94), layout, scale: k, width: c.width, height: c.height };
+  return { blob: await toBlob(c, type, 0.94), layout, scale: k, width: c.width, height: c.height, ...fontReviewFor(comp) };
 }
 
 /**
@@ -154,7 +157,7 @@ export async function renderQuote(comp, poem, selection, { format = "poster", ty
   const v = assertOk("Quote (excerpt)", checkQuote(probeCtx(), comp, poem, selection, { format }));
   const fmt = FORMATS[v.format], c = mkCanvas(fmt.w, fmt.h), ctx = c.getContext("2d");
   drawFrame(ctx, { ...qc, format: v.format }, 0, { w: fmt.w, h: fmt.h, assets, still: true, scene: v.scene, minSize: quoteMin(v.format) });
-  return { blob: await toBlob(c, type, 0.94), excerpt: true, complete: false, coverage: v.coverage, format: v.format };
+  return { blob: await toBlob(c, type, 0.94), excerpt: true, complete: false, coverage: v.coverage, format: v.format, ...fontReviewFor(comp) };
 }
 /** Animated quote (EXCERPT): the selected lines as one short MP4 scene (text-in, then hold). Same labelling as renderQuote. */
 export async function exportQuoteMp4(comp, poem, selection, { format = "reel", ...opts } = {}) {
@@ -163,7 +166,7 @@ export async function exportQuoteMp4(comp, poem, selection, { format = "reel", .
   await fontsFor(qc, { extraText: scene ? scene.lines.join("\n") : "" });
   const v = assertOk("Animated quote (excerpt)", checkQuote(probeCtx(), comp, poem, selection, { format }));
   const blob = await encodeMp4({ ...qc, format: v.format, scenes: [v.scene] }, { ...opts, minSize: quoteMin(v.format) });
-  return { blob, excerpt: true, complete: false, coverage: v.coverage, format: v.format };
+  return { blob, excerpt: true, complete: false, coverage: v.coverage, format: v.format, ...fontReviewFor(comp) };
 }
 /** Feed carousel: title cover + poem cards (poster set) + optional end card, each numbered k/N; every card validated. */
 export async function renderCarousel(comp, { type = "image/png", assets = {} } = {}) {
@@ -176,7 +179,7 @@ export async function renderCarousel(comp, { type = "image/png", assets = {} } =
     drawFrame(ctx, pc, 0, { w: c.width, h: c.height, assets, still: true, scene: card.scene, minSize: 46, pageLabel: card.page });
     blobs.push(await toBlob(c, type, 0.94)); await tick();
   }
-  return { blobs, pages: plan.cards.map((cd) => ({ role: cd.role, page: cd.page })) };
+  return { blobs, pages: plan.cards.map((cd) => ({ role: cd.role, page: cd.page })), ...fontReviewFor(comp) };
 }
 /** Reel cover: the title card (or first scene) as a still 1080×1920 image. Distinct from the full-poem poster. */
 export async function renderReelCover(comp, { type = "image/png", assets = {} } = {}) {

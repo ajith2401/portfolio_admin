@@ -43,6 +43,7 @@ import {
   recordingSupport,
 } from "@/lib/motion-studio/audio";
 import { FONT_CSS } from "./fonts";
+import { VERIFIED_FONT_IDS, fontReviewOf, CANDIDATE_EXPORT_WARNING } from "@/lib/motion-studio/font-registry";
 import AudioPanel from "./panels/AudioPanel";
 import BackgroundPanel from "./panels/BackgroundPanel";
 import ExportPanel from "./panels/ExportPanel";
@@ -199,6 +200,8 @@ export default function MotionStudio() {
     update((c) => ({ ...c, scenes: fn(c.scenes) }), key);
   const start = (c) => {
     hist.reset(c);
+    // normalizeComposition replaced a font (unreviewed candidate / display-only): say so, never silently
+    if (c?.notices) flash("error", Object.values(c.notices).join(" "));
     lastKey.current = { k: null, at: 0 };
     bump((n) => n + 1);
   };
@@ -336,9 +339,12 @@ export default function MotionStudio() {
     (async () => {
       try {
         await Promise.all(
-          Object.values(FONT_CSS).map((f) =>
-            document.fonts.load(`500 40px ${f}`, "தமிழ் Aa"),
-          ),
+          // verified faces always; a candidate only when this composition draws with it (never fetched otherwise)
+          [...VERIFIED_FONT_IDS, comp.style.font, comp.style.titleFont]
+            .filter((id, i, a) => id && FONT_CSS[id] && a.indexOf(id) === i)
+            .map((id) =>
+              document.fonts.load(`500 40px ${FONT_CSS[id]}`, "தமிழ் Aa"),
+            ),
         );
       } catch {}
       if (!dead) paint(t);
@@ -791,6 +797,12 @@ export default function MotionStudio() {
     try {
       await fontsReady();
       await fn(abortRef.current.signal);
+      // a candidate (unreviewed) font: the export succeeded, but the result always carries the review warning
+      if (fontReviewOf(comp))
+        setMsg((m) => ({
+          kind: "error",
+          text: `${m?.text ? m.text + " " : ""}Font review: unreviewed. ${CANDIDATE_EXPORT_WARNING}`,
+        }));
     } catch (e) {
       flash(
         "error",

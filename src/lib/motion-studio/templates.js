@@ -1,12 +1,8 @@
 // Six distinct template families. Each defines palette, type, placement and motion; not just a recoloured background.
-export const FONT_KEYS = ["noto-serif", "noto-sans", "hind-madurai", "anek", "tiro"];
-export const FONT_LABELS = {
-  "noto-serif": "Noto Serif Tamil",
-  "noto-sans": "Noto Sans Tamil",
-  "hind-madurai": "Hind Madurai",
-  anek: "Anek Tamil",
-  tiro: "Tiro Tamil",
-};
+import { VERIFIED_FONT_IDS, FONT_REGISTRY } from "./font-registry.js";
+// Fonts come from the registry: FONT_KEYS is the VERIFIED set (templates may only use these); labels cover every entry.
+export const FONT_KEYS = VERIFIED_FONT_IDS;
+export const FONT_LABELS = Object.fromEntries(FONT_REGISTRY.map((f) => [f.id, f.label]));
 
 export const TEMPLATES = [
   {

@@ -11,14 +11,12 @@ import { totalDuration } from "./scenes.js";
 import { rowState } from "./animation.js";
 import { runFx, runMaterial } from "./fx/registry.js";
 import { materialPlan, effectiveIntensity } from "./materials.js";
+import { registryFamilies } from "./font-registry.js";
 
-export const FONT_FAMILY = {
-  "noto-serif": '"Noto Serif Tamil", serif',
-  "noto-sans": '"Noto Sans Tamil", sans-serif',
-  "hind-madurai": '"Hind Madurai", sans-serif',
-  anek: '"Anek Tamil", sans-serif',
-  tiro: '"Tiro Tamil", serif',
-};
+// id -> CSS family stack, derived from the ONE font registry (the five verified stacks are byte-identical to before).
+export const FONT_FAMILY = registryFamilies();
+/** Family the renderer paints `role` text with: a title may use style.titleFont; everything else uses style.font. */
+export const familyFor = (st, role = "body") => FONT_FAMILY[role === "title" && st.titleFont ? st.titleFont : st.font];
 /** next/font hashes family names; the page registers the real ones here before drawing. */
 export const setFontFamilies = (m) => Object.assign(FONT_FAMILY, m);
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
@@ -92,7 +90,7 @@ export function paintGrain(ctx, w, h, amt, tMs) {
  * Shrinks the font until the block fits but never below `minSize`; `fits:false` means it could not fit legibly.
  */
 export function layoutScene(ctx, c, scene, rect, { minSize = defaultMinSize(c.format) } = {}) {
-  const st = c.style, family = FONT_FAMILY[st.font];
+  const st = c.style, family = familyFor(st, scene.kind === "title" ? "title" : "body");
   const maxW = rect.w * (st.widthPct / 100);
   let size = Math.round(st.sizePx * (scene.scale || 1));
   for (let attempt = 0; attempt < 24; attempt++) {
@@ -150,7 +148,7 @@ function layerText(ctx, env) {
     if (r.gap) continue;
     const s = rowState(comp, sc, r, at.local, { still, last: at.last, index: i });
     ctx.globalAlpha = clamp01(s.alpha);
-    ctx.font = `${isTitle ? 700 : st.weight} ${size}px ${FONT_FAMILY[st.font]}`;
+    ctx.font = `${isTitle ? 700 : st.weight} ${size}px ${familyFor(st, isTitle ? "title" : "body")}`;
     if (st.shadow) { ctx.shadowColor = "rgba(0,0,0,0.45)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 3; } else ctx.shadowColor = "transparent";
     ctx.fillStyle = st.color;
     ctx.fillText(r.text, rowAnchor(align, ax, r.indentPx) + s.dx, top + r.h / 2 + s.dy);

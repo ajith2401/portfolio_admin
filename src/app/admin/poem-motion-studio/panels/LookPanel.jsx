@@ -1,5 +1,6 @@
 "use client";
-import { FONT_KEYS, FONT_LABELS } from "@/lib/motion-studio/templates";
+import { templateById } from "@/lib/motion-studio/templates";
+import { selectableFonts, resolveFonts, CANDIDATE_TOGGLE_LABEL } from "@/lib/motion-studio/font-registry";
 import { BG_MOTION, PARTICLES, TEXT_IN } from "@/lib/motion-studio/composition";
 import SignaturePanel from "./SignaturePanel";
 import MaterialPanel from "./MaterialPanel";
@@ -47,17 +48,72 @@ export default function LookPanel() {
                           onChange={(e) =>
                             update((c) => {
                               c.style.font = e.target.value;
+                              delete c.notices;
                               return c;
                             })
                           }
                         >
-                          {FONT_KEYS.map((k) => (
-                            <option key={k} value={k}>
-                              {FONT_LABELS[k]}
+                          {selectableFonts({ preview: comp.fontPreview === true }).map((f) => (
+                            <option key={f.id} value={f.id}>
+                              {f.label}
                             </option>
                           ))}
                         </select>
                       </Field>
+                      <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                        <input
+                          type="checkbox"
+                          checked={comp.fontPreview === true}
+                          onChange={(e) =>
+                            update((c) => {
+                              const on = e.target.checked;
+                              // turning it off replaces any candidate font with the template font, with a notice
+                              const r = resolveFonts({ font: c.style.font, titleFont: c.style.titleFont, preview: on, fallback: templateById(c.templateId).style.font });
+                              c.style.font = r.font;
+                              if (r.titleFont) c.style.titleFont = r.titleFont;
+                              else delete c.style.titleFont;
+                              if (on) c.fontPreview = true;
+                              else delete c.fontPreview;
+                              if (Object.keys(r.notices).length) c.notices = r.notices;
+                              else delete c.notices;
+                              return c;
+                            })
+                          }
+                        />
+                        {CANDIDATE_TOGGLE_LABEL}
+                      </label>
+                      {comp.fontPreview === true && (
+                        <Field label="Title font">
+                          <select
+                            aria-label="Title font"
+                            className="pms-field"
+                            value={comp.style.titleFont || ""}
+                            onChange={(e) =>
+                              update((c) => {
+                                if (e.target.value) c.style.titleFont = e.target.value;
+                                else delete c.style.titleFont;
+                                return c;
+                              })
+                            }
+                          >
+                            <option value="">Same as poem font</option>
+                            {selectableFonts({ preview: true, role: "title" }).map((f) => (
+                              <option key={f.id} value={f.id}>
+                                {f.label}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                      )}
+                      {(comp.fontPreview === true || comp.notices) && (
+                        <p role="status" className="text-sm sm:col-span-2" style={{ color: "var(--err-ink)" }}>
+                          {[comp.notices?.unverifiedFont, comp.notices?.displayOnlyFont]
+                            .filter(Boolean)
+                            .join(" ")}
+                          {comp.fontPreview === true &&
+                            " Candidate fonts are NOT reviewed for Tamil: every export with one is marked “Font review: unreviewed”."}
+                        </p>
+                      )}
                       <Range
                         label="Font size"
                         value={comp.style.sizePx}

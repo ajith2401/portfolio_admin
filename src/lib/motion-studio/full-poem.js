@@ -85,14 +85,15 @@ const footerFor = (comp) => (comp.branding?.show && comp.branding?.signature ? 1
 function measureAt(ctx, comp, poem, preset, size) {
   const st = comp.style,
     family = FONT_FAMILY[st.font] || FONT_FAMILY["noto-serif"],
+    titleFamily = (st.titleFont && FONT_FAMILY[st.titleFont]) || family,
     align = st.align;
   const maxW = FULL_W * (1 - 2 * preset.side);
   const lh = size * preset.lh,
     items = [];
-  const fontFor = (px, wt) => `${wt} ${px}px ${family}`;
+  const fontFor = (px, wt, fam = family) => `${wt} ${px}px ${fam}`;
   const ax = align === "left" ? FULL_W * preset.side : align === "right" ? FULL_W * (1 - preset.side) : FULL_W / 2;
-  const measureAtFont = (px, wt) => {
-    ctx.font = fontFor(px, wt);
+  const measureAtFont = (px, wt, fam) => {
+    ctx.font = fontFor(px, wt, fam);
     return (x) => ctx.measureText(x).width;
   };
   let y = 0;
@@ -100,7 +101,7 @@ function measureAt(ctx, comp, poem, preset, size) {
     const title = poem.title.trim();
     const tpx = Math.round(size * preset.titleScale),
       tlh = tpx * Math.min(1.5, preset.lh);
-    const measure = measureAtFont(tpx, 700);
+    const measure = measureAtFont(tpx, 700, titleFamily);
     wrapSpans(title, maxW, measure, 0).forEach((r, ri) => {
       items.push({ kind: "title", text: r.text, start: r.start, end: r.end, wrapRow: ri, px: tpx, wt: 700, x: ax, w: measure(r.text), rowH: tlh, y: y + tlh / 2 });
       y += tlh;
@@ -337,6 +338,7 @@ export function drawFullPoem(
     ctx.shadowOffsetY = 3;
   }
   const family = FONT_FAMILY[st.font] || FONT_FAMILY["noto-serif"];
+  const titleFamily = (st.titleFont && FONT_FAMILY[st.titleFont]) || family;
   for (const it of layout.items) {
     const y = layout.offset + it.y;
     if (it.kind === "rule") {
@@ -355,7 +357,7 @@ export function drawFullPoem(
       ctx.restore();
       continue;
     }
-    ctx.font = `${it.wt} ${it.px}px ${family}`;
+    ctx.font = `${it.wt} ${it.px}px ${it.kind === "title" ? titleFamily : family}`;
     ctx.fillText(it.text, it.x ?? ax, y);
   }
   ctx.shadowColor = "transparent";

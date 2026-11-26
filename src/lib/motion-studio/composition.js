@@ -1,7 +1,8 @@
 // Composition: the serialisable description of a Reel / Story / Poster. Never contains the poem document itself
 // (only the text lines chosen for each scene) and never any HTML. normalizeComposition() is the single gate used
 // by the API and the client: it whitelists fields, clamps numbers and rejects anything else.
-import { FONT_KEYS, templateById } from "./templates.js";
+import { templateById } from "./templates.js";
+import { resolveFonts } from "./font-registry.js";
 import { parsePoemText, MAX_POEM_CHARS } from "./poem-input.js";
 import { SIG_SIZE_MIN, SIG_SIZE_MAX, SIG_Y_MIN, SIG_Y_MAX, newSignatureDefaults, isLegacySignature } from "./signature.js";
 import { sceneDuration, attachStanzaMeta, MIN_SCENE_MS, MAX_SCENE_MS } from "./scenes.js";
@@ -96,6 +97,11 @@ export function normalizeComposition(input) {
   }).filter((sc) => sc.lines.length > 0);
   const poemSnap = normalizePoemSnapshot(c.poem);
   const scenes = attachStanzaMeta(normScenes(c.scenes), poemSnap);
+  // Fonts: verified registry ids by default. A candidate (verified:false) is kept ONLY when the composition opted in with
+  // fontPreview:true (the explicit "Preview candidate fonts (not reviewed)" toggle); otherwise it is replaced by the
+  // template font and `notices.unverifiedFont` says so. A display-only font is never kept as the poem (body) font.
+  const fontPreview = c.fontPreview === true;
+  const fonts = resolveFonts({ font: s.font, titleFont: s.titleFont, preview: fontPreview, fallback: t.style.font });
   return {
     v: 1,
     format: oneOf(c.format, FORMAT_KEYS, "reel"),
@@ -103,7 +109,8 @@ export function normalizeComposition(input) {
     scenes,
     originalScenes: attachStanzaMeta(normScenes(c.originalScenes), poemSnap),
     style: {
-      font: oneOf(s.font, FONT_KEYS, t.style.font),
+      font: fonts.font,
+      ...(fonts.titleFont ? { titleFont: fonts.titleFont } : {}),
       sizePx: Math.round(num(s.sizePx, 28, 140, t.style.sizePx)),
       weight: oneOf(Number(s.weight), [400, 500, 600, 700], t.style.weight),
       color: hex(s.color, t.style.color),
@@ -152,6 +159,9 @@ export function normalizeComposition(input) {
     ...(poemSnap ? { poem: poemSnap } : {}),
     // material (materials.js) is stored only when the input has one: legacy projects normalize unchanged
     ...(c.material && typeof c.material === "object" ? { material: normalizeMaterial(c.material) } : {}),
+    // stored only when on / when something was replaced: legacy projects normalize unchanged
+    ...(fontPreview ? { fontPreview: true } : {}),
+    ...(Object.keys(fonts.notices).length ? { notices: fonts.notices } : {}),
   };
 
 }

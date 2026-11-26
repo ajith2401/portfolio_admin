@@ -11,6 +11,7 @@ import { drawFrame } from "./render.js";
 import { drawFullPoem } from "./full-poem.js";
 import { verifyMaterial } from "./fx/verify.js";
 import { materialActive } from "./materials.js";
+import { fontById, canBody, canTitle, fontLabel, fontReviewOf, CANDIDATE_EXPORT_WARNING } from "./font-registry.js";
 
 export const sceneMin = (format) => MIN_TEXT_PX[format] ?? MIN_TEXT_PX.reel;
 export const FULL_NO_FIT = "This poem does not fit this canvas at a readable size. Choose the extended-height poster or a more compact layout.";
@@ -21,11 +22,37 @@ export const FULL_NO_FIT = "This poem does not fit this canvas at a readable siz
 export const MAX_FX_FRAMES = 16;
 const sample = (list, n) => (list.length <= n ? list : Array.from({ length: n }, (_, i) => list[Math.floor((i * list.length) / n)]));
 export function withMaterial(result, ctx, comp, draws) {
+  return withFonts(materialOnly(result, ctx, comp, draws), comp);
+}
+function materialOnly(result, ctx, comp, draws) {
   if (!materialActive(comp)) return result;
   const v = verifyMaterial(ctx, comp, sample(draws, MAX_FX_FRAMES));
   if (v.ok) return { ...result, material: v };
   const messages = [...new Set([...(result.messages || []), ...v.messages])];
   return { ...result, ok: false, messages, material: v };
+}
+
+// ---------------------------------------------------------------- font roles, shared by every route (font-registry.js)
+// A font outside the registry, a display-only font used for poem (body) text, or a body-only font as the title font is
+// REFUSED. A candidate (unreviewed) font is allowed (ensureFonts already proved its glyphs) but the result always says
+// fontReview:'unreviewed' with a warning: never silent.
+export function fontIssues(comp) {
+  const st = comp?.style || {}, out = [];
+  if (!fontById(st.font)) out.push(`The poem font "${st.font}" is not in the Studio font list.`);
+  else if (!canBody(st.font)) out.push(`"${fontLabel(st.font)}" is a display (title-only) font and cannot be used for poem text.`);
+  if (st.titleFont != null) {
+    if (!fontById(st.titleFont)) out.push(`The title font "${st.titleFont}" is not in the Studio font list.`);
+    else if (!canTitle(st.titleFont)) out.push(`"${fontLabel(st.titleFont)}" cannot be used as a title font.`);
+  }
+  for (const id of [st.font, st.titleFont]) if (fontById(id) && !fontById(id).loadable) out.push(`"${fontLabel(id)}" cannot be loaded in this Studio.`);
+  return out;
+}
+export function withFonts(result, comp) {
+  const issues = fontIssues(comp);
+  const review = fontReviewOf(comp);
+  const out = review ? { ...result, fontReview: review, fontWarning: CANDIDATE_EXPORT_WARNING } : result;
+  if (!issues.length) return out;
+  return { ...out, ok: false, fontIssues: issues, messages: [...new Set([...(result.messages || []), ...issues])] };
 }
 /** The frames a scene route draws: each scene as a still, and mid-scene on the animated timeline. */
 export function sceneDraws(comp, scenes, minSize, extra = {}) {
