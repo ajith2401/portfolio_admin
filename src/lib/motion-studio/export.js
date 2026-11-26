@@ -1,7 +1,7 @@
 // Browser-side export. Everything is feature-detected at runtime; nothing assumes a device supports it.
 import { drawFrame, compDuration, posterCards, validateScenes } from "./render.js";
 import { ensureFonts, canvasMeasure } from "./font-ready.js";
-import { FORMATS } from "./safe-zone.js";
+import { FORMATS, MIN_TEXT_PX } from "./safe-zone.js";
 import { zipStore } from "./zip.js";
 import { layoutFullPoem, drawFullPoem, validateFullPoem, FULL_W } from "./full-poem.js";
 
@@ -18,7 +18,7 @@ export class ExportValidationError extends Error {
 }
 const probeCtx = () => mkCanvas(16, 16).getContext("2d");
 /** Fonts ready (exact faces, Tamil glyphs proven) → THEN every scene this route will draw is validated against its source. */
-async function prepare(comp, scenes, what, { minSize = 28, extraText = "", title = "" } = {}) {
+async function prepare(comp, scenes, what, { minSize = MIN_TEXT_PX[comp.format] ?? MIN_TEXT_PX.reel, extraText = "", title = "" } = {}) {
   await ensureFonts(comp, { poemText: extraText, title }, { measure: canvasMeasure() });
   const v = validateScenes(probeCtx(), comp, scenes, { minSize });
   if (!v.ok) throw new ExportValidationError(what, v.messages);

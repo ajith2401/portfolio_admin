@@ -13,3 +13,6 @@ export const FORMATS = Object.freeze({
   story: { w: 1080, h: 1920, safe: SAFE },
   poster: { w: 1080, h: 1350, safe: POSTER_SAFE },
 });
+/** Smallest text size (px, on the 1080-wide canvas) the Studio will ever render. Reel/Story scenes are SPLIT to fit, never shrunk below it. */
+export const MIN_TEXT_PX = Object.freeze({ reel: 40, story: 40, poster: 46 });
+export const FIT_ACTION_LABEL = "Fit scenes to 40px";

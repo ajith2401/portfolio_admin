@@ -1,6 +1,7 @@
 "use client";
 import { Btn } from "../studio-ui";
 import { useStudio } from "../studio-context";
+import { ExportEstimate, ReadabilityNotice } from "./FitScenesDialog";
 
 export default function ExportPanel() {
   const {
@@ -18,6 +19,8 @@ export default function ExportPanel() {
   return (
 <section aria-label="Export" className="pms-card space-y-3">
                   <h2 className="text-lg font-semibold">Export</h2>
+                  <ExportEstimate />
+                  <ReadabilityNotice />
                   {caps === null && (
                     <p className="text-sm" style={{ color: "var(--mute)" }}>
                       Checking what this device can encode…

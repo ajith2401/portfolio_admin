@@ -2,6 +2,7 @@
 import * as E from "@/lib/motion-studio/scene-edit";
 import { Btn, Field, Range } from "../studio-ui";
 import { useStudio } from "../studio-context";
+import { FitScenesButton } from "./FitScenesDialog";
 
 export default function ScenesPanel() {
   const {
@@ -19,6 +20,7 @@ export default function ScenesPanel() {
                     <h2 className="text-lg font-semibold">
                       Scenes ({comp.scenes.length})
                     </h2>
+                    <FitScenesButton />
                     <Btn
                       onClick={() => {
                         if (comp.originalScenes.length) {

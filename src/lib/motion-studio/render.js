@@ -3,7 +3,9 @@
 // seeded from index so frames are reproducible.
 import { classifyInto, newResult, note, rowExtent, checkX, TOLERANCE } from "./coverage.js";
 import { wrapSpans, indentPx, lineIndent } from "./graphemes.js";
-import { FORMATS, safeRect } from "./safe-zone.js";
+import { FORMATS, safeRect, MIN_TEXT_PX, FIT_ACTION_LABEL } from "./safe-zone.js";
+// Reel/Story floor comes from MIN_TEXT_PX; poster paths pass POSTER_MIN explicitly and keep their legacy default here.
+export const defaultMinSize = (format) => (format === "poster" ? 28 : MIN_TEXT_PX[format] ?? MIN_TEXT_PX.reel);
 import { totalDuration } from "./scenes.js";
 
 export const FONT_FAMILY = {
@@ -86,7 +88,7 @@ export function paintGrain(ctx, w, h, amt, tMs) {
  * Lay out a scene's lines inside the safe rect. A line equal to "" is a stanza gap (poster cards).
  * Shrinks the font until the block fits but never below `minSize`; `fits:false` means it could not fit legibly.
  */
-export function layoutScene(ctx, c, scene, rect, { minSize = 28 } = {}) {
+export function layoutScene(ctx, c, scene, rect, { minSize = defaultMinSize(c.format) } = {}) {
   const st = c.style, family = FONT_FAMILY[st.font];
   const maxW = rect.w * (st.widthPct / 100);
   let size = Math.round(st.sizePx * (scene.scale || 1));
@@ -114,7 +116,7 @@ export function layoutScene(ctx, c, scene, rect, { minSize = 28 } = {}) {
 /** Anchor x of a row after its layout indent: left/right anchors move by the indent, a centred row by half of it. */
 export const rowAnchor = (align, ax, ipx = 0) => (align === "left" ? ax + ipx : align === "right" ? ax - ipx : ax + ipx / 2);
 
-export function drawFrame(ctx, comp, tMs, { w, h, assets = {}, still = false, scene: forced = null, minSize = 28 } = {}) {
+export function drawFrame(ctx, comp, tMs, { w, h, assets = {}, still = false, scene: forced = null, minSize = defaultMinSize(comp.format) } = {}) {
   const fmt = FORMATS[comp.format] || FORMATS.reel;
   w = w || fmt.w; h = h || fmt.h;
   ctx.save(); ctx.scale(w / fmt.w, w / fmt.w);
@@ -198,7 +200,7 @@ export function posterCards(ctx, comp) {
  * source ranges reproduce it, and every row must sit inside the canvas, the format's safe area and clear of the signature.
  * Pass a measuring ctx. Returns the structured result shared with the Full-Poem validator.
  */
-export function validateScene(ctx, comp, scene, { minSize = 28, label = "scene" } = {}) {
+export function validateScene(ctx, comp, scene, { minSize = defaultMinSize(comp.format), label = "scene" } = {}) {
   const fmt = FORMATS[comp.format] || FORMATS.reel, W = fmt.w, H = fmt.h, st = comp.style;
   const rect = safeRect(W, H, fmt.safe);
   const lay = layoutScene(ctx, comp, scene, rect, { minSize });
@@ -208,6 +210,9 @@ export function validateScene(ctx, comp, scene, { minSize = 28, label = "scene" 
     classifyInto(r, `${label}, line ${i + 1} ${JSON.stringify(String(ln).slice(0, 60))}`, ln, lay.rows.filter((x) => !x.gap && x.srcLine === i));
   });
   if (!lay.fits) note(r, "outOfBounds", `${label}: the text does not fit the safe area at ${lay.size}px`);
+  // Reel/Story: text that RESOLVES below the floor (a legacy project saved at <40px, or a scene scale <1) is never exported
+  // silently. Nothing is rewritten here; the author is pointed at the explicit fit action.
+  if (comp.format !== "poster" && lay.size < minSize) note(r, "outOfBounds", `${label}: text is ${lay.size}px, below the ${minSize}px minimum. Use "${FIT_ACTION_LABEL}" in Scenes to split the scenes (and raise the size) before exporting`);
   const align = scene.align || st.align;
   const ax = align === "left" ? rect.x : align === "right" ? rect.x + rect.w : rect.x + rect.w / 2;
   const shift = ((scene.offsetY || 0) / 100) * rect.h;

@@ -49,6 +49,7 @@ import PoemPanel from "./panels/PoemPanel";
 import PosterPanel from "./panels/PosterPanel";
 import ProjectPanel from "./panels/ProjectPanel";
 import ScenesPanel from "./panels/ScenesPanel";
+import { ReadabilityNotice } from "./panels/FitScenesDialog";
 import StoryPanel from "./panels/StoryPanel";
 import { StudioContext } from "./studio-context";
 import { Btn, Field, download, slug } from "./studio-ui";
@@ -1387,6 +1388,7 @@ export default function MotionStudio() {
           )}
           <div className="min-w-0 lg:sticky lg:top-4 lg:self-start">
             {previewBlock("main")}
+            <ReadabilityNotice />
             <label className="mt-2 flex min-h-11 items-center gap-2 text-sm">
               <input
                 type="checkbox"
