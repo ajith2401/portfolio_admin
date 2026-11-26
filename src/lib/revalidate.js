@@ -5,7 +5,7 @@
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 export async function notifyPortfolio(
-  { slug, previousSlugs = [] },
+  { slug, previousSlugs = [], section },
   { env = process.env, fetchImpl = globalThis.fetch, timeoutMs = 5000 } = {},
 ) {
   const url = env.PORTFOLIO_REVALIDATE_URL;
@@ -53,6 +53,7 @@ export async function notifyPortfolio(
       },
       body: JSON.stringify({
         slug,
+        ...(section ? { section } : {}),
         ...(previousSlugs.length ? { previousSlugs } : {}),
       }),
       signal: controller.signal,
