@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import connectDB from "@/lib/mongodb";
 import { Writing, Comment } from "@/models";
+import { claimSlug, releaseSlug } from "@/lib/slug-registry";
 import { uploadImage } from "@/lib/cloudinary";
 import { deleteOwnedImages } from "@/lib/image-cleanup";
 import { getAuthenticatedUser, requireAuth, validateOrigin } from "@/lib/auth";
@@ -103,7 +104,8 @@ export async function PUT(request, { params }) {
         exists: async (slug, excludeId) =>
           Boolean(
             await Writing.exists({
-              slug,
+              // a slug is taken if it is anyone's current slug OR sits in anyone's redirect history
+              $or: [{ slug }, { "slugHistory.slug": slug }],
               ...(excludeId ? { _id: { $ne: excludeId } } : {}),
             }),
           ),
@@ -164,11 +166,25 @@ export async function PUT(request, { params }) {
 
     for (const [path, value] of Object.entries(set))
       existingDoc.set(path, value);
+    // Reserve a changed slug atomically (and keep the old one reserved for its redirect).
+    let claimedNew = null;
+    if (plan.slugChange) {
+      const c = await claimSlug(plan.slugChange.to, existingDoc._id);
+      if (!c.ok) {
+        return NextResponse.json(
+          { error: "Another writing already uses this slug" },
+          { status: 409 },
+        );
+      }
+      if (c.created) claimedNew = plan.slugChange.to;
+      await claimSlug(plan.slugChange.from, existingDoc._id).catch(() => {});
+    }
     // Compare-and-swap on the version: if anyone saved in between, the save matches nothing.
     existingDoc.$where = { version: input.version };
     try {
       await existingDoc.save();
     } catch (error) {
+      if (claimedNew) await releaseSlug(claimedNew, existingDoc._id);
       if (error?.name === "DocumentNotFoundError") {
         return NextResponse.json(
           {

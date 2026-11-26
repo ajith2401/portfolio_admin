@@ -60,8 +60,9 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Valid email is required' }, { status: 400 });
     }
 
-    const writing = await Writing.findById(id);
-    if (!writing) {
+    // Only published work can be rated or commented on; drafts/archived/malformed ids are a plain 404.
+    const writing = /^[0-9a-f]{24}$/i.test(String(id)) ? await Writing.findById(id) : null;
+    if (!writing || (writing.status && writing.status !== 'published')) {
       return NextResponse.json({ error: 'Writing not found' }, { status: 404 });
     }
 

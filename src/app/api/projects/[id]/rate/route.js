@@ -30,8 +30,9 @@ export async function POST(request, { params }) {
     const ratingNum = Math.max(1, Math.min(5, Math.round(Number(body.rating))));
     const sanitizedName = sanitizeHtml(String(body.name || 'Anonymous')).trim();
 
-    const project = await Project.findById(id);
-    if (!project) {
+    // Only published work can be rated or commented on; drafts/archived/malformed ids are a plain 404.
+    const project = /^[0-9a-f]{24}$/i.test(String(id)) ? await Project.findById(id) : null;
+    if (!project || (project.status && project.status !== 'published')) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 

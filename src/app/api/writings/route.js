@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { Writing } from "@/models";
+import { claimSlug, releaseSlug } from "@/lib/slug-registry";
 import { uploadImage } from "@/lib/cloudinary";
 import { notifyWritingSubscribers } from "@/lib/notificationHandler";
 import { getAuthenticatedUser, requireAuth, validateOrigin } from "@/lib/auth";
@@ -279,7 +280,8 @@ export async function POST(request) {
         exists: async (slug, excludeId) =>
           Boolean(
             await Writing.exists({
-              slug,
+              // a slug is taken if it is anyone's current slug OR sits in anyone's redirect history
+              $or: [{ slug }, { "slugHistory.slug": slug }],
               ...(excludeId ? { _id: { $ne: excludeId } } : {}),
             }),
           ),
@@ -337,7 +339,23 @@ export async function POST(request) {
     const doc = new Writing({});
     for (const [path, value] of Object.entries(data)) doc.set(path, value);
     doc.version = 1;
-    await doc.save();
+    let claimed = null;
+    if (doc.slug) {
+      const c = await claimSlug(doc.slug, doc._id);
+      if (!c.ok) {
+        return NextResponse.json(
+          { error: "A writing with this slug already exists" },
+          { status: 409 },
+        );
+      }
+      claimed = doc.slug;
+    }
+    try {
+      await doc.save();
+    } catch (e) {
+      if (claimed) await releaseSlug(claimed, doc._id);
+      throw e;
+    }
 
     let revalidate = { status: "skipped" };
     if (doc.status === "published") {

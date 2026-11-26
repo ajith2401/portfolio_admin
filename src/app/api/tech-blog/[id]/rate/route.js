@@ -30,8 +30,9 @@ export async function POST(request, { params }) {
     const ratingNum = Math.max(1, Math.min(5, Math.round(Number(body.rating))));
     const sanitizedName = sanitizeHtml(String(body.name || 'Anonymous')).trim();
 
-    const blog = await TechBlog.findById(id);
-    if (!blog) {
+    // Only published work can be rated or commented on; drafts/archived/malformed ids are a plain 404.
+    const blog = /^[0-9a-f]{24}$/i.test(String(id)) ? await TechBlog.findById(id) : null;
+    if (!blog || (blog.status && blog.status !== 'published')) {
       return NextResponse.json(
         { error: 'Tech blog not found' },
         { status: 404 }
