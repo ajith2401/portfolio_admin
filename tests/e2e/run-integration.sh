@@ -33,7 +33,7 @@ trap 'killtree $PUB_PID; killtree $ADM_PID' EXIT
 wait_for http://127.0.0.1:$PUB_PORT/ && wait_for http://127.0.0.1:$ADM_PORT/login || exit 1
 export E2E_REVALIDATE_SECRET=$RSECRET
 export E2E_BAD_SECRET=$(openssl rand -hex 16)   # guaranteed different from the real secret
-( cd tests/e2e && npx playwright test specs/05-integration-publish.spec.mjs specs/07-security-negatives.spec.mjs specs/08-book-lifecycle.spec.mjs specs/09-cover-images.spec.mjs "$@" ); RC1=$?
+( cd tests/e2e && npx playwright test specs/05-integration-publish.spec.mjs specs/07-security-negatives.spec.mjs specs/08-book-lifecycle.spec.mjs specs/09-cover-images.spec.mjs specs/10-seo-structure.spec.mjs "$@" ); RC1=$?
 # Phase 2: restart admin pointing at a dead revalidate URL to prove a failed revalidation never fails the save.
 killtree $ADM_PID; sleep 2
 start_admin "http://127.0.0.1:1/api/revalidate"; wait_for http://127.0.0.1:$ADM_PORT/login || exit 1
