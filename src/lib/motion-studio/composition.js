@@ -18,6 +18,12 @@ export const MAX_LINE_CHARS = 400;
 const hex = (v, d) => (typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v) ? v.toLowerCase() : d);
 const num = (v, lo, hi, d) => (Number.isFinite(Number(v)) ? Math.min(hi, Math.max(lo, Number(v))) : d);
 const oneOf = (v, list, d) => (list.includes(v) ? v : d);
+// Background images must be an https Cloudinary image of ours or a same-origin path. blob:/data:/javascript: never persist.
+export const safeImageUrl = (v) => {
+  if (typeof v !== "string" || v.length > 2048) return null;
+  if (/^\/[^/\\]/.test(v)) return v;
+  try { const u = new URL(v); return u.protocol === "https:" && u.hostname === "res.cloudinary.com" && !u.username && !u.password ? u.toString() : null; } catch { return null; }
+};
 const str = (v, max, d = "") => (typeof v === "string" ? v.slice(0, max) : d);
 
 export function defaultComposition({ format = "reel", templateId = "ink-silence", scenes = [], signature = "Ajithkumar R." } = {}) {
@@ -36,20 +42,25 @@ export function normalizeComposition(input) {
   const c = input && typeof input === "object" ? input : {};
   const t = templateById(c.templateId);
   const s = c.style || {}, bg = s.bg || {}, ov = s.overlay || {}, m = c.motion || {}, b = c.branding || {}, a = c.audio || {};
-  const scenes = (Array.isArray(c.scenes) ? c.scenes : []).slice(0, MAX_SCENES).map((sc, i) => {
+  const normScenes = (arr) => (Array.isArray(arr) ? arr : []).slice(0, MAX_SCENES).map((sc, i) => {
     const lines = (Array.isArray(sc?.lines) ? sc.lines : []).slice(0, MAX_LINES).map((l) => str(l, MAX_LINE_CHARS)).filter((l) => l.trim() !== "");
     return {
       id: str(sc?.id, 40, `s${i}`) || `s${i}`,
       kind: oneOf(sc?.kind, ["title", "stanza"], "stanza"),
       lines,
       durationMs: Math.round(num(sc?.durationMs, MIN_SCENE_MS, MAX_SCENE_MS, sceneDuration(lines))),
+      ...(Number.isFinite(Number(sc?.offsetY)) && Number(sc.offsetY) !== 0 ? { offsetY: num(sc.offsetY, -30, 30, 0) } : {}),
+      ...(ALIGN.includes(sc?.align) ? { align: sc.align } : {}),
+      ...(Number.isFinite(Number(sc?.scale)) && Number(sc.scale) !== 1 ? { scale: num(sc.scale, 0.6, 1.4, 1) } : {}),
     };
   }).filter((sc) => sc.lines.length > 0);
+  const scenes = normScenes(c.scenes);
   return {
     v: 1,
     format: oneOf(c.format, FORMAT_KEYS, "reel"),
     templateId: t.id,
     scenes,
+    originalScenes: normScenes(c.originalScenes),
     style: {
       font: oneOf(s.font, FONT_KEYS, t.style.font),
       sizePx: Math.round(num(s.sizePx, 28, 140, t.style.sizePx)),
@@ -60,7 +71,13 @@ export function normalizeComposition(input) {
       widthPct: Math.round(num(s.widthPct, 50, 100, 100)),
       vAlign: oneOf(s.vAlign, VALIGN, "middle"),
       shadow: !!s.shadow,
-      bg: { kind: oneOf(bg.kind, BG_KINDS, t.bg.kind), a: hex(bg.a, t.bg.a), b: hex(bg.b, t.bg.b) },
+      bg: {
+        kind: oneOf(bg.kind, BG_KINDS, t.bg.kind), a: hex(bg.a, t.bg.a), b: hex(bg.b, t.bg.b),
+        ...(safeImageUrl(bg.image?.url) || bg.image?.local === true ? { image: {
+          url: safeImageUrl(bg.image.url) || "", local: !safeImageUrl(bg.image.url), x: num(bg.image.x, 0, 1, 0.5), y: num(bg.image.y, 0, 1, 0.5), zoom: num(bg.image.zoom, 1, 3, 1),
+          brightness: num(bg.image.brightness, -0.5, 0.5, 0), contrast: num(bg.image.contrast, -0.5, 0.5, 0), blur: Math.round(num(bg.image.blur, 0, 40, 0)),
+        } } : {}),
+      },
       overlay: { color: hex(ov.color, "#000000"), opacity: num(ov.opacity, 0, 0.9, 0) },
       vignette: num(s.vignette, 0, 1, t.fx.vignette),
       grain: num(s.grain, 0, 0.4, t.fx.grain),
@@ -69,7 +86,16 @@ export function normalizeComposition(input) {
     },
     motion: { textIn: oneOf(m.textIn, TEXT_IN, t.motion.textIn), bgMotion: oneOf(m.bgMotion, BG_MOTION, t.motion.bgMotion), intensity: num(m.intensity, 0, 1, 0.5) },
     branding: { show: b.show !== false, signature: str(b.signature, 60, "Ajithkumar R."), watermark: !!b.watermark, color: hex(b.color, t.signatureColor) },
-    audio: { source: oneOf(a.source, ["none", "upload", "record"], "none"), volume: num(a.volume, 0, 1, 1), fadeInMs: Math.round(num(a.fadeInMs, 0, 5000, 0)), fadeOutMs: Math.round(num(a.fadeOutMs, 0, 5000, 800)) },
+    audio: {
+      source: oneOf(a.source, ["none", "upload", "record"], "none"), label: str(a.label, 80),
+      volume: num(a.volume, 0, 1, 1), fadeInMs: Math.round(num(a.fadeInMs, 0, 5000, 0)), fadeOutMs: Math.round(num(a.fadeOutMs, 0, 5000, 800)),
+      trimStartMs: Math.round(num(a.trimStartMs, 0, 3600000, 0)), trimEndMs: Math.round(num(a.trimEndMs, 0, 3600000, 0)),
+      fitVideo: oneOf(a.fitVideo, ["keep", "extend"], "extend"),
+    },
+    poster: {
+      sceneIds: (Array.isArray(c.poster?.sceneIds) ? c.poster.sceneIds : []).slice(0, MAX_SCENES).map((x) => str(x, 40)).filter(Boolean),
+      mode: oneOf(c.poster?.mode, ["single", "set"], "single"),
+    },
     export: { quality: oneOf(c.export?.quality, ["draft", "standard", "high"], "standard") },
   };
 }

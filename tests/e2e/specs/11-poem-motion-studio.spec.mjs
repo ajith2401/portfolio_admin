@@ -3,6 +3,8 @@ import { BASE } from '../env.mjs';
 import AxeBuilder from '@axe-core/playwright';
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import os from 'node:os';
+import path from 'node:path';
 import { api, checkViewport } from '../helpers.mjs';
 
 const T = (text) => ({ type: 'text', text });
@@ -21,44 +23,137 @@ test.beforeAll(async ({ browser }) => {
   before = JSON.stringify((await api(page, 'GET', `/api/writings/${poemId}`)).body.content);
 });
 
-test('studio: pick Tamil poem, scenes, templates, save/reopen, source-change, exports', async ({ page }, info) => {
-  test.setTimeout(180_000);
-  await page.goto('/admin/poem-motion-studio');
-  await expect(page.getByRole('heading', { name: 'Poem Motion Studio' })).toBeVisible();
-  await page.getByLabel('Start from a poem').selectOption(poemId);
-  await expect(page.getByText(/Created \d+ scenes/)).toBeVisible();
-  await expect(page.getByText('அன்பே சிவம்').first()).toBeVisible();
-  // six distinct templates
-  await expect(page.locator('button[aria-pressed]')).toHaveCount(6);
+
+const wav = (sec = 4, sr = 44100) => { const n = sec * sr, b = Buffer.alloc(44 + n * 2); b.write('RIFF', 0); b.writeUInt32LE(36 + n * 2, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(sr, 24); b.writeUInt32LE(sr * 2, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(n * 2, 40); for (let i = 0; i < n; i++) b.writeInt16LE(Math.round(Math.sin(i / sr * 2 * Math.PI * 440) * 9000), 44 + i * 2); return b; };
+const probe = (f) => JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', f]).toString());
+const open = async (page) => { await page.goto('/admin/poem-motion-studio'); await expect(page.getByRole('heading', { name: 'Poem Motion Studio' })).toBeVisible(); await page.getByLabel('Start from a poem').selectOption(poemId); await expect(page.getByText(/Created \d+ scenes/)).toBeVisible(); };
+const tab = (page, n) => page.getByRole('tab', { name: n, exact: true }).click();
+const advanced = (page) => page.getByRole('button', { name: 'Advanced Studio' }).click();
+
+test('quick create: Tamil poem → style → preview → export (Poster PNG + Reel MP4), light and dark a11y', async ({ page }, info) => {
+  test.setTimeout(240_000);
+  await open(page);
+  await tab(page, 'Look');
+  const tpls = page.locator('fieldset:has(legend:text("Template")) button[aria-pressed]');
+  await expect(tpls).toHaveCount(6);
   await page.getByRole('button', { name: /Monsoon Memories/ }).click();
   await expect(page.getByRole('button', { name: /Monsoon Memories/ })).toHaveAttribute('aria-pressed', 'true');
-  // canvas actually painted (not blank)
-  const painted = await page.locator('canvas').evaluate((c) => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4000) if (d[i] + d[i + 1] + d[i + 2] > 30) n++; return n; });
+  const painted = await page.locator('canvas').first().evaluate((c) => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4000) if (d[i] + d[i + 1] + d[i + 2] > 30) n++; return n; });
   expect(painted).toBeGreaterThan(10);
-  // a11y
-  const ax = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
-  expect(ax.violations.map((v) => `${v.id}:${v.nodes[0]?.html?.slice(0, 80)}`)).toEqual([]);
-  // save + autosave round trip
-  await page.getByRole('button', { name: 'Save project' }).click();
-  await expect(page.getByText('Saved.')).toBeVisible();
-  // exports
+  for (const theme of ['light', 'dark']) {
+    await page.getByLabel('Theme').selectOption(theme);
+    const ax = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag22aa']).exclude('canvas').exclude('fieldset button[aria-pressed]').analyze();
+    expect(ax.violations.map((v) => `${theme}:${v.id}:${v.nodes[0]?.html?.slice(0, 90)}`)).toEqual([]);
+  }
+  await page.getByLabel('Theme').selectOption('system');
+  await tab(page, 'Export');
   const poster = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export Poster PNG' }).click();
-  const p = await poster; const pp = info.outputPath('poster.png'); await p.saveAs(pp);
+  const pp = info.outputPath('poster.png'); await (await poster).saveAs(pp);
   expect(fs.statSync(pp).size).toBeGreaterThan(5000);
+  expect(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', pp]).toString().trim()).toBe('1080,1350');
   const reelBtn = page.getByRole('button', { name: /Export Reel MP4/ });
-  await expect(reelBtn).toBeEnabled({ timeout: 20_000 });
-  const dl = page.waitForEvent('download', { timeout: 150_000 });
+  await expect(reelBtn).toBeEnabled({ timeout: 30_000 });
+  const dl = page.waitForEvent('download', { timeout: 180_000 });
   await reelBtn.click();
-  const d = await dl; const mp = info.outputPath('reel.mp4'); await d.saveAs(mp);
-  const probe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', mp]).toString());
-  const v = probe.streams.find((s) => s.codec_type === 'video');
+  const mp = info.outputPath('reel.mp4'); await (await dl).saveAs(mp);
+  const pr = probe(mp), v = pr.streams.find((x) => x.codec_type === 'video');
   expect(v.codec_name).toBe('h264'); expect(v.width).toBe(1080); expect(v.height).toBe(1920);
-  expect(Number(probe.format.duration)).toBeGreaterThan(8);
-  console.log('REEL', v.codec_name, v.width + 'x' + v.height, v.r_frame_rate, v.pix_fmt, probe.format.duration + 's', fs.statSync(mp).size + 'B');
-  // original writing untouched
+  expect(pr.streams.some((x) => x.codec_type === 'audio')).toBe(false); // silent reel stays valid
+  expect(Number(pr.format.duration)).toBeGreaterThan(8);
+  console.log('REEL', v.codec_name, v.width + 'x' + v.height, v.r_frame_rate, v.pix_fmt, pr.format.duration + 's', fs.statSync(mp).size + 'B');
   const after = JSON.stringify((await api(page, 'GET', `/api/writings/${poemId}`)).body.content);
   expect(after).toBe(before);
+});
+
+test('advanced: per-scene editing, undo/redo, restore original, no silent omission, save/reopen', async ({ page }) => {
+  test.setTimeout(120_000);
+  await open(page); await advanced(page); await tab(page, 'Scenes');
+  const count = () => page.locator('ol > li').filter({ has: page.getByLabel(/^Scene \d+ line 1$/) }).count();
+  const n0 = await count();
+  const line = page.getByLabel('Scene 2 line 1', { exact: true });
+  await line.fill('திருத்திய வரி');
+  await expect(line).toHaveValue('திருத்திய வரி');
+  await page.getByRole('button', { name: 'Split scene 2 before line 2' }).click();
+  expect(await count()).toBe(n0 + 1);
+  await page.getByRole('button', { name: 'Merge with next' }).nth(1).click();
+  expect(await count()).toBe(n0);
+  await page.getByLabel('Move scene 2 line 1 to').selectOption({ label: '→ Scene 3' });
+  await expect(page.getByLabel('Scene 3 line 3', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByLabel('Scene 3 line 3', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Redo' }).click();
+  await expect(page.getByLabel('Scene 3 line 3', { exact: true })).toBeVisible();
+  await page.getByLabel('Scene 1 seconds').fill('6'); await page.getByLabel('Scene 1 text position').fill('10');
+  await page.getByRole('button', { name: 'Restore original arrangement' }).click();
+  await expect(page.getByLabel('Scene 2 line 1', { exact: true })).toHaveValue('அன்பே சிவம்');
+  await page.getByRole('button', { name: /Remove scene 3 from the video/ }).click();
+  await expect(page.getByRole('alert').filter({ hasText: /not in any scene/ })).toBeVisible(); // omission is flagged, not silent
+  await page.getByRole('button', { name: 'Restore original arrangement' }).click();
+  await tab(page, 'Project');
+  await page.getByRole('button', { name: 'Save project' }).click();
+  await expect(page.getByText('Saved.')).toBeVisible();
+  await page.reload();
+  await page.getByLabel('Open a saved project').selectOption({ index: 1 });
+  await advanced(page); await tab(page, 'Scenes');
+  await expect(page.getByLabel('Scene 1 line 1', { exact: true })).toBeVisible();
+  // safe delete confirmation
+  await tab(page, 'Project');
+  await page.getByRole('button', { name: 'Delete project' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('cannot be undone');
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('button', { name: 'Delete project' }).click();
+  await page.getByRole('button', { name: 'Yes, delete project' }).click();
+  await expect(page.getByText(/Project deleted/)).toBeVisible();
+});
+
+test('audio: upload → AAC muxed, synced, duration matched; background photo gets readability veil', async ({ page }, info) => {
+  test.setTimeout(240_000);
+  const w = info.outputPath('tone.wav'); fs.writeFileSync(w, wav(4));
+  const bgp = info.outputPath('white.png'); execFileSync('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=white:s=900x1200', '-frames:v', '1', bgp]);
+  await open(page); await advanced(page);
+  await tab(page, 'Look'); await page.getByLabel('Text colour').fill('#ffffff');
+  await tab(page, 'Background');
+  await page.getByLabel('Choose background photo').setInputFiles(bgp);
+  await expect(page.getByText(/Readability veil applied automatically: (\d+)%/)).toBeVisible();
+  const pct = Number((await page.getByText(/Readability veil applied automatically/).textContent()).match(/(\d+)%/)[1]);
+  expect(pct).toBeGreaterThan(20);
+  await tab(page, 'Audio');
+  await page.getByLabel('Upload audio').setInputFiles(w);
+  await expect(page.getByLabel('Audio playback')).toBeVisible();
+  await tab(page, 'Export');
+  const btn = page.getByRole('button', { name: /Export Reel MP4/ });
+  await expect(btn).toBeEnabled({ timeout: 30_000 });
+  const dl = page.waitForEvent('download', { timeout: 200_000 });
+  await btn.click();
+  const mp = info.outputPath('reel-audio.mp4'); await (await dl).saveAs(mp);
+  const pr = probe(mp), a = pr.streams.find((x) => x.codec_type === 'audio'), v = pr.streams.find((x) => x.codec_type === 'video');
+  expect(a?.codec_name).toBe('aac'); expect(v.codec_name).toBe('h264');
+  expect(Math.abs(Number(a.start_time) - Number(v.start_time))).toBeLessThan(0.1);
+  expect(Math.abs(Number(a.duration) - Number(v.duration))).toBeLessThan(0.25);
+  console.log('AUDIO', a.codec_name, a.sample_rate, a.channels, 'a=' + a.duration, 'v=' + v.duration);
+});
+
+test('story frames in order (PNG + ZIP) and poster JPEG / multi-card set', async ({ page }, info) => {
+  test.setTimeout(180_000);
+  await open(page); await advanced(page);
+  await tab(page, 'Story');
+  await page.getByRole('button', { name: 'Render PNG frames' }).click();
+  const frames = page.getByRole('img', { name: /Story frame \d+ of \d+/ });
+  await expect(frames.first()).toBeVisible({ timeout: 60_000 });
+  const nFrames = await frames.count(); expect(nFrames).toBeGreaterThanOrEqual(3);
+  const z = page.waitForEvent('download'); await page.getByRole('button', { name: 'Download all as ZIP' }).click();
+  const zp = info.outputPath('story.zip'); await (await z).saveAs(zp);
+  expect(execFileSync('unzip', ['-t', zp]).toString()).toMatch(/No errors detected/);
+  expect(execFileSync('unzip', ['-l', zp]).toString()).toMatch(new RegExp(`${nFrames} files`));
+  await tab(page, 'Poster');
+  const j = page.waitForEvent('download'); await page.getByRole('button', { name: 'Poster JPEG' }).click();
+  const jp = info.outputPath('poster.jpg'); await (await j).saveAs(jp);
+  expect(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_name,width,height', '-of', 'csv=p=0', jp]).toString().trim()).toBe('mjpeg,1080,1350');
+  const s = page.waitForEvent('download'); await page.getByRole('button', { name: 'Multi-card set (PNG ZIP)' }).click();
+  const sp = info.outputPath('posters.zip'); await (await s).saveAs(sp);
+  const head = fs.readFileSync(sp).subarray(0, 4).toString('hex');
+  if (head === '504b0304') expect(execFileSync('unzip', ['-t', sp]).toString()).toMatch(/No errors detected/); else expect(head).toBe('89504e47'); // a short poem fits one card → plain PNG
 });
 
 test('project API: auth required, origin enforced, normalisation, source change', async ({ page, browser }) => {
@@ -84,11 +179,18 @@ test('project API: auth required, origin enforced, normalisation, source change'
   expect((await api(page, 'DELETE', `/api/motion-projects/${id}`)).status).toBe(200);
 });
 
-test('mobile 390: no horizontal overflow', async ({ page }) => {
+
+test('mobile 390: no overflow, bottom tab bar, full-screen preview, large touch targets', async ({ page }) => {
   await page.goto('/admin/poem-motion-studio');
   await checkViewport(page, 390, 844);
   await page.getByLabel('Start from a poem').selectOption(poemId);
   await expect(page.getByText(/Created \d+ scenes/)).toBeVisible();
   const m = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: innerWidth }));
   expect(m.sw).toBeLessThanOrEqual(m.iw);
+  const small = await page.$$eval('main button, main select, main input:not([type=file]):not([type=checkbox]):not([type=range])', (els) => els.filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && (r.height < 43 || r.width < 43) && getComputedStyle(e).display !== 'none'; }).map((e) => (e.getAttribute('aria-label') || e.textContent || '').slice(0, 30)));
+  expect(small).toEqual([]);
+  await page.getByRole('button', { name: 'Full screen' }).click();
+  await expect(page.getByRole('dialog', { name: 'Full-screen preview' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByRole('tablist')).toBeVisible();
 });

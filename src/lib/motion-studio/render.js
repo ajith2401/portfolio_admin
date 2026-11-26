@@ -30,16 +30,22 @@ export function sceneAt(comp, tMs) {
 }
 export const compDuration = (comp) => totalDuration(comp.scenes);
 
-function paintBackground(ctx, c, w, h, tMs, totalMs) {
+function paintBackground(ctx, c, w, h, tMs, totalMs, assets) {
   const st = c.style, p = clamp01(tMs / Math.max(1, totalMs)), k = c.motion.intensity;
   ctx.save();
   if (c.motion.bgMotion === "zoom") { const z = 1 + 0.06 * k * p; ctx.translate(w / 2, h / 2); ctx.scale(z, z); ctx.translate(-w / 2, -h / 2); }
   if (c.motion.bgMotion === "drift") ctx.translate(-30 * k * p, -20 * k * p);
-  const g = ctx.createLinearGradient(0, 0, w * 0.3, h);
-  g.addColorStop(0, st.bg.a); g.addColorStop(1, st.bg.kind === "solid" ? st.bg.a : st.bg.b);
-  ctx.fillStyle = g; ctx.fillRect(-60, -60, w + 120, h + 120);
+  if (assets.bg) ctx.drawImage(assets.bg, -30, -30, w + 60, h + 60);
+  else {
+    const g = ctx.createLinearGradient(0, 0, w * 0.3, h);
+    g.addColorStop(0, st.bg.a); g.addColorStop(1, st.bg.kind === "solid" ? st.bg.a : st.bg.b);
+    ctx.fillStyle = g; ctx.fillRect(-60, -60, w + 120, h + 120);
+  }
   ctx.restore();
   if (st.overlay.opacity > 0) { ctx.globalAlpha = st.overlay.opacity; ctx.fillStyle = st.overlay.color; ctx.fillRect(0, 0, w, h); ctx.globalAlpha = 1; }
+  if (assets.scrim > 0) { // readability guard: automatic scrim so Tamil text stays legible on photos
+    ctx.globalAlpha = assets.scrim; ctx.fillStyle = assets.scrimColor || "#000"; ctx.fillRect(0, 0, w, h); ctx.globalAlpha = 1;
+  }
   if (st.geometry) { ctx.strokeStyle = st.color; ctx.globalAlpha = 0.12; ctx.lineWidth = 3; ctx.strokeRect(w * 0.08, h * 0.1, w * 0.84, h * 0.8); ctx.beginPath(); ctx.moveTo(w * 0.08, h * 0.5); ctx.lineTo(w * 0.3, h * 0.5); ctx.stroke(); ctx.globalAlpha = 1; }
 }
 function paintParticles(ctx, c, w, h, tMs) {
@@ -68,62 +74,104 @@ function paintGrain(ctx, w, h, amt, tMs) {
   ctx.restore();
 }
 
-/** Lay out a scene's lines inside the safe rect. Returns { rows:[{text,y}], size } shrinking the font until it fits. */
-export function layoutScene(ctx, c, scene, rect) {
+/**
+ * Lay out a scene's lines inside the safe rect. A line equal to "" is a stanza gap (poster cards).
+ * Shrinks the font until the block fits but never below `minSize`; `fits:false` means it could not fit legibly.
+ */
+export function layoutScene(ctx, c, scene, rect, { minSize = 28 } = {}) {
   const st = c.style, family = FONT_FAMILY[st.font];
   const maxW = rect.w * (st.widthPct / 100);
-  let size = st.sizePx;
-  for (let attempt = 0; attempt < 12; attempt++) {
+  let size = Math.round(st.sizePx * (scene.scale || 1));
+  for (let attempt = 0; attempt < 24; attempt++) {
     ctx.font = `${st.weight} ${size}px ${family}`;
-    const measure = (s) => ctx.measureText(s).width;
-    const rows = [];
-    scene.lines.forEach((ln, li) => wrapLine(ln, maxW, measure).forEach((r) => rows.push({ text: r, line: li })));
-    const lh = size * st.lineHeight;
-    if (rows.length * lh <= rect.h || size <= 28) return { rows, size, lh, maxW };
-    size = Math.max(28, Math.floor(size * 0.92));
+    const measure = (x) => ctx.measureText(x).width;
+    const lh = size * st.lineHeight, rows = [];
+    let li = 0;
+    for (const ln of scene.lines) {
+      if (ln === "") { rows.push({ text: "", gap: true, h: lh * 0.6, line: li }); continue; }
+      wrapLine(ln, maxW, measure).forEach((r) => rows.push({ text: r, h: lh, line: li }));
+      li++;
+    }
+    const total = rows.reduce((n, r) => n + r.h, 0);
+    if (total <= rect.h) return { rows, size, lh, total, maxW, fits: true };
+    if (size <= minSize) return { rows, size, lh, total, maxW, fits: false };
+    size = Math.max(minSize, Math.floor(size * 0.94));
   }
-  return { rows: [], size, lh: size * st.lineHeight, maxW };
+  return { rows: [], size, lh: size * st.lineHeight, total: 0, maxW, fits: false };
 }
 
-export function drawFrame(ctx, comp, tMs, { w, h } = {}) {
+export function drawFrame(ctx, comp, tMs, { w, h, assets = {}, still = false, scene: forced = null, minSize = 28 } = {}) {
   const fmt = FORMATS[comp.format] || FORMATS.reel;
   w = w || fmt.w; h = h || fmt.h;
-  const sx = w / fmt.w;
-  ctx.save(); ctx.scale(sx, sx);
+  ctx.save(); ctx.scale(w / fmt.w, w / fmt.w);
   const W = fmt.w, H = fmt.h, st = comp.style, total = compDuration(comp);
-  paintBackground(ctx, comp, W, H, tMs, total);
-  paintParticles(ctx, comp, W, H, tMs);
-  const at = sceneAt(comp, tMs);
+  const rect = safeRect(W, H, fmt.safe);
+  paintBackground(ctx, comp, W, H, still ? 0 : tMs, total, assets);
+  if (!still) paintParticles(ctx, comp, W, H, tMs);
+  const at = forced ? { scene: forced, index: 0, local: 1e6, last: true } : sceneAt(comp, tMs);
   if (at) {
-    const rect = safeRect(W, H, fmt.safe);
-    const { rows, lh, size } = layoutScene(ctx, comp, at.scene, rect);
-    const isTitle = at.scene.kind === "title";
-    const fadeIn = ease(at.local / 700), fadeOut = at.last ? 1 : 1 - clamp01((at.local - (at.scene.durationMs - 500)) / 500);
-    const blockH = rows.length * lh;
-    let y0 = st.vAlign === "top" ? rect.y : st.vAlign === "bottom" ? rect.y + rect.h - blockH : rect.y + (rect.h - blockH) / 2;
-    ctx.textBaseline = "middle";
-    ctx.textAlign = st.align;
-    const ax = st.align === "left" ? rect.x : st.align === "right" ? rect.x + rect.w : rect.x + rect.w / 2;
-    rows.forEach((r, i) => {
+    const sc = at.scene;
+    const { rows, size, lh, total: blockH } = layoutScene(ctx, comp, sc, rect, { minSize });
+    const isTitle = sc.kind === "title";
+    const align = sc.align || st.align;
+    const fadeIn = still ? 1 : ease(at.local / 700);
+    const fadeOut = still || at.last ? 1 : 1 - clamp01((at.local - (sc.durationMs - 500)) / 500);
+    const shift = ((sc.offsetY || 0) / 100) * rect.h;
+    let y = st.vAlign === "top" ? rect.y : st.vAlign === "bottom" ? rect.y + rect.h - blockH : rect.y + (rect.h - blockH) / 2;
+    y = Math.max(rect.y, Math.min(rect.y + rect.h - blockH, y + shift));
+    ctx.textBaseline = "middle"; ctx.textAlign = align;
+    const ax = align === "left" ? rect.x : align === "right" ? rect.x + rect.w : rect.x + rect.w / 2;
+    let i = 0;
+    for (const r of rows) {
+      const top = y; y += r.h;
+      if (r.gap) continue;
       let a = fadeIn * fadeOut, dy = 0;
-      if (comp.motion.textIn === "line") a = ease((at.local - r.line * 450) / 600) * fadeOut;
-      else if (comp.motion.textIn === "rise") { const p = ease((at.local - i * 150) / 800); a = p * fadeOut; dy = (1 - p) * 40 * (0.4 + comp.motion.intensity); }
-      else if (comp.motion.textIn === "none") a = fadeOut;
+      if (!still) {
+        if (comp.motion.textIn === "line") a = ease((at.local - r.line * 450) / 600) * fadeOut;
+        else if (comp.motion.textIn === "rise") { const p = ease((at.local - i * 150) / 800); a = p * fadeOut; dy = (1 - p) * 40 * (0.4 + comp.motion.intensity); }
+        else if (comp.motion.textIn === "none") a = fadeOut;
+      } else a = 1;
       ctx.globalAlpha = clamp01(a);
       ctx.font = `${isTitle ? 700 : st.weight} ${size}px ${FONT_FAMILY[st.font]}`;
       if (st.shadow) { ctx.shadowColor = "rgba(0,0,0,0.45)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 3; } else ctx.shadowColor = "transparent";
       ctx.fillStyle = st.color;
-      ctx.fillText(r.text, ax, y0 + i * lh + lh / 2 + dy);
-    });
+      ctx.fillText(r.text, ax, top + r.h / 2 + dy);
+      i++;
+    }
     ctx.globalAlpha = 1; ctx.shadowColor = "transparent";
   }
   paintVignette(ctx, W, H, st.vignette);
-  paintGrain(ctx, W, H, st.grain, tMs);
+  paintGrain(ctx, W, H, st.grain, still ? 0 : tMs);
   if (comp.branding.show && comp.branding.signature) {
     ctx.globalAlpha = 0.85; ctx.fillStyle = comp.branding.color; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.font = `500 30px ${FONT_FAMILY["noto-sans"]}`;
-    ctx.fillText(comp.branding.signature, W / 2, H * (comp.format === "poster" ? 0.94 : 0.8));
+    ctx.fillText(comp.branding.signature, W / 2, H * (comp.format === "poster" ? 0.955 : 0.8));
     ctx.globalAlpha = 1;
   }
   ctx.restore();
+}
+
+/**
+ * Poster cards. Selected scenes (poster.sceneIds, or all poem scenes) are packed into cards without ever shrinking
+ * text below POSTER_MIN. mode "single": one card, `overflow:true` when the selection cannot fit legibly.
+ */
+export const POSTER_MIN = 46;
+export function posterCards(ctx, comp) {
+  const fmt = FORMATS.poster, rect = safeRect(fmt.w, fmt.h, fmt.safe);
+  const pc = { ...comp, format: "poster" };
+  const ids = comp.poster.sceneIds, chosen = comp.scenes.filter((s) => s.kind !== "title" && (!ids.length || ids.includes(s.id)));
+  const fit = (lines) => layoutScene(ctx, pc, { lines, scale: 1 }, rect, { minSize: POSTER_MIN }).fits;
+  const withGaps = (group) => group.flatMap((s, i) => (i ? ["", ...s.lines] : s.lines));
+  if (!chosen.length) return { cards: [], overflow: false };
+  if (comp.poster.mode === "single") {
+    const lines = withGaps(chosen);
+    return { cards: [{ lines }], overflow: !fit(lines) };
+  }
+  const cards = []; let cur = [];
+  for (const s of chosen) {
+    if (cur.length && !fit(withGaps([...cur, s]))) { cards.push({ lines: withGaps(cur) }); cur = []; }
+    cur.push(s);
+  }
+  if (cur.length) cards.push({ lines: withGaps(cur) });
+  return { cards, overflow: cards.some((c) => !fit(c.lines)) };
 }
