@@ -173,7 +173,11 @@ export const TechBlogEditor = ({ content, onSave, onClose }) => {
   const [richMode, setRichMode] = useState(content?.contentFormat === 'tiptap' || !content?.content);
   const [richOk, setRichOk] = useState(content?.contentFormat === 'tiptap');
   const [converting, setConverting] = useState(false);
-  const [formData, setFormData] = useState(content || {
+  const [formData, setFormData] = useState(content ? {
+    ...content,
+    images: { small: '', medium: '', large: '', ...(content.images || {}) },
+    author: { name: '', email: '', ...(content.author || {}) },
+  } : {
     title: '',
     subtitle: '',
     content: '',

@@ -7,6 +7,13 @@ import { requireAuth } from '@/lib/auth';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// pageViews is a Mongoose Map (or a lean plain object / array); sum it whatever shape arrives.
+function sumViews(pv) {
+  if (!pv) return 0;
+  const vals = pv instanceof Map ? [...pv.values()] : Array.isArray(pv) ? pv : Object.values(pv);
+  return vals.reduce((a, b) => a + (Number(b) || 0), 0);
+}
+
 export async function GET(request) {
   const auth = await requireAuth(request, ['admin', 'editor']);
   if (!auth.authorized) {
@@ -112,7 +119,7 @@ export async function GET(request) {
       },
       pageViewsData: analyticsData.map(item => ({
         date: item.date ? item.date.toISOString().split('T')[0] : '',
-        views: item.pageViews ? item.pageViews.reduce((a, b) => a + b, 0) : 0,
+        views: sumViews(item.pageViews),
         visitors: item.visitors || 0
       })),
       popularContent: detailedPopularContent,

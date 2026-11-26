@@ -37,7 +37,7 @@ const securityHeaders = [
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: blob: https://res.cloudinary.com https://64.media.tumblr.com",
+      "img-src 'self' data: blob: https://www.ajithkumarr.com https://res.cloudinary.com https://64.media.tumblr.com",
       "connect-src 'self' https://res.cloudinary.com",
       "frame-ancestors 'none'",
       "base-uri 'self'",

@@ -146,11 +146,11 @@ export const ContentSection = ({ type, title }) => {
     try {
       if (selectedItem) {
         // Update existing item
-        await updateItem({ id: selectedItem._id, ...formData });
+        await updateItem({ id: selectedItem._id, ...formData }).unwrap();
         showAlert(`${title} updated successfully`, 'success');
       } else {
         // Create new item
-        await addItem(formData);
+        await addItem(formData).unwrap();
         showAlert(`${title} created successfully`, 'success');
       }
 
@@ -160,7 +160,9 @@ export const ContentSection = ({ type, title }) => {
       setSelectedItem(null);
     } catch (error) {
       console.error(`Error saving ${type}:`, error);
-      showAlert(`Failed to save ${title}`, 'destructive');
+      const detail = [error?.data?.error, ...(error?.data?.details || [])].filter(Boolean).join(': ');
+      showAlert(`Failed to save ${title}${detail ? ` — ${detail}` : ''}`, 'destructive');
+      return; // keep the editor open so nothing is lost
     }
   };
 
@@ -168,7 +170,7 @@ export const ContentSection = ({ type, title }) => {
   const handleDelete = async (id) => {
     if (window.confirm(`Are you sure you want to delete this ${title.toLowerCase()}?`)) {
       try {
-        await deleteItem(id);
+        await deleteItem(id).unwrap();
         
         // If this is the last item on the page and not the first page
         const items = getItems(data, type);
@@ -314,6 +316,11 @@ return viewMode === 'grid' ? (
 
   return (
     <div className="space-y-4">
+      {alert && (
+        <div role="alert" className={`rounded-md border px-4 py-3 text-sm ${alert.variant === 'destructive' ? 'border-red-200 bg-red-50 text-red-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
+          {alert.message}
+        </div>
+      )}
      {/* Header with view mode toggle and filters */}
      <div className="flex justify-between items-center">
      <h2 className="text-2xl font-semibold">{title}</h2>

@@ -116,6 +116,7 @@ export async function POST(request) {
     const bodyError = applyRichBody(data, 'content');
     if (bodyError) return NextResponse.json({ error: bodyError }, { status: 400 });
 
+    if (!data.metaDescription && data.content) data.metaDescription = String(data.excerpt || data.content).replace(/\s+/g, ' ').trim().slice(0, 157) + (String(data.excerpt || data.content).length > 157 ? '…' : '');
     if (!data.title || !data.category || !data.content) {
       return NextResponse.json(
         { error: 'Title, category, and content are required' },
