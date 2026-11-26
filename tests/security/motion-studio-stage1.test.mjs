@@ -17,7 +17,6 @@ import {
 import {
   generateScenes,
   attachStanzaMeta,
-  splitStanza,
 } from "../../src/lib/motion-studio/scenes.js";
 import {
   splitScene,
@@ -549,7 +548,7 @@ const fakeFonts = ({
     check: () => check,
   };
 };
-const goodMeasure = (font, text) =>
+const goodMeasure = (font) =>
   font.includes("serif") && !font.includes("Tamil") ? 100 : 217;
 test("font readiness: export right after init waits for the faces before returning", async () => {
   const f = fakeFonts({ resolveAfter: 30 });

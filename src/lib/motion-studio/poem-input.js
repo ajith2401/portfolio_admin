@@ -107,6 +107,9 @@ export function parseMarkdownPoem(md) {
       .replace(/^(\s*)(-{3,}|\*{3,}|_{3,})\s*$/, "");
     out.push(l);
   }
+  // Markdown is converted, not preserved: the blank lines around a removed title heading are markup, not poem.
+  while (out.length && out[0].trim() === "") out.shift();
+  while (out.length && out[out.length - 1].trim() === "") out.pop();
   return parsePoemText(out.join("\n"), { title });
 }
 

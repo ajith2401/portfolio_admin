@@ -8,9 +8,11 @@ import {
   FONT_KEYS,
   FONT_LABELS,
 } from "@/lib/motion-studio/templates";
+import { ensureFonts, canvasMeasure } from "@/lib/motion-studio/font-ready";
 import {
   defaultComposition,
   normalizeComposition,
+  MAX_SCENES,
   PARTICLES,
   TEXT_IN,
   BG_MOTION,
@@ -52,7 +54,7 @@ import {
 import {
   layoutFullPoem,
   drawFullPoem,
-  fullPoemCoverage,
+  validateFullPoem,
   PRESETS as FULL_PRESETS,
   FULL_W,
 } from "@/lib/motion-studio/full-poem";
@@ -186,6 +188,8 @@ export default function MotionStudio() {
   const [poemText, setPoemText] = useState("");
   const [poemTitle, setPoemTitle] = useState("");
   const [fontTick, setFontTick] = useState(0);
+  const parsedEdit = useMemo(() => parsePoemText(poemText, { title: poemTitle }), [poemText, poemTitle]);
+  const parsedBox = useMemo(() => parsePoemText(textBox, { title: titleBox }), [textBox, titleBox]);
   const mainRef = useRef(null);
   const [wide, setWide] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -459,17 +463,27 @@ export default function MotionStudio() {
       `Created ${scenes.length} scenes from “${r.data.title}”. The original writing is unchanged.`,
     );
   };
+  // The poem record kept with a project: stanzas plus the verbatim source and blank-line structure.
+  const poemRecord = (p) => ({ title: p.title, stanzas: p.stanzas, source: p.source, blank: p.blank, trailingBlank: p.trailingBlank });
+  // Returns scenes, or null after showing an inline error. Nothing is ever cut to fit.
+  const scenesFor = (p) => {
+    if (!p.ok) { flash("error", p.issues[0].message); return null; }
+    const scenes = generateScenes({ stanzas: p.stanzas }, { title: p.title });
+    if (scenes.length > MAX_SCENES) { flash("error", `This poem needs ${scenes.length} scenes; the limit is ${MAX_SCENES}. Nothing was cut. Split it into several poems.`); return null; }
+    return scenes;
+  };
   const startManual = (text, title) => {
     const p = parsePoemText(text, { title });
     if (!p.stanzas.length)
       return flash("error", "Write or paste at least one line of the poem first.");
-    const scenes = generateScenes({ stanzas: p.stanzas }, { title: p.title });
+    const scenes = scenesFor(p);
+    if (!scenes) return; // the whole text stays in the box
     draftId.current = null;
-    setSource({ id: null, kind: "manual", title: p.title, warnings: [], poem: { stanzas: p.stanzas } });
+    setSource({ id: null, kind: "manual", title: p.title, warnings: [], poem: poemRecord(p) });
     start({
       ...defaultComposition({ scenes }),
       originalScenes: structuredClone(scenes),
-      poem: { title: p.title, stanzas: p.stanzas },
+      poem: poemRecord(p),
     });
     setName(p.title || "Untitled poem");
     setProjectId(null);
@@ -480,10 +494,8 @@ export default function MotionStudio() {
     bgBitmap.current = null;
     setHasBitmap(false);
     flash(
-      p.truncated ? "error" : "ok",
-      p.truncated
-        ? `The text was longer than the ${"60,000"}-character limit and the end was cut. Created ${scenes.length} scenes from the rest.`
-        : `Created ${scenes.length} scenes from ${p.lineCount} lines. Nothing was saved to your Portfolio or Admin; a recovery copy stays on this device.`,
+      "ok",
+      `Created ${scenes.length} scenes from ${p.lineCount} lines. Nothing was saved to your Portfolio or Admin; a recovery copy stays on this device.`,
     );
   };
   const pasteFromClipboard = async () => {
@@ -499,10 +511,11 @@ export default function MotionStudio() {
   const onImport = async (file) => {
     try {
       const p = await importPoemFile(file);
-      setTextBox(poemToText(p));
+      setTextBox(poemToText(p)); // the full imported text, never a truncated copy
       setTitleBox(p.title);
       setRoute("import");
-      flash("ok", `Imported “${file.name}” as text only. Review it, then choose Create scenes.`);
+      if (!p.ok) flash("error", `Imported “${file.name}” in full, but it cannot be turned into scenes yet: ${p.issues[0].message}`);
+      else flash("ok", `Imported “${file.name}” as text only. Review it, then choose Create scenes.`);
     } catch (e) {
       flash("error", e?.message || "Could not import that file.");
     }
@@ -525,13 +538,14 @@ export default function MotionStudio() {
   const applyPoemEdit = () => {
     const p = parsePoemText(poemText, { title: poemTitle });
     if (!p.stanzas.length) return flash("error", "The poem is empty, so nothing was changed.");
-    const scenes = generateScenes({ stanzas: p.stanzas }, { title: p.title });
-    setSource((x) => ({ ...x, title: p.title, poem: { stanzas: p.stanzas } }));
+    const scenes = scenesFor(p);
+    if (!scenes) return; // your edited text stays in the box; the current scenes are unchanged
+    setSource((x) => ({ ...x, title: p.title, poem: poemRecord(p) }));
     update((c) => ({
       ...c,
       scenes,
       originalScenes: structuredClone(scenes),
-      poem: { title: p.title, stanzas: p.stanzas },
+      poem: poemRecord(p),
     }));
     flash("ok", `Rebuilt ${scenes.length} scenes from your edited text. Use Undo to go back.`);
   };
@@ -605,7 +619,7 @@ export default function MotionStudio() {
             warnings: [],
           }
         : c.poem
-          ? { id: null, kind: "manual", title: c.poem.title, warnings: [], poem: { stanzas: c.poem.stanzas } }
+          ? { id: null, kind: "manual", title: c.poem.title, warnings: [], poem: c.poem }
           : null,
     );
     setSourceChanged(!!r.data.sourceChanged);
@@ -798,11 +812,12 @@ export default function MotionStudio() {
   );
 
   // ---- export
+  // Exact faces (family+weight, with the poem's own text so the Tamil subset loads) must be ready before any measuring.
   const fontsReady = () =>
-    Promise.all(
-      Object.values(FONT_CSS).map((f) =>
-        document.fonts.load(`500 40px ${f}`, "தமிழ் Aa"),
-      ),
+    ensureFonts(
+      comp,
+      { poemText: [fullPoem.title, ...fullPoem.stanzas.flat()].join("\n"), title: fullPoem.title },
+      { measure: canvasMeasure() },
     );
   const exportAssets = (fm) => {
     if (!bg || !bgBitmap.current) return {};
@@ -948,7 +963,7 @@ export default function MotionStudio() {
 
   const fullPoem = useMemo(() => {
     if (!comp) return { title: "", stanzas: [] };
-    if (source?.poem) return { title: source.title || "", stanzas: source.poem.stanzas };
+    if (source?.poem) return { title: source.title || "", stanzas: source.poem.stanzas, blank: source.poem.blank, source: source.poem.source };
     return {
       title: comp.scenes.find((x) => x.kind === "title")?.lines?.[0] || "",
       stanzas: comp.scenes.filter((x) => x.kind !== "title").map((x) => x.lines),
@@ -961,8 +976,8 @@ export default function MotionStudio() {
     const cx = document.createElement("canvas").getContext("2d");
     return layoutFullPoem(cx, comp, fullPoem, { preset: fullPreset, height: fullHeight });
   }, [comp?.style, comp?.branding, fullPoem, fullPreset, fullHeight, fontTick, activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
-  const fullMissing = useMemo(
-    () => (fullLayout ? fullPoemCoverage(fullPoem, fullLayout) : []),
+  const fullCheck = useMemo(
+    () => (fullLayout ? validateFullPoem(fullPoem, fullLayout) : null),
     [fullLayout, fullPoem],
   );
   const fullAssets = (H) =>
@@ -976,6 +991,7 @@ export default function MotionStudio() {
     drawFullPoem(c.getContext("2d"), comp, fullLayout, { assets: fullAssets(fullLayout.height), scale: k });
   }, [fullLayout, bgReady, hasBitmap]); // eslint-disable-line react-hooks/exhaustive-deps
   const setFull_ = (patch) => update((c) => ({ ...c, full: { ...c.full, ...patch } }));
+  const fullMissing = fullCheck ? fullCheck.messages : [];
   const doFull = (type, scale) =>
     guard(async () => {
       const r = await renderFullPoem(comp, fullPoem, {
@@ -1322,7 +1338,15 @@ export default function MotionStudio() {
                           onChange={(e) => setPoemText(e.target.value)}
                         />
                       </Field>
-                      <Btn primary onClick={applyPoemEdit}>
+                      {!parsedEdit.ok && (
+                        <div role="alert" className="rounded-lg p-3 text-sm" style={{ background: "var(--warn-bg)", color: "var(--warn-ink)" }}>
+                          <strong>Your text is kept, but scenes cannot be rebuilt yet.</strong>
+                          <ul className="mt-1 list-disc pl-5">
+                            {parsedEdit.issues.slice(0, 5).map((i, k) => <li key={k}>{i.message}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                      <Btn primary disabled={!parsedEdit.ok} onClick={applyPoemEdit}>
                         Apply and rebuild scenes
                       </Btn>
                       <p className="text-xs" style={{ color: "var(--mute)" }}>
@@ -1519,10 +1543,18 @@ export default function MotionStudio() {
                 />
               </Field>
               <p className="text-xs" style={{ color: "var(--mute)" }}>
-                A blank line starts a new stanza. Line breaks are kept exactly
-                as you wrote them.
+                A blank line starts a new stanza. Line breaks, indentation and
+                spaces are kept exactly as you wrote them.
               </p>
-              <Btn primary onClick={() => startManual(textBox, titleBox)}>
+              {!parsedBox.ok && (
+                <div id="pms-input-error" role="alert" className="rounded-lg p-3 text-sm" style={{ background: "var(--warn-bg)", color: "var(--warn-ink)" }}>
+                  <strong>Your full text is kept here, but scenes cannot be made yet.</strong>
+                  <ul className="mt-1 list-disc pl-5">
+                    {parsedBox.issues.slice(0, 5).map((i, k) => <li key={k}>{i.message}</li>)}
+                  </ul>
+                </div>
+              )}
+              <Btn primary disabled={!parsedBox.ok} onClick={() => startManual(textBox, titleBox)}>
                 Create scenes
               </Btn>
             </div>
@@ -2394,8 +2426,10 @@ export default function MotionStudio() {
                       </p>
                       <p className="text-xs" style={{ color: fullMissing.length ? "var(--err-ink)" : "var(--mute)" }}>
                         {fullMissing.length
-                          ? `${fullMissing.length} line(s) are missing from this layout; export is blocked.`
-                          : `All ${fullPoem.stanzas.flat().length} lines are on the poster.`}
+                          ? `${fullMissing.length} problem(s) with this layout; export is blocked: ${fullMissing.slice(0, 3).join("; ")}${fullMissing.length > 3 ? "; …" : ""}`
+                          : fullCheck?.partial
+                            ? "This layout is partial, not the complete poem."
+                            : `All ${fullPoem.stanzas.flat().length} lines are on the poster, exactly as written.`}
                       </p>
                       {!fullLayout.fits && (
                         <div role="alert" className="rounded-lg p-3 text-sm" style={{ background: "var(--warn-bg)", color: "var(--warn-ink)" }}>

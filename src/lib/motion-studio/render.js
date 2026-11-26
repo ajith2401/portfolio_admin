@@ -125,7 +125,7 @@ export function drawFrame(ctx, comp, tMs, { w, h, assets = {}, still = false, sc
   const at = forced ? { scene: forced, index: 0, local: 1e6, last: true } : sceneAt(comp, tMs);
   if (at) {
     const sc = at.scene;
-    const { rows, size, lh, total: blockH } = layoutScene(ctx, comp, sc, rect, { minSize });
+    const { rows, size, total: blockH } = layoutScene(ctx, comp, sc, rect, { minSize });
     const isTitle = sc.kind === "title";
     const align = sc.align || st.align;
     const fadeIn = still ? 1 : ease(at.local / 700);
