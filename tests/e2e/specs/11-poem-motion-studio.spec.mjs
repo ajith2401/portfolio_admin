@@ -156,6 +156,31 @@ test('story frames in order (PNG + ZIP) and poster JPEG / multi-card set', async
   if (head === '504b0304') expect(execFileSync('unzip', ['-t', sp]).toString()).toMatch(/No errors detected/); else expect(head).toBe('89504e47'); // a short poem fits one card → plain PNG
 });
 
+test('Tamil: all five fonts load, shape mixed Tamil-English, and render distinct exported frames', async ({ page }) => {
+  test.setTimeout(120_000);
+  await open(page); await advanced(page); await tab(page, 'Scenes');
+  await page.getByLabel('Scene 2 line 1', { exact: true }).fill('கொடுமை கூடாது, Hope & அன்பு — ஸ்ரீ க்ஷ கௌ');
+  await page.getByRole('button', { name: 'Preview scene 2' }).click();
+  await tab(page, 'Look');
+  const opts = await page.getByLabel('Font', { exact: true }).locator('option').evaluateAll((o) => o.map((x) => x.value));
+  expect(opts.length).toBe(5);
+  const sigs = [];
+  for (const f of opts) {
+    await page.getByLabel('Font', { exact: true }).selectOption(f);
+    await page.getByRole('button', { name: 'Poster' }).first().click();
+    const r = await page.evaluate(async () => {
+      await document.fonts.ready;
+      const fams = [...document.fonts].filter((x) => x.status === 'loaded').map((x) => x.family);
+      const c = document.querySelector('canvas'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      let h = 0; for (let i = 0; i < d.length; i += 97) h = (h * 31 + d[i]) | 0;
+      return { fams: fams.length, h };
+    });
+    expect(r.fams).toBeGreaterThan(0);
+    sigs.push(r.h);
+  }
+  expect(new Set(sigs).size).toBe(5); // five visibly different faces: no silent substitution to one fallback
+});
+
 test('project API: auth required, origin enforced, normalisation, source change', async ({ page, browser }) => {
   await page.goto('/admin');
   const anon = await pwRequest.newContext({ baseURL: BASE, storageState: { cookies: [], origins: [] }, extraHTTPHeaders: { Origin: BASE } });
