@@ -1,0 +1,386 @@
+{
+ "frame/reel/legacy/fade": {
+  "calls": 6553,
+  "sha256": "dd20ad146604ade79b881fe8ac1a2c03c5a2519c35a096a9b33fd80f53b2230e"
+ },
+ "frame/reel/legacy/line": {
+  "calls": 6553,
+  "sha256": "dda869ac181179011a4b572de68dfe02dfe990a5bc8638350505d86a6c044e59"
+ },
+ "frame/reel/legacy/rise": {
+  "calls": 6553,
+  "sha256": "c450141333b213da17d55d9335b0b5fd8f4dbdcdc989d6c7d93b32331badf2ad"
+ },
+ "frame/reel/legacy/none": {
+  "calls": 6553,
+  "sha256": "a4518d60c2284893f416ca20fed7755ec560a78e3f7cc70599e3e7cd1edd3308"
+ },
+ "frame/reel/new/fade": {
+  "calls": 6553,
+  "sha256": "e5e83a77b982608f5a1959ccb57f08205ab0ed5ec8bd6eb348a1655d3f8382c8"
+ },
+ "frame/reel/new/line": {
+  "calls": 6553,
+  "sha256": "1c1232ee5ae20ac49a8e3dc7a05a9b7c57723b5ac2d3c7b3323c88876e19c0fd"
+ },
+ "frame/reel/new/rise": {
+  "calls": 6553,
+  "sha256": "f460edc4f27ffffd1bc0b7becee1ab0a2fdeee38408d4b7875027005281d8b59"
+ },
+ "frame/reel/new/none": {
+  "calls": 6553,
+  "sha256": "4ccf08c6c8e938bee3badadb19603921366f7319659e98cf88213e27debed902"
+ },
+ "frame/reel/right/fade": {
+  "calls": 6553,
+  "sha256": "cd901c9f09aba1951e3f8d82dee4cff265c334e8c2dea8d21f341cbbab5f430e"
+ },
+ "frame/reel/right/line": {
+  "calls": 6553,
+  "sha256": "8271aafcf299dc45cd4d3b04c2d6a8b9763283829172dc3a6fbc34cd870847fe"
+ },
+ "frame/reel/right/rise": {
+  "calls": 6553,
+  "sha256": "4143682629b5d0a4791127c7e870b9c23463e843191db8010ed22e4241c16a4a"
+ },
+ "frame/reel/right/none": {
+  "calls": 6553,
+  "sha256": "6cda5fc869e17fd7622c6a19a6c18ef39ace8f17cf54dcf924a0bcc9d8898f4e"
+ },
+ "frame/reel/off/fade": {
+  "calls": 6445,
+  "sha256": "4d70ac6901a724407aa67708a7558b2c6d5276b42e5024d047b9e10f08c1d8ff"
+ },
+ "frame/reel/off/line": {
+  "calls": 6445,
+  "sha256": "49872ee1e4744a14d1d0d0682232a3feecb05bc855bc2b4110cea0ced6a4be82"
+ },
+ "frame/reel/off/rise": {
+  "calls": 6445,
+  "sha256": "a408a5d44411028aacc155197729b2d8256bc52865b2c12451bd3e466e619537"
+ },
+ "frame/reel/off/none": {
+  "calls": 6445,
+  "sha256": "802d09e1739d11d04508a5e89fd81e239ed48a2469993390e79ca0d9b8ed4c0b"
+ },
+ "frame/story/legacy/fade": {
+  "calls": 6553,
+  "sha256": "dd20ad146604ade79b881fe8ac1a2c03c5a2519c35a096a9b33fd80f53b2230e"
+ },
+ "frame/story/legacy/line": {
+  "calls": 6553,
+  "sha256": "dda869ac181179011a4b572de68dfe02dfe990a5bc8638350505d86a6c044e59"
+ },
+ "frame/story/legacy/rise": {
+  "calls": 6553,
+  "sha256": "c450141333b213da17d55d9335b0b5fd8f4dbdcdc989d6c7d93b32331badf2ad"
+ },
+ "frame/story/legacy/none": {
+  "calls": 6553,
+  "sha256": "a4518d60c2284893f416ca20fed7755ec560a78e3f7cc70599e3e7cd1edd3308"
+ },
+ "frame/story/new/fade": {
+  "calls": 6553,
+  "sha256": "e5e83a77b982608f5a1959ccb57f08205ab0ed5ec8bd6eb348a1655d3f8382c8"
+ },
+ "frame/story/new/line": {
+  "calls": 6553,
+  "sha256": "1c1232ee5ae20ac49a8e3dc7a05a9b7c57723b5ac2d3c7b3323c88876e19c0fd"
+ },
+ "frame/story/new/rise": {
+  "calls": 6553,
+  "sha256": "f460edc4f27ffffd1bc0b7becee1ab0a2fdeee38408d4b7875027005281d8b59"
+ },
+ "frame/story/new/none": {
+  "calls": 6553,
+  "sha256": "4ccf08c6c8e938bee3badadb19603921366f7319659e98cf88213e27debed902"
+ },
+ "frame/story/right/fade": {
+  "calls": 6553,
+  "sha256": "cd901c9f09aba1951e3f8d82dee4cff265c334e8c2dea8d21f341cbbab5f430e"
+ },
+ "frame/story/right/line": {
+  "calls": 6553,
+  "sha256": "8271aafcf299dc45cd4d3b04c2d6a8b9763283829172dc3a6fbc34cd870847fe"
+ },
+ "frame/story/right/rise": {
+  "calls": 6553,
+  "sha256": "4143682629b5d0a4791127c7e870b9c23463e843191db8010ed22e4241c16a4a"
+ },
+ "frame/story/right/none": {
+  "calls": 6553,
+  "sha256": "6cda5fc869e17fd7622c6a19a6c18ef39ace8f17cf54dcf924a0bcc9d8898f4e"
+ },
+ "frame/story/off/fade": {
+  "calls": 6445,
+  "sha256": "4d70ac6901a724407aa67708a7558b2c6d5276b42e5024d047b9e10f08c1d8ff"
+ },
+ "frame/story/off/line": {
+  "calls": 6445,
+  "sha256": "49872ee1e4744a14d1d0d0682232a3feecb05bc855bc2b4110cea0ced6a4be82"
+ },
+ "frame/story/off/rise": {
+  "calls": 6445,
+  "sha256": "a408a5d44411028aacc155197729b2d8256bc52865b2c12451bd3e466e619537"
+ },
+ "frame/story/off/none": {
+  "calls": 6445,
+  "sha256": "802d09e1739d11d04508a5e89fd81e239ed48a2469993390e79ca0d9b8ed4c0b"
+ },
+ "frame/poster/legacy/fade": {
+  "calls": 6553,
+  "sha256": "6d67bd762008c72c45d7f01d1e6adb1312563c99dbf525d215ce8f79708be3cf"
+ },
+ "frame/poster/legacy/line": {
+  "calls": 6553,
+  "sha256": "ac84ee28219818cf5813be8ed6efcbf879af8d742753fc561c922101992f0d3e"
+ },
+ "frame/poster/legacy/rise": {
+  "calls": 6553,
+  "sha256": "1a3c41d97103b5980fbc15bd91ed46df31c062e4fe704c177fedad54f703329f"
+ },
+ "frame/poster/legacy/none": {
+  "calls": 6553,
+  "sha256": "30fa11986715b3c95120d2599461f76b6b3b263d79663572319eff2a0c250cfb"
+ },
+ "frame/poster/new/fade": {
+  "calls": 6553,
+  "sha256": "c9629e113dd970e470fc660c8b0c54823f677b8a64038c488f9042557c79c201"
+ },
+ "frame/poster/new/line": {
+  "calls": 6553,
+  "sha256": "9b84d76141f2c88793455f5cfbfd85734e8a66d71e941065ceedfbfe1639a1c6"
+ },
+ "frame/poster/new/rise": {
+  "calls": 6553,
+  "sha256": "654d33fe17f0557a44b0edfc9133379e94ad3b0a020a461efb822fc981a4fdbc"
+ },
+ "frame/poster/new/none": {
+  "calls": 6553,
+  "sha256": "8214e0a46faf93e6e541eae0d101d22dad529297cd3423c81712ff4f6e760366"
+ },
+ "frame/poster/right/fade": {
+  "calls": 6553,
+  "sha256": "e9a865397655bbab80b29ee4892b2f021f5a6ab040979c68cb42b608c202540d"
+ },
+ "frame/poster/right/line": {
+  "calls": 6553,
+  "sha256": "80cebe5ff7bfb1d3396f75fcd34f58c55c4d5830a3cd7d9c9cebceb0df825da1"
+ },
+ "frame/poster/right/rise": {
+  "calls": 6553,
+  "sha256": "fb8ae68553a4d348e51b8d8ead95aa7538d55ca3f93ea02fa9a6ad852fe66c96"
+ },
+ "frame/poster/right/none": {
+  "calls": 6553,
+  "sha256": "29604d9d64083bdbde7ad6cb5fb98e9a30668dda8f856cd844acaf4f7bf0e344"
+ },
+ "frame/poster/off/fade": {
+  "calls": 6445,
+  "sha256": "e0a71d7516db19426291d439ac77c1c58eb38486c2ee5c1f7f1165518159cf33"
+ },
+ "frame/poster/off/line": {
+  "calls": 6445,
+  "sha256": "084c74586216dba5e87bf747acd9233b6f245300bae19f5a8e800e655380eeba"
+ },
+ "frame/poster/off/rise": {
+  "calls": 6445,
+  "sha256": "da20c18674a0e8a7bb0ea8ebca259961fb632b3119e3caa342211961693bd7ca"
+ },
+ "frame/poster/off/none": {
+  "calls": 6445,
+  "sha256": "c5bfdffb4593c044841faeffbc4b44a0de988d3b29167666895f8c6b223a9b42"
+ },
+ "template/ink-silence/reel": {
+  "calls": 2181,
+  "sha256": "6288cdd4f0e18ccee3509073e7f8a6dfb3c9e673cab595ac49ddd184dde8a7b6"
+ },
+ "template/ink-silence/poster": {
+  "calls": 2181,
+  "sha256": "1e4cd968027680dab4cf5dc8a7d5350bb3925ffc0d915bbac8b86b1889042634"
+ },
+ "template/paper-ink/reel": {
+  "calls": 1453,
+  "sha256": "f01b897400ce5d8f3a5fbb5f49633d2ed6f51b4b580b1af501832b5d9f4a251d"
+ },
+ "template/paper-ink/poster": {
+  "calls": 1458,
+  "sha256": "22735d11261a6d31d940627d6cd3991ea75e988eeb920ddcbdb79a03be00f14e"
+ },
+ "template/monsoon/reel": {
+  "calls": 2363,
+  "sha256": "38ad5f5bcc584bca22ecba0d0fc0f8bfd9418b9a576f9ecb8d823ce7f4bba3b8"
+ },
+ "template/monsoon/poster": {
+  "calls": 2363,
+  "sha256": "615a68337eaacb106ac455a0e4f1b1950d51996cd726f2c05d30ed1e9179dd03"
+ },
+ "template/midnight/reel": {
+  "calls": 2211,
+  "sha256": "5859fcb28554838a1db6d982892fd3b9abb4db724a756ac13c6d59e07cb175a3"
+ },
+ "template/midnight/poster": {
+  "calls": 2211,
+  "sha256": "3fdc36cb8a04e63b39c93bb37cc76280c03073357846e74466cabdea6bd0ddfc"
+ },
+ "template/golden-hour/reel": {
+  "calls": 2219,
+  "sha256": "ad04be02ecbf59440c0ba5447c3d4b9aedc50f7061129510433e2660ad8a4d80"
+ },
+ "template/golden-hour/poster": {
+  "calls": 2219,
+  "sha256": "b3e50374783f54d5de3e4a1337eb15034b2710a6b2c37b858c4328e278286ac4"
+ },
+ "template/modern-minimal/reel": {
+  "calls": 1469,
+  "sha256": "9b96f2df4279bb36004bac40a7fd08fc8ec60fae81e13fddf914bd8f807c4344"
+ },
+ "template/modern-minimal/poster": {
+  "calls": 1469,
+  "sha256": "e99d46647b379b4287b91f2875c152d0e5927e78410f24dcd53c1f6ac1e3baea"
+ },
+ "fx/none/none": {
+  "calls": 1523,
+  "sha256": "6af8b96690e74f5d3b32700dbc3e20d6b0be15126398963a3e82acb24092ae0e"
+ },
+ "fx/none/zoom": {
+  "calls": 1535,
+  "sha256": "7d4a2960821b4ffdfa55d0aff4f7aaf327faeaf051c9bdf0a950bba15ef79ff5"
+ },
+ "fx/none/drift": {
+  "calls": 1527,
+  "sha256": "22cbcb85f1f14cd26ac48a5f370ccdeffa7b1ff1abfce70bd58dbdb2d83d89bb"
+ },
+ "fx/dust/none": {
+  "calls": 2251,
+  "sha256": "323a609c12fa7f18798b80afee4c8bc3e77b61f4fa8a3c847a8dd2e9f3a8ba78"
+ },
+ "fx/dust/zoom": {
+  "calls": 2263,
+  "sha256": "f8725c7688d840a97c84241730d1dbf6af19d17c7b5c01a46c94c162dddd8624"
+ },
+ "fx/dust/drift": {
+  "calls": 2255,
+  "sha256": "043a861b985c1dca77ea83eb2048e7f6be4c4a4dd41edf0d26ac6935312870f1"
+ },
+ "fx/rain/none": {
+  "calls": 2395,
+  "sha256": "99e6fffadc92930b42f179c2779fa6c90dc16e65f2e62e31d477c37bb223f18f"
+ },
+ "fx/rain/zoom": {
+  "calls": 2407,
+  "sha256": "9756d7649fa20a41b929b4af0317b6e5542a8b9646b036bb08a8972bda0e4b96"
+ },
+ "fx/rain/drift": {
+  "calls": 2399,
+  "sha256": "d78bff084291635cca48c866efd6e2b0431256aace40f53a25a26756bd84807e"
+ },
+ "fx/stars/none": {
+  "calls": 2251,
+  "sha256": "8e18e0d9d4b7a1dc41b960c39fb477fb7c6dabb3ce11cef6920789b566b7446f"
+ },
+ "fx/stars/zoom": {
+  "calls": 2263,
+  "sha256": "e96fc54ced27fbdd267087520ad9e5d596b7d9350d61e7871c7d3c51bdeb29d0"
+ },
+ "fx/stars/drift": {
+  "calls": 2255,
+  "sha256": "6a398c18d094b6de7c9306c12dbc157ae78127ba99577dba5f035779d4ed6770"
+ },
+ "fx/light/none": {
+  "calls": 2251,
+  "sha256": "f13a4611580a77ee01d0a8b03cd429ae5a74b768055e27bbc62106698b398781"
+ },
+ "fx/light/zoom": {
+  "calls": 2263,
+  "sha256": "811bc9aa267e344b1fb1184e6d8758f10ecc341bd481d63e9d3f1c5189dcf864"
+ },
+ "fx/light/drift": {
+  "calls": 2255,
+  "sha256": "c8b95c65cd62fd55765035be0670e1441d58fbe07c53a25620fa48abdc47c6d5"
+ },
+ "still/reel/legacy": {
+  "calls": 1495,
+  "sha256": "4a959d9bcb2a67098ca43146848a1ea86bd11f338ba2d916e1b8184436842234"
+ },
+ "still/reel/new": {
+  "calls": 1495,
+  "sha256": "c285c0a3a00358b192e2fc2a3f4e06dbd67722ed4948453dfb35dbd1f0036d13"
+ },
+ "still/reel/off": {
+  "calls": 1459,
+  "sha256": "73df1c8d5a36d0563b4714eed8553cdabe474cb23ed9afa1734cd5d5d722b814"
+ },
+ "still/story/legacy": {
+  "calls": 1495,
+  "sha256": "4a959d9bcb2a67098ca43146848a1ea86bd11f338ba2d916e1b8184436842234"
+ },
+ "still/story/new": {
+  "calls": 1495,
+  "sha256": "c285c0a3a00358b192e2fc2a3f4e06dbd67722ed4948453dfb35dbd1f0036d13"
+ },
+ "still/story/off": {
+  "calls": 1459,
+  "sha256": "73df1c8d5a36d0563b4714eed8553cdabe474cb23ed9afa1734cd5d5d722b814"
+ },
+ "still/poster/legacy": {
+  "calls": 1495,
+  "sha256": "e1f2a99ecbdae282b0c688fcd0f8905e11af38da287068434c06a35cd2b4100e"
+ },
+ "still/poster/new": {
+  "calls": 1495,
+  "sha256": "5df877f50803e4be351def21435ba235a3e2e5ddaf36db52feade2ee57c21e13"
+ },
+ "still/poster/off": {
+  "calls": 1459,
+  "sha256": "04e3580d913a1c94a8209505d5bbbebdb19d7d48f83a9f7b5b219bac9431915c"
+ },
+ "full/elegant/legacy": {
+  "calls": 379,
+  "sha256": "5658e4e611df570408aa77d999401bb25f0eeeb0f0218ed51bf684703757dc9a"
+ },
+ "full/elegant/new": {
+  "calls": 379,
+  "sha256": "2526f0c8a8968619341cf02c313ef61717bae4becaa622a4f8c3da6c02938501"
+ },
+ "full/elegant/off": {
+  "calls": 370,
+  "sha256": "b41a3f908878c9a029a748b105c132ea876403ca4694b16c99c4d97ff72b7656"
+ },
+ "full/balanced/legacy": {
+  "calls": 377,
+  "sha256": "d2a867a57dc03cc535a0bd820a0b44f43e32ea5ba88beb82e1cd677a922db55a"
+ },
+ "full/balanced/new": {
+  "calls": 377,
+  "sha256": "4001fbfbe2a1c9e42a99056fb1e8c319a880bb16e2aa24132fdd46baacb1b429"
+ },
+ "full/balanced/off": {
+  "calls": 368,
+  "sha256": "e1a5e5ec0dbda46ba0802143c3ad6125004fbf69df504018cbec56db990ba6a7"
+ },
+ "full/compact/legacy": {
+  "calls": 377,
+  "sha256": "79919f46f4510510b7c53444c4281c83afa31f1b7e3ea290b1eb6c44c1f0f848"
+ },
+ "full/compact/new": {
+  "calls": 377,
+  "sha256": "0d9631863e75babdccec72454edee1a3c97e7553f13e1bf28603df731e771581"
+ },
+ "full/compact/off": {
+  "calls": 368,
+  "sha256": "081a3105d58b980a66f72b8598d85b2361774074aed736939b7dbfc132bde4da"
+ },
+ "full/expressive/legacy": {
+  "calls": 402,
+  "sha256": "ef02bf5195ffb04edc3d1ad3f0553723fc4a50777397809d0589ada0fd577701"
+ },
+ "full/expressive/new": {
+  "calls": 402,
+  "sha256": "ca0d49696d452f5b24e25ef368e511ec46134f2c2cb718e6f833ec3b4c75480a"
+ },
+ "full/expressive/off": {
+  "calls": 393,
+  "sha256": "6c221875ab09521da3ce517b636ce9e3d9a0ac98f6c4001653258773b48633e4"
+ }
+}
