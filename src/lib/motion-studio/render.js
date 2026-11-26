@@ -9,7 +9,8 @@ import { signatureBox, textRect, signatureBoundsIssues, overlapsSignature } from
 export const defaultMinSize = (format) => (format === "poster" ? 28 : MIN_TEXT_PX[format] ?? MIN_TEXT_PX.reel);
 import { totalDuration } from "./scenes.js";
 import { rowState } from "./animation.js";
-import { runFx } from "./fx/registry.js";
+import { runFx, runMaterial } from "./fx/registry.js";
+import { materialPlan, effectiveIntensity } from "./materials.js";
 
 export const FONT_FAMILY = {
   "noto-serif": '"Noto Serif Tamil", serif',
@@ -123,12 +124,12 @@ export const rowAnchor = (align, ax, ipx = 0) => (align === "left" ? ax + ipx : 
 // signature. material/atmosphere/surface accept registered effects (fx/registry.js, empty by default). The text layer
 // takes no state from any effect: effects run isolated, and the text state is re-asserted before the text is drawn.
 export const LAYERS = Object.freeze(["bg", "material", "atmosphere", "text", "surface", "signature"]);
-const resetTextState = (ctx) => { ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.filter = "none"; ctx.shadowColor = "transparent"; };
+export const resetTextState = (ctx) => { ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.filter = "none"; ctx.shadowColor = "transparent"; };
 function layerBg(ctx, env) { paintBackground(ctx, env.comp, env.W, env.H, env.still ? 0 : env.tMs, env.total, env.assets); }
-function layerMaterial(ctx, env) { return runFx("material", ctx, env); }
+function layerMaterial(ctx, env) { return runFx("material", ctx, env) + runMaterial("material", ctx, env); }
 function layerAtmosphere(ctx, env) {
   if (!env.still) paintParticles(ctx, env.comp, env.W, env.H, env.tMs);
-  return runFx("atmosphere", ctx, env);
+  return runFx("atmosphere", ctx, env) + runMaterial("atmosphere", ctx, env);
 }
 function layerText(ctx, env) {
   const { comp, rect, still, minSize } = env, st = comp.style;
@@ -160,7 +161,7 @@ function layerText(ctx, env) {
 function layerSurface(ctx, env) {
   paintVignette(ctx, env.W, env.H, env.comp.style.vignette);
   paintGrain(ctx, env.W, env.H, env.comp.style.grain, env.still ? 0 : env.tMs);
-  return runFx("surface", ctx, env);
+  return runFx("surface", ctx, env) + runMaterial("surface", ctx, env);
 }
 function layerSignature(ctx, env) {
   const { comp, fmt } = env;
@@ -189,11 +190,14 @@ export function pageLabelBox(comp, fmt, ctx, text) {
   return { text, font, size, x, y, w, left: x - w, right: x, top: y - size / 2, bottom: y + size / 2 };
 }
 
-export function drawFrame(ctx, comp, tMs, { w, h, assets = {}, still = false, scene: forced = null, minSize = defaultMinSize(comp.format), pageLabel = null } = {}) {
+export function drawFrame(ctx, comp, tMs, { w, h, assets = {}, still = false, scene: forced = null, minSize = defaultMinSize(comp.format), pageLabel = null, fxTrace = null, fxReport = null } = {}) {
   const fmt = FORMATS[comp.format] || FORMATS.reel;
   w = w || fmt.w; h = h || fmt.h;
   ctx.save(); ctx.scale(w / fmt.w, w / fmt.w);
-  const env = { comp, fmt, W: fmt.w, H: fmt.h, tMs, still, assets, forced, minSize, pageLabel, total: compDuration(comp), rect: textRect(comp, fmt, ctx) };
+  const env = { comp, fmt, W: fmt.w, H: fmt.h, tMs, still, assets, forced, minSize, pageLabel, total: compDuration(comp), rect: textRect(comp, fmt, ctx),
+    // material (materials.js): [] unless comp.material selects a preset; fxTrace/fxReport are for fx/verify.js only
+    plan: materialPlan(comp), intensity: effectiveIntensity(comp), seed: comp.material?.seed ?? 1, fxTrace, fxReport };
+
   layerBg(ctx, env);
   const under = layerMaterial(ctx, env) + layerAtmosphere(ctx, env);
   if (under) resetTextState(ctx);

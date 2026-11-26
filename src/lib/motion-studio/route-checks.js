@@ -7,13 +7,41 @@ import { layoutFullPoem, validateFullPoem } from "./full-poem.js";
 import { MIN_TEXT_PX, QUOTE_MIN_PX, FORMATS } from "./safe-zone.js";
 import { newResult, note, TOLERANCE } from "./coverage.js";
 import { textRect, signatureBox } from "./signature.js";
+import { drawFrame } from "./render.js";
+import { drawFullPoem } from "./full-poem.js";
+import { verifyMaterial } from "./fx/verify.js";
+import { materialActive } from "./materials.js";
 
 export const sceneMin = (format) => MIN_TEXT_PX[format] ?? MIN_TEXT_PX.reel;
 export const FULL_NO_FIT = "This poem does not fit this canvas at a readable size. Choose the extended-height poster or a more compact layout.";
 
+// ---------------------------------------------------------------- material (fx) verification, shared by every route
+// When comp.material is active, every route also proves (fx/verify.js) that the material leaves the text layer exactly
+// as it is drawn without it, keeps over-text opacity <= the cap and text contrast >= the floor. No material => no-op.
+export const MAX_FX_FRAMES = 16;
+const sample = (list, n) => (list.length <= n ? list : Array.from({ length: n }, (_, i) => list[Math.floor((i * list.length) / n)]));
+export function withMaterial(result, ctx, comp, draws) {
+  if (!materialActive(comp)) return result;
+  const v = verifyMaterial(ctx, comp, sample(draws, MAX_FX_FRAMES));
+  if (v.ok) return { ...result, material: v };
+  const messages = [...new Set([...(result.messages || []), ...v.messages])];
+  return { ...result, ok: false, messages, material: v };
+}
+/** The frames a scene route draws: each scene as a still, and mid-scene on the animated timeline. */
+export function sceneDraws(comp, scenes, minSize, extra = {}) {
+  const starts = new Map();
+  let t = 0;
+  for (const s of comp.scenes) { starts.set(s, t); t += s.durationMs; }
+  return scenes.flatMap((sc) => {
+    const still = (c, cm, x) => drawFrame(c, cm, 0, { still: true, scene: sc, minSize, ...extra, ...x });
+    const at = starts.get(sc);
+    return at == null ? [still] : [still, (c, cm, x) => drawFrame(c, cm, at + sc.durationMs * 0.5, { minSize, ...extra, ...x })];
+  });
+}
+
 /** Every scene a scene-based route draws, validated exactly as drawFrame lays it out. */
 export function checkScenes(ctx, comp, scenes = comp.scenes, { minSize = sceneMin(comp.format), mutate = null } = {}) {
-  return validateScenes(ctx, comp, scenes, { minSize, mutate });
+  return withMaterial(validateScenes(ctx, comp, scenes, { minSize, mutate }), ctx, comp, sceneDraws(comp, scenes, minSize));
 }
 
 /** The scene a Reel cover draws: the title card, else the first scene. */
@@ -38,7 +66,7 @@ export function checkPoster(ctx, comp, { mutate = null } = {}) {
   const want = plan.chosen.flatMap((s) => s.lines), got = plan.cards.flatMap((cd) => cd.lines).filter((l) => l !== "");
   const messages = [...v.messages];
   if (want.length !== got.length || want.some((l, i) => l !== got[i])) messages.push("the poster cards do not contain every selected line, in order");
-  return { ...v, ok: messages.length === 0, messages, plan };
+  return withMaterial({ ...v, ok: messages.length === 0, messages, plan }, ctx, plan.pc, sceneDraws(plan.pc, plan.cardScenes, POSTER_MIN));
 }
 
 // ---------------------------------------------------------------- quote (excerpt) routes
@@ -88,8 +116,14 @@ export function checkQuote(ctx, comp, poem, selection, { format = comp.format, m
   const v = scene ? validateScenes(ctx, fc, [scene], { minSize: quoteMin(fc.format), enforceMin: true, mutate }) : { ok: false, messages: [], results: [] };
   if (scene) v.messages.forEach((m) => note(r, "outOfBounds", m.replace(/^Scene 1/, "Quote")));
   const messages = r.messages;
-  return { ...r, ok: messages.length === 0, messages, results: v.results, scene, format: fc.format, excerpt: true, complete: false,
+  const out = { ...r, ok: messages.length === 0, messages, results: v.results, scene, format: fc.format, excerpt: true, complete: false,
     coverage: { selected: sel.length, total, partial: true } };
+  if (!scene) return out;
+  const qMin = quoteMin(fc.format);
+  return withMaterial(out, ctx, fc, [
+    (c, cm, x) => drawFrame(c, cm, 0, { still: true, scene, minSize: qMin, ...x }),
+    (c, cm, x) => drawFrame(c, cm, QUOTE_MS * 0.5, { scene, minSize: qMin, ...x }),
+  ]);
 }
 
 // ---------------------------------------------------------------- Feed carousel (cover + poem cards + end card, numbered)
@@ -122,7 +156,8 @@ export function checkCarousel(ctx, comp, { mutate = null } = {}) {
     if (sg && b.bottom > sg.top && b.top < sg.bottom && b.right > sg.left && b.left < sg.right) messages.push(`page number ${c.page} overlaps the signature`);
   }
   if (!plan.poemCards.length) messages.push("Select at least one stanza for the carousel.");
-  return { ok: messages.length === 0, messages, results: [...body.results, ...extra], plan };
+  const draws = plan.cards.map((cd) => (c, cm, x) => drawFrame(c, cm, 0, { still: true, scene: cd.scene, minSize: POSTER_MIN, pageLabel: cd.page, ...x }));
+  return withMaterial({ ok: messages.length === 0, messages, results: [...body.results, ...extra], plan }, ctx, pc, draws);
 }
 
 /** Full-poem poster: layout + source-aware validation against the SOURCE poem. `fits:false` is a failure, never a clip. */
@@ -130,5 +165,6 @@ export function checkFull(ctx, comp, poem, { preset = "balanced", height = "stan
   const layout0 = layoutFullPoem(ctx, comp, poem, { preset, height });
   if (!layout0.fits) return { ok: false, fits: false, messages: [FULL_NO_FIT], layout: layout0 };
   const layout = mutate ? mutate(structuredClone(layout0)) || layout0 : layout0;
-  return { ...validateFullPoem(poem, layout), fits: true, layout };
+  return withMaterial({ ...validateFullPoem(poem, layout), fits: true, layout }, ctx, comp, [(c, cm, x) => drawFullPoem(c, cm, layout0, x)]);
+
 }

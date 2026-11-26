@@ -2,6 +2,7 @@
 import { FONT_KEYS, FONT_LABELS } from "@/lib/motion-studio/templates";
 import { BG_MOTION, PARTICLES, TEXT_IN } from "@/lib/motion-studio/composition";
 import SignaturePanel from "./SignaturePanel";
+import MaterialPanel from "./MaterialPanel";
 import TemplatePicker from "../TemplatePicker";
 import { Btn, Field, Range } from "../studio-ui";
 import { useStudio } from "../studio-context";
@@ -34,6 +35,8 @@ export default function LookPanel() {
                     <legend className="pms-lbl">Template</legend>
                     <TemplatePicker comp={comp} tick={fontTick} onPick={pickTemplate} />
                   </fieldset>
+                  <MaterialPanel />
+
                   {mode === "advanced" && (
                     <div className="grid gap-3 sm:grid-cols-2">
                       <Field label="Font">

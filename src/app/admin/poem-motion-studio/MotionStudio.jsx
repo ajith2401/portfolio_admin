@@ -1036,6 +1036,7 @@ export default function MotionStudio() {
       audio: c.audio,
       poster: c.poster,
       export: c.export,
+      ...(c.material ? { material: c.material } : {}),
     }));
   const scenesPanel = comp ? <ScenesPanel /> : null;
   const poemPanel = comp ? <PoemPanel /> : null;

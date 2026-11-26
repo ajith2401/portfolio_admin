@@ -9,7 +9,10 @@ import {
   paintBackground,
   paintVignette,
   paintGrain,
+  resetTextState,
 } from "./render.js";
+import { runMaterial } from "./fx/registry.js";
+import { materialPlan, effectiveIntensity } from "./materials.js";
 import { signatureBox as sigBox, boxBoundsIssues, overlapsSignature } from "./signature.js";
 
 export const FULL_W = 1080;
@@ -302,11 +305,13 @@ export function drawFullPoem(
   ctx,
   comp,
   layout,
-  { assets = {}, scale = 1 } = {},
+  { assets = {}, scale = 1, fxTrace = null, fxReport = null } = {},
 ) {
   const W = FULL_W,
     H = layout.height,
     st = comp.style;
+  // material layers (materials.js): no-ops unless comp.material selects a preset. Same guard/isolation as drawFrame.
+  const fxEnv = { comp, W, H, tMs: 0, still: true, assets, rect: { x: 0, y: 0, w: W, h: H }, plan: materialPlan(comp), intensity: effectiveIntensity(comp), seed: comp.material?.seed ?? 1, fxTrace, fxReport };
   ctx.save();
   ctx.scale(scale, scale);
   paintBackground(
@@ -318,6 +323,7 @@ export function drawFullPoem(
     1,
     assets,
   );
+  if (runMaterial("material", ctx, fxEnv) + runMaterial("atmosphere", ctx, fxEnv)) resetTextState(ctx);
   const align = st.align,
     side = (PRESETS[layout.preset] || PRESETS.balanced).side;
   const ax =
@@ -355,7 +361,9 @@ export function drawFullPoem(
   ctx.shadowColor = "transparent";
   paintVignette(ctx, W, H, st.vignette);
   paintGrain(ctx, W, H, st.grain, 0);
+  if (runMaterial("surface", ctx, fxEnv)) resetTextState(ctx);
   const sg = signatureBox(ctx, comp, H);
+
   if (sg) {
     ctx.globalAlpha = 0.85;
     ctx.fillStyle = comp.branding.color;
