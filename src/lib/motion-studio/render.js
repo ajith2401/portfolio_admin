@@ -221,15 +221,19 @@ export function posterCards(ctx, comp) {
  * source ranges reproduce it, and every row must sit inside the canvas, the format's safe area and clear of the signature.
  * Pass a measuring ctx. Returns the structured result shared with the Full-Poem validator.
  */
-export function validateScene(ctx, comp, scene, { minSize = defaultMinSize(comp.format), label = "scene" } = {}) {
+export function validateScene(ctx, comp, scene, { minSize = defaultMinSize(comp.format), label = "scene", mutate = null } = {}) {
   const fmt = FORMATS[comp.format] || FORMATS.reel, W = fmt.w, H = fmt.h, st = comp.style;
   const rect = textRect(comp, fmt, ctx);
-  const lay = layoutScene(ctx, comp, scene, rect, { minSize });
+  // `mutate` (negative controls only) transforms a COPY of the layout before it is checked, proving the checks bite.
+  const lay0 = layoutScene(ctx, comp, scene, rect, { minSize });
+  const lay = mutate ? mutate(structuredClone(lay0)) || lay0 : lay0;
   const r = newResult();
   scene.lines.forEach((ln, i) => {
     if (ln === "") return;
     classifyInto(r, `${label}, line ${i + 1} ${JSON.stringify(String(ln).slice(0, 60))}`, ln, lay.rows.filter((x) => !x.gap && x.srcLine === i));
   });
+  // no drawn row may claim a line that is not in the scene
+  if (lay.rows.some((x) => !x.gap && !(typeof scene.lines[x.srcLine] === "string" && scene.lines[x.srcLine] !== ""))) note(r, "orderIssues", `${label}: a row draws text that is not a line of this scene`);
   if (!lay.fits) note(r, "outOfBounds", `${label}: the text does not fit the safe area at ${lay.size}px`);
   // Reel/Story: text that RESOLVES below the floor (a legacy project saved at <40px, or a scene scale <1) is never exported
   // silently. Nothing is rewritten here; the author is pointed at the explicit fit action.

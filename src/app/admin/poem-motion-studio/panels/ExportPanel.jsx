@@ -2,6 +2,7 @@
 import { Btn } from "../studio-ui";
 import { useStudio } from "../studio-context";
 import { ExportEstimate, ReadabilityNotice } from "./FitScenesDialog";
+import { panelRoutes, videoRouteFor } from "@/lib/motion-studio/formats";
 
 export default function ExportPanel() {
   const {
@@ -16,6 +17,18 @@ export default function ExportPanel() {
     setMode,
     setTab,
   } = useStudio();
+  // every button below comes from the route registry (formats.js); actions map to the Studio's export handlers
+  const actions = {
+    "full-tab": () => setTab("full"),
+    cover: () => doCover("image/png"),
+    poster: () => doPoster("image/png", false),
+    "story-zip": () => {
+      setTab("story");
+      setMode("advanced");
+      doStory("image/png");
+    },
+  };
+  const video = videoRouteFor(comp);
   return (
 <section aria-label="Export" className="pms-card space-y-3">
                   <h2 className="text-lg font-semibold">Export</h2>
@@ -50,41 +63,22 @@ export default function ExportPanel() {
                     >
                       {progress !== null
                         ? `Working ${Math.round(progress * 100)}%`
-                        : `Export ${comp.format === "story" ? "Story" : "Reel"} MP4`}
+                        : `Export ${video.short} MP4`}
                     </Btn>
                     {progress !== null && (
                       <Btn onClick={() => abortRef.current?.abort()}>
                         Cancel
                       </Btn>
                     )}
-                    <Btn
-                      disabled={progress !== null}
-                      onClick={() => setTab("full")}
-                    >
-                      Full-poem poster…
-                    </Btn>
-                    <Btn
-                      disabled={progress !== null}
-                      onClick={() => doCover("image/png")}
-                    >
-                      Reel cover PNG
-                    </Btn>
-                    <Btn
-                      disabled={progress !== null}
-                      onClick={() => doPoster("image/png", false)}
-                    >
-                      Export Feed poster PNG
-                    </Btn>
-                    <Btn
-                      disabled={progress !== null}
-                      onClick={() => {
-                        setTab("story");
-                        setMode("advanced");
-                        doStory("image/png");
-                      }}
-                    >
-                      Export Story frames (ZIP)
-                    </Btn>
+                    {panelRoutes().filter((r) => actions[r.ui.action]).map((r) => (
+                      <Btn
+                        key={r.id}
+                        disabled={progress !== null}
+                        onClick={actions[r.ui.action]}
+                      >
+                        {r.ui.label(comp)}
+                      </Btn>
+                    ))}
                   </div>
                   {comp.format === "poster" && (
                     <p className="text-xs" style={{ color: "var(--mute)" }}>
