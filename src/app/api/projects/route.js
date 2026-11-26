@@ -7,6 +7,7 @@ import { generateSlug, ensureUniqueSlug } from '@/utils/slugGenerator';
 import { getAuthenticatedUser, requireAuth, validateOrigin } from '@/lib/auth';
 import { applyRateLimit } from '@/lib/rateLimit';
 import { sanitizeHtml } from '@/lib/sanitize';
+import { applyRichBody } from '@/lib/rich-body';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -142,6 +143,9 @@ export async function POST(request) {
         { status: 400 }
       );
     }
+
+    const bodyError = applyRichBody(projectData, 'longDescription', 10000);
+    if (bodyError) return NextResponse.json({ error: bodyError }, { status: 400 });
 
     // Sanitize text inputs
     projectData.title = sanitizeHtml(projectData.title).trim();

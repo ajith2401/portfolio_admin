@@ -7,6 +7,7 @@ import { deleteOwnedImages } from '@/lib/image-cleanup';
 import { generateSlug, ensureUniqueSlug } from '@/utils/slugGenerator';
 import { getAuthenticatedUser, requireAuth, validateOrigin } from '@/lib/auth';
 import { sanitizeHtml } from '@/lib/sanitize';
+import { applyRichBody } from '@/lib/rich-body';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -108,6 +109,9 @@ export async function PUT(request, { params }) {
         );
       }
     }
+
+    const bodyError = applyRichBody(updates, 'longDescription', 10000);
+    if (bodyError) return NextResponse.json({ error: bodyError }, { status: 400 });
 
     // Sanitize fields
     if (updates.title) updates.title = sanitizeHtml(updates.title).trim();

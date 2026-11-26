@@ -7,6 +7,7 @@ import { generateSlug, ensureUniqueSlug } from '@/utils/slugGenerator';
 import { getAuthenticatedUser, requireAuth, validateOrigin } from '@/lib/auth';
 import { applyRateLimit } from '@/lib/rateLimit';
 import { sanitizeHtml } from '@/lib/sanitize';
+import { applyRichBody } from '@/lib/rich-body';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -112,6 +113,9 @@ export async function POST(request) {
       );
     }
     
+    const bodyError = applyRichBody(data, 'content');
+    if (bodyError) return NextResponse.json({ error: bodyError }, { status: 400 });
+
     if (!data.title || !data.category || !data.content) {
       return NextResponse.json(
         { error: 'Title, category, and content are required' },

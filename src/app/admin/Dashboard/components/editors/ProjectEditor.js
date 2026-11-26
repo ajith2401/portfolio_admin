@@ -28,6 +28,7 @@ import {
   Image as ImageIcon,
   Minus,
 } from 'lucide-react';
+import RichBodyField, { convertMarkdown } from './RichBodyField';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { sanitizeHtml } from '@/lib/sanitize';
 
@@ -90,6 +91,9 @@ const PreviewContent = ({ content }) => {
 };
 
 export const ProjectEditor = ({ content, onSave, onClose }) => {
+  const [richMode, setRichMode] = useState(content?.contentFormat === 'tiptap' || !content?.longDescription);
+  const [richOk, setRichOk] = useState(content?.contentFormat === 'tiptap');
+  const [converting, setConverting] = useState(false);
   const [formData, setFormData] = useState(content || {
     title: '',
     shortDescription: '',
@@ -414,6 +418,7 @@ export const ProjectEditor = ({ content, onSave, onClose }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (richMode && (formData.contentFormat !== 'tiptap' || !richOk)) { setRichOk(false); return; }
     
     // Process any string values that should be arrays before saving
     const processedFormData = { ...formData };
@@ -509,6 +514,41 @@ export const ProjectEditor = ({ content, onSave, onClose }) => {
       {/* Long Description with Markdown Editor */}
       <div>
         <label className="block text-sm font-medium mb-1">Long Description *</label>
+        {richMode ? (
+          <>
+            <RichBodyField
+              doc={formData.doc}
+              language={formData.language}
+              onChange={({ doc, contentFormat, valid }) => {
+                setRichOk(valid !== false);
+                setFormData((prev) => ({ ...prev, contentFormat, doc }));
+              }}
+            />
+            {!richOk && <p className="mt-1 text-sm text-amber-700">Write something, or fix the document problems, before saving.</p>}
+          </>
+        ) : (
+          <>
+            <div className="mb-2 flex items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <span>This body is legacy Markdown. Convert it to use the rich editor.</span>
+              <button
+                type="button"
+                disabled={converting}
+                className="rounded-md bg-amber-600 px-3 py-1 font-medium text-white hover:bg-amber-700 disabled:opacity-60"
+                onClick={async () => {
+                  setConverting(true);
+                  try {
+                    const doc = await convertMarkdown(formData.longDescription);
+                    setFormData((prev) => ({ ...prev, contentFormat: 'tiptap', doc }));
+                    setRichOk(true);
+                    setRichMode(true);
+                  } finally {
+                    setConverting(false);
+                  }
+                }}
+              >
+                {converting ? 'Converting…' : 'Convert to rich editor'}
+              </button>
+            </div>
         <div className="border rounded-md overflow-hidden">
           <div className="bg-gray-100 p-2 border-b flex flex-wrap gap-2">
             <Button 
@@ -670,6 +710,8 @@ export const ProjectEditor = ({ content, onSave, onClose }) => {
             </ul>
           </div>
         </details>
+          </>
+        )}
       </div>
 
       <div>

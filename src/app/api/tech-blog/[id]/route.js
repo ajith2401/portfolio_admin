@@ -6,6 +6,7 @@ import { generateSlug, ensureUniqueSlug } from '@/utils/slugGenerator';
 import { deleteOwnedImages } from '@/lib/image-cleanup';
 import { getAuthenticatedUser, requireAuth, validateOrigin } from '@/lib/auth';
 import { sanitizeHtml } from '@/lib/sanitize';
+import { applyRichBody } from '@/lib/rich-body';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -71,6 +72,9 @@ export async function PUT(request, { params }) {
       );
     }
     
+    const bodyError = applyRichBody(data, 'content');
+    if (bodyError) return NextResponse.json({ error: bodyError }, { status: 400 });
+
     // Sanitize user inputs
     if (data.title) data.title = sanitizeHtml(data.title).trim();
     if (data.subtitle) data.subtitle = sanitizeHtml(data.subtitle).trim();
