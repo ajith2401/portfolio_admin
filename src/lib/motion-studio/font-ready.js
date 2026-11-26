@@ -3,6 +3,8 @@
 // to cover the glyphs. No silent fallback measurement: if a face cannot be loaded in time, the export stops with an error.
 import { FONT_FAMILY } from "./render.js";
 import { graphemes } from "./graphemes.js";
+import { signatureBox } from "./signature.js";
+import { FORMATS } from "./safe-zone.js";
 
 export const FONT_TIMEOUT_MS = 8000;
 export const TAMIL_FIXTURE =
@@ -58,11 +60,12 @@ export function requiredFaces(
           .flatMap((s) => s.lines),
       ),
     });
-  if (comp.branding?.show && comp.branding.signature)
+  const sg = signatureBox(comp, FORMATS[comp.format] || FORMATS.reel);
+  if (sg)
     faces.push({
       role: "signature",
-      font: `500 30px ${FONT_FAMILY["noto-sans"]}`,
-      text: sampleText(comp.branding.signature),
+      font: sg.font,
+      text: sampleText(sg.text),
     });
   const seen = new Set();
   return faces.filter((f) =>

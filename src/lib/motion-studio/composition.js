@@ -3,6 +3,7 @@
 // by the API and the client: it whitelists fields, clamps numbers and rejects anything else.
 import { FONT_KEYS, templateById } from "./templates.js";
 import { parsePoemText, MAX_POEM_CHARS } from "./poem-input.js";
+import { SIG_SIZE_MIN, SIG_SIZE_MAX, SIG_Y_MIN, SIG_Y_MAX, newSignatureDefaults, isLegacySignature } from "./signature.js";
 import { sceneDuration, attachStanzaMeta, MIN_SCENE_MS, MAX_SCENE_MS } from "./scenes.js";
 
 export const FORMAT_KEYS = ["reel", "story", "poster"];
@@ -59,13 +60,17 @@ function str(v, max, d = "") {
   return typeof v === "string" ? v.slice(0, max) : d;
 }
 
-export function defaultComposition({ format = "reel", templateId = "ink-silence", scenes = [], signature = "Ajithkumar R." } = {}) {
+const SIG_KEYS = ["show", "signature", "watermark", "size", "yPct", "align"];
+const pickBranding = (b) => Object.fromEntries(SIG_KEYS.filter((k) => k in b).map((k) => [k, b[k]]));
+// Legacy branding (none of size/yPct/align) stays legacy across a template switch: no silent move.
+export function defaultComposition({ format = "reel", templateId = "ink-silence", scenes = [], signature = "Ajithkumar R.", branding = null } = {}) {
   const t = templateById(templateId);
   return normalizeComposition({
     format, templateId: t.id, scenes,
     style: { ...t.style, bg: t.bg, overlay: t.fx.overlay, vignette: t.fx.vignette, grain: t.fx.grain, particles: t.fx.particles, geometry: !!t.fx.geometry },
     motion: { ...t.motion, intensity: 0.5 },
-    branding: { show: true, signature, watermark: false, color: t.signatureColor },
+    // a template switch passes the current branding: every signature field is carried (the colour follows the template)
+    branding: { show: true, signature, watermark: false, ...(branding && isLegacySignature(branding) ? {} : newSignatureDefaults()), ...(branding ? pickBranding(branding) : {}), color: t.signatureColor },
     audio: { source: "none", volume: 1, fadeInMs: 0, fadeOutMs: 800 },
     export: { quality: "standard" },
   });
@@ -120,7 +125,15 @@ export function normalizeComposition(input) {
       geometry: !!s.geometry,
     },
     motion: { textIn: oneOf(m.textIn, TEXT_IN, t.motion.textIn), bgMotion: oneOf(m.bgMotion, BG_MOTION, t.motion.bgMotion), intensity: num(m.intensity, 0, 1, 0.5) },
-    branding: { show: b.show !== false, signature: str(b.signature, 60, "Ajithkumar R."), watermark: !!b.watermark, color: hex(b.color, t.signatureColor) },
+    branding: {
+      show: b.show !== false, signature: str(b.signature, 60, "Ajithkumar R."), watermark: !!b.watermark, color: hex(b.color, t.signatureColor),
+      // WP6 fields are stored only when the input has them; absent = legacy geometry (30px, centred, 0.8 / 0.955)
+      ...(isLegacySignature(b) ? {} : {
+        size: Math.round(num(b.size == null ? NaN : b.size, SIG_SIZE_MIN, SIG_SIZE_MAX, newSignatureDefaults().size)),
+        yPct: b.yPct == null || !Number.isFinite(Number(b.yPct)) ? null : num(b.yPct, SIG_Y_MIN, SIG_Y_MAX, null),
+        align: oneOf(b.align, ALIGN, "center"),
+      }),
+    },
     audio: {
       source: oneOf(a.source, ["none", "upload", "record"], "none"), label: str(a.label, 80),
       volume: num(a.volume, 0, 1, 1), fadeInMs: Math.round(num(a.fadeInMs, 0, 5000, 0)), fadeOutMs: Math.round(num(a.fadeOutMs, 0, 5000, 800)),

@@ -3,7 +3,8 @@
 // seeded from index so frames are reproducible.
 import { classifyInto, newResult, note, rowExtent, checkX, TOLERANCE } from "./coverage.js";
 import { wrapSpans, indentPx, lineIndent } from "./graphemes.js";
-import { FORMATS, safeRect, MIN_TEXT_PX, FIT_ACTION_LABEL } from "./safe-zone.js";
+import { FORMATS, MIN_TEXT_PX, FIT_ACTION_LABEL } from "./safe-zone.js";
+import { signatureBox, textRect, signatureBoundsIssues, overlapsSignature } from "./signature.js";
 // Reel/Story floor comes from MIN_TEXT_PX; poster paths pass POSTER_MIN explicitly and keep their legacy default here.
 export const defaultMinSize = (format) => (format === "poster" ? 28 : MIN_TEXT_PX[format] ?? MIN_TEXT_PX.reel);
 import { totalDuration } from "./scenes.js";
@@ -121,7 +122,7 @@ export function drawFrame(ctx, comp, tMs, { w, h, assets = {}, still = false, sc
   w = w || fmt.w; h = h || fmt.h;
   ctx.save(); ctx.scale(w / fmt.w, w / fmt.w);
   const W = fmt.w, H = fmt.h, st = comp.style, total = compDuration(comp);
-  const rect = safeRect(W, H, fmt.safe);
+  const rect = textRect(comp, fmt, ctx);
   paintBackground(ctx, comp, W, H, still ? 0 : tMs, total, assets);
   if (!still) paintParticles(ctx, comp, W, H, tMs);
   const at = forced ? { scene: forced, index: 0, local: 1e6, last: true } : sceneAt(comp, tMs);
@@ -158,10 +159,11 @@ export function drawFrame(ctx, comp, tMs, { w, h, assets = {}, still = false, sc
   }
   paintVignette(ctx, W, H, st.vignette);
   paintGrain(ctx, W, H, st.grain, still ? 0 : tMs);
-  if (comp.branding.show && comp.branding.signature) {
-    ctx.globalAlpha = 0.85; ctx.fillStyle = comp.branding.color; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.font = `500 30px ${FONT_FAMILY["noto-sans"]}`;
-    ctx.fillText(comp.branding.signature, W / 2, H * (comp.format === "poster" ? 0.955 : 0.8));
+  const sg = signatureBox(comp, fmt, ctx);
+  if (sg) {
+    ctx.globalAlpha = 0.85; ctx.fillStyle = comp.branding.color; ctx.textAlign = sg.align; ctx.textBaseline = "middle";
+    ctx.font = sg.font;
+    ctx.fillText(sg.text, sg.x, sg.y);
     ctx.globalAlpha = 1;
   }
   ctx.restore();
@@ -173,8 +175,9 @@ export function drawFrame(ctx, comp, tMs, { w, h, assets = {}, still = false, sc
  */
 export const POSTER_MIN = 46;
 export function posterCards(ctx, comp) {
-  const fmt = FORMATS.poster, rect = safeRect(fmt.w, fmt.h, fmt.safe);
+  const fmt = FORMATS.poster;
   const pc = { ...comp, format: "poster" };
+  const rect = textRect(pc, fmt);
   const ids = comp.poster.sceneIds, chosen = comp.scenes.filter((s) => s.kind !== "title" && (!ids.length || ids.includes(s.id)));
   const fit = (lines) => layoutScene(ctx, pc, { lines, scale: 1 }, rect, { minSize: POSTER_MIN }).fits;
   // A stanza gap goes between scenes only where the SOURCE has a stanza boundary. Consecutive parts of one split stanza
@@ -202,7 +205,7 @@ export function posterCards(ctx, comp) {
  */
 export function validateScene(ctx, comp, scene, { minSize = defaultMinSize(comp.format), label = "scene" } = {}) {
   const fmt = FORMATS[comp.format] || FORMATS.reel, W = fmt.w, H = fmt.h, st = comp.style;
-  const rect = safeRect(W, H, fmt.safe);
+  const rect = textRect(comp, fmt, ctx);
   const lay = layoutScene(ctx, comp, scene, rect, { minSize });
   const r = newResult();
   scene.lines.forEach((ln, i) => {
@@ -218,8 +221,8 @@ export function validateScene(ctx, comp, scene, { minSize = defaultMinSize(comp.
   const shift = ((scene.offsetY || 0) / 100) * rect.h;
   let y = st.vAlign === "top" ? rect.y : st.vAlign === "bottom" ? rect.y + rect.h - lay.total : rect.y + (rect.h - lay.total) / 2;
   y = Math.max(rect.y, Math.min(rect.y + rect.h - lay.total, y + shift));
-  const sigY = H * (comp.format === "poster" ? 0.955 : 0.8);
-  const sigTop = comp.branding?.show && comp.branding.signature ? sigY - 15 : Infinity;
+  const sg = signatureBox(comp, fmt, ctx);
+  signatureBoundsIssues(comp, fmt, ctx).forEach((m) => note(r, "outOfBounds", `${label}: ${m}`));
   for (const row of lay.rows) {
     const top = y; y += row.h;
     if (row.gap) continue;
@@ -228,7 +231,7 @@ export function validateScene(ctx, comp, scene, { minSize = defaultMinSize(comp.
     if (bad) note(r, "outOfBounds", `${where} is ${bad}`);
     if (row.w > lay.maxW + TOLERANCE) note(r, "outOfBounds", `${where} is wider than the text column`);
     if (top < rect.y - TOLERANCE || y > rect.y + rect.h + TOLERANCE || top < -TOLERANCE || y > H + TOLERANCE) note(r, "outOfBounds", `${where} is outside the safe area vertically`);
-    if (y > sigTop + TOLERANCE) note(r, "outOfBounds", `${where} overlaps the signature`);
+    if (overlapsSignature(sg, top, y, TOLERANCE)) note(r, "outOfBounds", `${where} overlaps the signature`);
   }
   r.partial = !lay.fits;
   r.ok = r.messages.length === 0 && !r.partial;

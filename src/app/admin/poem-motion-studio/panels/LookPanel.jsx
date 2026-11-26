@@ -1,6 +1,7 @@
 "use client";
 import { FONT_KEYS, FONT_LABELS } from "@/lib/motion-studio/templates";
 import { BG_MOTION, PARTICLES, TEXT_IN } from "@/lib/motion-studio/composition";
+import SignaturePanel from "./SignaturePanel";
 import TemplatePicker from "../TemplatePicker";
 import { Btn, Field, Range } from "../studio-ui";
 import { useStudio } from "../studio-context";
@@ -208,33 +209,7 @@ export default function LookPanel() {
                         }
                         fmt={(v) => v.toFixed(2)}
                       />
-                      <Field label="Signature">
-                        <input
-                          aria-label="Signature"
-                          className="pms-field"
-                          value={comp.branding.signature}
-                          maxLength={60}
-                          onChange={(e) =>
-                            update((c) => {
-                              c.branding.signature = e.target.value;
-                              return c;
-                            }, "sig")
-                          }
-                        />
-                      </Field>
-                      <label className="flex min-h-11 items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={comp.branding.show}
-                          onChange={(e) =>
-                            update((c) => {
-                              c.branding.show = e.target.checked;
-                              return c;
-                            })
-                          }
-                        />{" "}
-                        Show signature
-                      </label>
+                      <SignaturePanel />
                     </div>
                   )}
                 </>

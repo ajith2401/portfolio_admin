@@ -1012,7 +1012,7 @@ export default function MotionStudio() {
 
   const pickTemplate = (id) =>
     update((c) => ({
-      ...defaultComposition({ format: c.format, templateId: id, scenes: c.scenes, signature: c.branding.signature }),
+      ...defaultComposition({ format: c.format, templateId: id, scenes: c.scenes, signature: c.branding.signature, branding: c.branding }),
       originalScenes: c.originalScenes,
       audio: c.audio,
       poster: c.poster,

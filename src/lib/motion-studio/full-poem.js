@@ -10,6 +10,7 @@ import {
   paintVignette,
   paintGrain,
 } from "./render.js";
+import { signatureBox as sigBox, boxBoundsIssues, overlapsSignature } from "./signature.js";
 
 export const FULL_W = 1080;
 export const FULL_STD_H = 1920;
@@ -68,17 +69,15 @@ export const PRESETS = Object.freeze({
 
 /** Poem as drawn: optional title + stanzas. `poem.title` may be empty. */
 const hasTitle = (poem) => !!String(poem?.title || "").trim();
-const SIG_PX = 30; // signature size on the 1080 canvas (configurable in a later stage)
 const EXTRA_BLANK_UNIT = 0.6; // each intentional blank line beyond the one that separates stanzas adds 0.6 line heights
 const MAX_EXTRA_BLANK = 3;
 const extraBlanks = (poem, si) => Math.min(MAX_EXTRA_BLANK, Math.max(0, (Number(poem?.blank?.[si]) || 1) - 1));
 
-function signatureBox(ctx, comp, H) {
-  if (!(comp.branding?.show && comp.branding.signature)) return null;
-  ctx.font = `500 ${SIG_PX}px ${FONT_FAMILY["noto-sans"]}`;
-  const w = ctx.measureText(comp.branding.signature).width;
-  return { w, left: FULL_W / 2 - w / 2, right: FULL_W / 2 + w / 2, top: H - 70 - SIG_PX / 2, bottom: H - 70 + SIG_PX / 2 };
-}
+const fullFmt = (H) => ({ w: FULL_W, h: H, safe: { side: 0.09 }, full: true });
+/** Signature box on the full-poem canvas: bottom-anchored (yPct is a Reel/Story/Poster control), size/align/show from branding. */
+const signatureBox = (ctx, comp, H) => sigBox(comp, fullFmt(H), ctx);
+/** Footer reserved for the signature: 150 for the legacy 30px, growing with the configured size; 40 when hidden. */
+const footerFor = (comp) => (comp.branding?.show && comp.branding?.signature ? 120 + sigBox(comp, fullFmt(FULL_STD_H)).size : 40);
 
 function measureAt(ctx, comp, poem, preset, size) {
   const st = comp.style,
@@ -158,7 +157,7 @@ export function layoutFullPoem(
   { preset: presetKey = "balanced", height = "standard" } = {},
 ) {
   const preset = PRESETS[presetKey] || PRESETS.balanced;
-  const footer = comp.branding?.show && comp.branding?.signature ? 150 : 40;
+  const footer = footerFor(comp);
   const frame = (H, size) => {
     const m = measureAt(ctx, comp, poem, preset, size);
     const padH = Math.min(H, FULL_STD_H); // margins stay constant in px on extended canvases
@@ -281,9 +280,9 @@ export function validateFullPoem(poem, layout) {
   }
   if (layout.signature) {
     const sg = layout.signature;
-    if (sg.top < -TOLERANCE || sg.bottom > H + TOLERANCE || sg.left < -TOLERANCE || sg.right > W + TOLERANCE) add(r.outOfBounds, "signature is outside the canvas");
-    const last = text[text.length - 1];
-    if (last && layout.offset + last.y + last.rowH / 2 > sg.top + TOLERANCE) add(r.outOfBounds, "signature overlaps the poem");
+    boxBoundsIssues(sg, fullFmt(H), "poster").forEach((m) => add(r.outOfBounds, m));
+    // every row (not just the last one) must be clear of the signature box
+    if (text.some((i) => overlapsSignature(sg, layout.offset + i.y - i.rowH / 2, layout.offset + i.y + i.rowH / 2, TOLERANCE))) add(r.outOfBounds, "signature overlaps the poem");
   }
   r.partial = !layout.fits || !!poem.partial;
   if (r.partial) r.messages.push("the layout is partial");
@@ -356,13 +355,14 @@ export function drawFullPoem(
   ctx.shadowColor = "transparent";
   paintVignette(ctx, W, H, st.vignette);
   paintGrain(ctx, W, H, st.grain, 0);
-  if (comp.branding?.show && comp.branding.signature) {
+  const sg = signatureBox(ctx, comp, H);
+  if (sg) {
     ctx.globalAlpha = 0.85;
     ctx.fillStyle = comp.branding.color;
-    ctx.textAlign = "center";
+    ctx.textAlign = sg.align;
     ctx.textBaseline = "middle";
-    ctx.font = `500 30px ${FONT_FAMILY["noto-sans"]}`;
-    ctx.fillText(comp.branding.signature, W / 2, H - 70);
+    ctx.font = sg.font;
+    ctx.fillText(sg.text, sg.x, sg.y);
     ctx.globalAlpha = 1;
   }
   ctx.restore();

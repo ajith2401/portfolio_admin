@@ -612,8 +612,8 @@ test("font readiness: loads the exact weights with the poem text — title 700, 
   assert.ok(weights.includes("700"), "title face");
   assert.ok(weights.includes(String(c.style.weight)), "body face");
   assert.ok(
-    f.calls.some((x) => /^500 30px/.test(x.font) && x.text.includes("A")),
-    "signature face",
+    f.calls.some((x) => /^500 40px/.test(x.font) && x.text.includes("A")),
+    "signature face (WP6: new compositions default to 40px)",
   );
   assert.ok(
     f.calls
