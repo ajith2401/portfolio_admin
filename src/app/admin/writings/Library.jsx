@@ -32,6 +32,17 @@ export default function Library() {
     return () => { alive = false; };
   }, []);
 
+  async function removeWriting(w) {
+    if (!window.confirm(`Delete "${w.title || "Untitled"}"? This also removes its uploaded images when nothing else uses them, and cannot be undone.`)) return;
+    const r = await apiRequest("DELETE", `/api/writings/${w._id}`);
+    if (r.ok) {
+      setData((d) => ({ ...d, writings: d.writings.filter((x) => x._id !== w._id), pagination: { ...d.pagination, total: Math.max(0, (d.pagination?.total || 1) - 1) } }));
+      setError("");
+    } else {
+      setError(r.status === 403 ? "Only an admin can delete writings." : "Could not delete the writing.");
+    }
+  }
+
   useEffect(() => {
     let alive = true;
     const q = new URLSearchParams({ view: "library", page: String(page), limit: "20" });
@@ -86,8 +97,8 @@ export default function Library() {
       {error && <p role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
       <ul className={`divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm ${loading ? "opacity-60" : ""}`} aria-busy={loading}>
         {data.writings.map((w) => (
-          <li key={w._id}>
-            <Link href={`/admin/writings/${w._id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 hover:bg-gray-50">
+          <li key={w._id} className="flex items-center hover:bg-gray-50">
+            <Link href={`/admin/writings/${w._id}`} className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
               <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${BADGE[w.status] || "bg-gray-200 text-gray-700"}`}>{w.status}</span>
               <span className="min-w-0 flex-1 basis-48 truncate font-medium" lang={w.language === "Tamil" ? "ta" : undefined}>{w.title || "Untitled"}</span>
               {w.contentFormat !== "tiptap" && <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs text-amber-800">Legacy</span>}
@@ -95,6 +106,14 @@ export default function Library() {
               {meta(w) && <span className="text-xs text-gray-500">{meta(w)}</span>}
               <span className="text-xs text-gray-500">{[w.wordCount ? `${w.wordCount.toLocaleString()} ${w.wordCount === 1 ? "word" : "words"}` : "", fmtDate(w.updatedAt)].filter(Boolean).join(" · ")}</span>
             </Link>
+            <button
+              type="button"
+              onClick={() => removeWriting(w)}
+              aria-label={`Delete ${w.title || "Untitled"}`}
+              className="mr-3 shrink-0 rounded-md px-2 py-1 text-sm text-red-700 hover:bg-red-50"
+            >
+              Delete
+            </button>
           </li>
         ))}
         {!loading && data.writings.length === 0 && <li className="px-4 py-10 text-center text-sm text-gray-500">No writings match these filters.</li>}
