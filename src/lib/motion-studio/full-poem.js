@@ -2,7 +2,8 @@
 // Pure layout + a draw routine that reuses the renderer's background/vignette/grain so it matches Reel/Story looks.
 // Rules: whole lines are only ever wrapped (never cut); text is never shrunk below MIN_READABLE; when a poem cannot
 // fit legibly in the standard canvas the layout says so and can grow the canvas height instead of dropping content.
-import { wrapLine } from "./graphemes.js";
+import { wrapSpans, lineIndent, indentPx } from "./graphemes.js";
+import { classifyInto, newResult, rowExtent, checkX, TOLERANCE } from "./coverage.js";
 import {
   FONT_FAMILY,
   paintBackground,
@@ -67,25 +68,39 @@ export const PRESETS = Object.freeze({
 
 /** Poem as drawn: optional title + stanzas. `poem.title` may be empty. */
 const hasTitle = (poem) => !!String(poem?.title || "").trim();
+const SIG_PX = 30; // signature size on the 1080 canvas (configurable in a later stage)
+const EXTRA_BLANK_UNIT = 0.6; // each intentional blank line beyond the one that separates stanzas adds 0.6 line heights
+const MAX_EXTRA_BLANK = 3;
+const extraBlanks = (poem, si) => Math.min(MAX_EXTRA_BLANK, Math.max(0, (Number(poem?.blank?.[si]) || 1) - 1));
+
+function signatureBox(ctx, comp, H) {
+  if (!(comp.branding?.show && comp.branding.signature)) return null;
+  ctx.font = `500 ${SIG_PX}px ${FONT_FAMILY["noto-sans"]}`;
+  const w = ctx.measureText(comp.branding.signature).width;
+  return { w, left: FULL_W / 2 - w / 2, right: FULL_W / 2 + w / 2, top: H - 70 - SIG_PX / 2, bottom: H - 70 + SIG_PX / 2 };
+}
 
 function measureAt(ctx, comp, poem, preset, size) {
   const st = comp.style,
-    family = FONT_FAMILY[st.font] || FONT_FAMILY["noto-serif"];
+    family = FONT_FAMILY[st.font] || FONT_FAMILY["noto-serif"],
+    align = st.align;
   const maxW = FULL_W * (1 - 2 * preset.side);
   const lh = size * preset.lh,
     items = [];
   const fontFor = (px, wt) => `${wt} ${px}px ${family}`;
-  let y = 0;
-  const wrap = (text, px, wt) => {
+  const ax = align === "left" ? FULL_W * preset.side : align === "right" ? FULL_W * (1 - preset.side) : FULL_W / 2;
+  const measureAtFont = (px, wt) => {
     ctx.font = fontFor(px, wt);
-    return wrapLine(text, maxW, (x) => ctx.measureText(x).width);
+    return (x) => ctx.measureText(x).width;
   };
+  let y = 0;
   if (hasTitle(poem)) {
+    const title = poem.title.trim();
     const tpx = Math.round(size * preset.titleScale),
       tlh = tpx * Math.min(1.5, preset.lh);
-    const rows = wrap(poem.title.trim(), tpx, 700);
-    rows.forEach((r) => {
-      items.push({ kind: "title", text: r, px: tpx, wt: 700, y: y + tlh / 2 });
+    const measure = measureAtFont(tpx, 700);
+    wrapSpans(title, maxW, measure, 0).forEach((r, ri) => {
+      items.push({ kind: "title", text: r.text, start: r.start, end: r.end, wrapRow: ri, px: tpx, wt: 700, x: ax, w: measure(r.text), rowH: tlh, y: y + tlh / 2 });
       y += tlh;
     });
     y += size * (preset.ornament ? 0.5 : 0.9);
@@ -96,18 +111,28 @@ function measureAt(ctx, comp, poem, preset, size) {
   }
   poem.stanzas.forEach((stanza, si) => {
     if (si > 0) {
-      y += lh * preset.gap;
+      y += lh * preset.gap + extraBlanks(poem, si) * lh * EXTRA_BLANK_UNIT;
       if (preset.ornament) {
         items.push({ kind: "rule", y: y - lh * preset.gap * 0.5, short: true });
       }
     }
     stanza.forEach((line, li) => {
-      wrap(line, size, st.weight).forEach((r, ri) => {
+      const measure = measureAtFont(size, st.weight);
+      const ind = lineIndent(line);
+      const ipx = indentPx(line, measure, maxW);
+      const x = align === "left" ? ax + ipx : align === "right" ? ax - ipx : ax + ipx / 2;
+      wrapSpans(line, maxW - ipx, measure, ind.len).forEach((r, ri) => {
         items.push({
           kind: "line",
-          text: r,
+          text: r.text,
+          start: r.start,
+          end: r.end,
           px: size,
           wt: st.weight,
+          x,
+          w: measure(r.text),
+          indentPx: ipx,
+          rowH: lh,
           y: y + lh / 2,
           stanza: si,
           line: li,
@@ -165,6 +190,9 @@ export function layoutFullPoem(
             ? "small"
             : "tiny",
       footer,
+      align: comp.style.align,
+      side: preset.side,
+      signature: signatureBox(ctx, comp, H),
       presetSize: preset.size,
       shrunk: size < preset.size,
       ...extra,
@@ -203,35 +231,71 @@ export function layoutFullPoem(
   };
 }
 
-/** Every poem line (and the title) must be drawn: wrapped rows rejoined must equal the original text. */
+const lineLabel = (si, li, text) => `stanza ${si + 1}, line ${li + 1}: ${JSON.stringify(String(text).slice(0, 60))}`;
+
+/**
+ * Source-aware, bounds-aware validation of a full-poem layout against the SOURCE poem.
+ * Every source line is compared with the rows that claim it (source ranges, exact text, no normalisation), stanza
+ * boundaries and row order are checked, and every row is checked against the canvas, safe margins and footer.
+ */
+export function validateFullPoem(poem, layout) {
+  const r = newResult();
+  const add = (list, msg) => { list.push(msg); r.messages.push(msg); };
+  const items = layout.items || [];
+  const W = layout.width || FULL_W, H = layout.height, align = layout.align || "center";
+  const side = (layout.side ?? 0.09) * W;
+  const rowsOf = (kind, si, li) => items.filter((i) => i.kind === kind && (kind === "title" || (i.stanza === si && i.line === li)));
+  const classify = (label, src, rows) => classifyInto(r, label, src, rows);
+  if (hasTitle(poem)) classify("title", poem.title.trim(), rowsOf("title"));
+  poem.stanzas.forEach((st, si) => st.forEach((l, li) => classify(lineLabel(si, li, l), l, rowsOf("line", si, li))));
+  // no row may claim a line that is not in the poem
+  items.filter((i) => i.kind === "line").forEach((i) => {
+    if (!poem.stanzas[i.stanza] || poem.stanzas[i.stanza][i.line] == null) add(r.stanzaIssues, `row for unknown stanza ${i.stanza + 1}, line ${i.line + 1}`);
+  });
+  // drawing order = source order, y strictly increasing
+  const text = items.filter((i) => i.kind === "line" || i.kind === "title");
+  for (let k = 1; k < text.length; k++) {
+    const a = text[k - 1], b = text[k];
+    if (!(b.y > a.y)) add(r.orderIssues, `rows are not in drawing order near ${JSON.stringify(String(b.text).slice(0, 40))}`);
+    if (a.kind === "line" && b.kind === "line" && (b.stanza < a.stanza || (b.stanza === a.stanza && b.line < a.line)))
+      add(r.orderIssues, `rows are out of source order near ${lineLabel(b.stanza, b.line, b.text)}`);
+  }
+  // stanza boundaries: a stanza gap is strictly larger than the pitch between lines inside a stanza
+  for (let k = 1; k < text.length; k++) {
+    const a = text[k - 1], b = text[k];
+    if (a.kind !== "line" || b.kind !== "line") continue;
+    const pitch = b.y - a.y;
+    if (b.stanza !== a.stanza && !(pitch > a.rowH + 0.5)) add(r.stanzaIssues, `no visible gap before stanza ${b.stanza + 1}`);
+    if (b.stanza === a.stanza && pitch > a.rowH + 0.5) add(r.stanzaIssues, `unexpected gap inside stanza ${b.stanza + 1}`);
+  }
+  // bounds
+  const footer = layout.footer ?? 40;
+  for (const i of text) {
+    const label = i.kind === "title" ? "title" : lineLabel(i.stanza, i.line, i.text);
+    if (!(i.w >= 0) || !Number.isFinite(i.w)) { add(r.outOfBounds, `${label}: row has no measured width`); continue; }
+    const bad = checkX(rowExtent(align, i.x, i.w), W, side, W - side);
+    if (bad) add(r.outOfBounds, `${label} is ${bad}`);
+    const top = layout.offset + i.y - i.rowH / 2, bot = layout.offset + i.y + i.rowH / 2;
+    if (top < -TOLERANCE || bot > H + TOLERANCE) add(r.outOfBounds, `${label} is outside the canvas vertically`);
+    else if (bot > H - footer + TOLERANCE) add(r.outOfBounds, `${label} overlaps the footer area`);
+  }
+  if (layout.signature) {
+    const sg = layout.signature;
+    if (sg.top < -TOLERANCE || sg.bottom > H + TOLERANCE || sg.left < -TOLERANCE || sg.right > W + TOLERANCE) add(r.outOfBounds, "signature is outside the canvas");
+    const last = text[text.length - 1];
+    if (last && layout.offset + last.y + last.rowH / 2 > sg.top + TOLERANCE) add(r.outOfBounds, "signature overlaps the poem");
+  }
+  r.partial = !layout.fits || !!poem.partial;
+  if (r.partial) r.messages.push("the layout is partial");
+  r.ok = !r.partial && r.messages.length === 0;
+  return r;
+}
+
+/** Compatibility wrapper: the source lines (and title) that are not drawn exactly, as a list. Empty = complete. */
 export function fullPoemCoverage(poem, layout) {
-  const rowsByLine = new Map();
-  layout.items
-    .filter((i) => i.kind === "line")
-    .forEach((i) => {
-      const k = `${i.stanza}:${i.line}`;
-      rowsByLine.set(k, (rowsByLine.get(k) || []).concat(i.text));
-    });
-  // whitespace-insensitive: wrapping may break a very long word between graphemes, never alter or drop a character
-  const norm = (s) => String(s).replace(/\s+/g, "");
-  const missing = [];
-  poem.stanzas.forEach((st, si) =>
-    st.forEach((l, li) => {
-      if (norm((rowsByLine.get(`${si}:${li}`) || []).join("")) !== norm(l))
-        missing.push(l);
-    }),
-  );
-  if (
-    hasTitle(poem) &&
-    norm(
-      layout.items
-        .filter((i) => i.kind === "title")
-        .map((i) => i.text)
-        .join(""),
-    ) !== norm(poem.title)
-  )
-    missing.unshift(poem.title);
-  return missing;
+  const v = validateFullPoem(poem, layout);
+  const bad = [...v.missingLines, ...v.textDiffs, ...v.whitespaceDiffs, ...v.orderIssues];
+  return bad.length ? bad : [];
 }
 
 /** Paint a layout. `scale` multiplies the output pixel size (1 or 2). */
@@ -287,7 +351,7 @@ export function drawFullPoem(
       continue;
     }
     ctx.font = `${it.wt} ${it.px}px ${family}`;
-    ctx.fillText(it.text, ax, y);
+    ctx.fillText(it.text, it.x ?? ax, y);
   }
   ctx.shadowColor = "transparent";
   paintVignette(ctx, W, H, st.vignette);

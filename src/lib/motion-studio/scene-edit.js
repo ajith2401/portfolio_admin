@@ -6,6 +6,25 @@ import { MAX_SCENES, MAX_LINES } from "./composition.js";
 let n = 0;
 const nid = () => `e${Date.now().toString(36)}${(n++).toString(36)}`;
 const clone = (s) => ({ ...s, lines: s.lines.slice() });
+const noMeta = ({ stanza, part, parts, ...rest }) => rest; // eslint-disable-line no-unused-vars
+/**
+ * Re-derive part/parts after a structural edit. Scenes keep their source-stanza identity only while consecutive scenes
+ * of one stanza still follow each other part by part; anything else simply has no stanza metadata (legacy behaviour:
+ * a gap is drawn). Never invents a relationship.
+ */
+export function restamp(scenes) {
+  const out = scenes.map((sc) => ({ ...sc }));
+  let i = 0;
+  while (i < out.length) {
+    const a = out[i];
+    if (a.stanza == null || a.part == null) { if (a.stanza != null || a.part != null || a.parts != null) out[i] = noMeta(a); i++; continue; }
+    let j = i + 1;
+    while (j < out.length && out[j].stanza === a.stanza && out[j].part > out[j - 1].part) j++;
+    for (let k = i; k < j; k++) { out[k].part = k - i; out[k].parts = j - i; }
+    i = j;
+  }
+  return out;
+}
 const dur = (lines, keep) => Math.min(MAX_SCENE_MS, Math.max(MIN_SCENE_MS, keep ?? sceneDuration(lines)));
 
 export function editLine(scenes, si, li, text) {
@@ -34,7 +53,8 @@ export function splitScene(scenes, si, at) {
   if (!s || at <= 0 || at >= s.lines.length || scenes.length >= MAX_SCENES) return scenes;
   const a = { ...clone(s), lines: s.lines.slice(0, at) }, b = { ...clone(s), id: nid(), kind: "stanza", lines: s.lines.slice(at) };
   a.durationMs = dur(a.lines); b.durationMs = dur(b.lines);
-  return [...scenes.slice(0, si), a, b, ...scenes.slice(si + 1)];
+  if (s.stanza != null) { a.part = s.part; b.part = s.part + 0.5; } // b follows a inside the same stanza; restamp renumbers
+  return restamp([...scenes.slice(0, si), a, b, ...scenes.slice(si + 1)]);
 }
 /** Merge scene `si` with the next one (lines concatenated in order). */
 export function mergeNext(scenes, si) {
@@ -42,12 +62,14 @@ export function mergeNext(scenes, si) {
   if (!a || !b || a.lines.length + b.lines.length > MAX_LINES) return scenes;
   const m = { ...clone(a), kind: a.kind === "title" ? "stanza" : a.kind, lines: [...a.lines, ...b.lines] };
   m.durationMs = dur(m.lines);
-  return [...scenes.slice(0, si), m, ...scenes.slice(si + 2)];
+  // a merge across a real stanza boundary has no single source stanza: drop the metadata rather than invent one
+  const out = a.stanza != null && a.stanza === b.stanza ? m : noMeta(m);
+  return restamp([...scenes.slice(0, si), out, ...scenes.slice(si + 2)]);
 }
 export function moveScene(scenes, si, dir) {
   const j = si + dir;
   if (!scenes[si] || !scenes[j]) return scenes;
-  const out = scenes.slice(); [out[si], out[j]] = [out[j], out[si]]; return out;
+  const out = scenes.slice(); [out[si], out[j]] = [noMeta(out[j]), noMeta(out[si])]; return restamp(out);
 }
 /** Move one line to another scene (or the same one) at an index. Removing the last line of a scene removes that scene. */
 export function moveLine(scenes, fromS, fromL, toS, toL) {
@@ -60,12 +82,14 @@ export function moveLine(scenes, fromS, fromL, toS, toL) {
   if (fromS === toS && fromL < idx) idx -= 0; // splice already shifted indices
   target.lines.splice(idx, 0, line);
   out.forEach((s) => { s.durationMs = s === out[fromS] || s === target ? dur(s.lines) : s.durationMs; });
-  return out.filter((s) => s.lines.length > 0);
+  out[fromS] = noMeta(out[fromS]); // lines moved between scenes: the touched scenes no longer map to one source stanza part
+  out[toS] = noMeta(out[toS]);
+  return restamp(out.filter((s) => s.lines.length > 0));
 }
-export function removeScene(scenes, si) { return scenes.filter((_, i) => i !== si); }
+export function removeScene(scenes, si) { return restamp(scenes.filter((_, i) => i !== si)); }
 export function duplicateScene(scenes, si) {
   if (!scenes[si] || scenes.length >= MAX_SCENES) return scenes;
-  return [...scenes.slice(0, si + 1), { ...clone(scenes[si]), id: nid() }, ...scenes.slice(si + 1)];
+  return [...scenes.slice(0, si + 1), noMeta({ ...clone(scenes[si]), id: nid() }), ...scenes.slice(si + 1)];
 }
 
 const flat = (stanzas) => stanzas.flat();

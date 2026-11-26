@@ -13,30 +13,75 @@ export function normalizeNewlines(text) {
     .replace(new RegExp("[\\u2028\\u2029\\u0085\\u000B\\u000C]", "g"), "\n"); // line/paragraph separators some editors paste
 }
 
+// Hard limits shared with composition.js (normalizeComposition caps). Exceeding one is an ERROR the UI shows; the text is
+// never cut to fit.
+export const LIMITS = Object.freeze({ lineChars: 400, stanzaLines: 120, stanzas: 400 });
+
+const isBlank = (l) => /^\s*$/.test(l);
+
 /**
+ * Parse poem text WITHOUT altering it. The returned `source` (line endings normalised to \n, nothing else) is the
+ * authoritative copy; `stanzas` are views onto it: every line is verbatim, including leading indentation, tabs, NBSP and
+ * trailing whitespace, and Unicode is never normalised (NFC/NFD, ZWJ/ZWNJ stay exactly as typed).
+ * Blank (whitespace-only) lines separate stanzas; `blank[i]` is how many of them preceded stanza i, `trailingBlank` how
+ * many followed the last stanza, so the exact stanza structure can be rebuilt.
+ *
+ * Nothing is ever sliced. If the text exceeds a limit, `ok` is false and `issues` names each problem; callers must not
+ * build scenes/exports from a poem with `ok === false` and must keep `source` available to the user.
+ *
  * @param {string} text
  * @param {{title?: string}} [opts]
- * @returns {{title:string, stanzas:string[][], truncated:boolean, lineCount:number}}
+ * @returns {{title:string, source:string, stanzas:string[][], blank:number[], trailingBlank:number, lineCount:number,
+ *   ok:boolean, truncated:boolean, issues:{code:string, message:string, line?:number}[]}}
  */
 export function parsePoemText(text, { title = "" } = {}) {
-  let t = normalizeNewlines(text);
-  const truncated = t.length > MAX_POEM_CHARS;
-  if (truncated) t = t.slice(0, MAX_POEM_CHARS);
-  const stanzas = [];
-  let cur = [];
-  for (const raw of t.split("\n")) {
-    const line = raw.replace(/[ \t ]+$/g, "").replace(/^[ \t]+/g, (m) => m); // trim trailing space only; keep indent text
-    if (line.trim() === "") {
-      if (cur.length) stanzas.push(cur);
-      cur = [];
-    } else cur.push(line.trim());
-  }
+  const source = normalizeNewlines(text);
+  const stanzas = [],
+    blank = [],
+    issues = [];
+  let cur = [],
+    run = 0;
+  const rows = source.split("\n");
+  rows.forEach((raw, i) => {
+    if (isBlank(raw)) {
+      if (cur.length) {
+        stanzas.push(cur);
+        cur = [];
+      }
+      run++;
+    } else {
+      if (!cur.length) {
+        blank.push(run);
+        run = 0;
+      }
+      cur.push(raw);
+      if ([...raw].length > LIMITS.lineChars)
+        issues.push({ code: "line-too-long", line: i + 1, message: `Line ${i + 1} has ${[...raw].length} characters; the limit is ${LIMITS.lineChars}. Split it into shorter lines.` });
+    }
+  });
   if (cur.length) stanzas.push(cur);
-  return { title: String(title || "").trim(), stanzas, truncated, lineCount: stanzas.reduce((n, s) => n + s.length, 0) };
+  // a source that ends with a newline yields one empty trailing row; it is not an intentional blank line
+  const trailingBlank = Math.max(0, run - (source.endsWith("\n") ? 1 : 0));
+  if (source.length > MAX_POEM_CHARS)
+    issues.push({ code: "too-long", message: `This text has ${source.length.toLocaleString("en")} characters; the limit is ${MAX_POEM_CHARS.toLocaleString("en")}. Nothing was cut. Shorten it or split it into several poems.` });
+  if (stanzas.length > LIMITS.stanzas)
+    issues.push({ code: "too-many-stanzas", message: `This poem has ${stanzas.length} stanzas; the limit is ${LIMITS.stanzas}.` });
+  stanzas.forEach((st, i) => {
+    if (st.length > LIMITS.stanzaLines)
+      issues.push({ code: "stanza-too-long", message: `Stanza ${i + 1} has ${st.length} lines; the limit is ${LIMITS.stanzaLines}. Add a blank line to split it.` });
+  });
+  const lineCount = stanzas.reduce((n, s) => n + s.length, 0);
+  return { title: String(title || "").trim(), source, stanzas, blank, trailingBlank, lineCount, ok: issues.length === 0, truncated: false, issues };
 }
 
-/** The inverse, used by the editable poem box: stanzas joined by one blank line. */
-export const poemToText = (poem) => (poem?.stanzas || []).map((s) => s.join("\n")).join("\n\n");
+/**
+ * The inverse, used by the editable poem box. A poem that carries its `source` returns it unchanged (exact round trip);
+ * a legacy poem ({stanzas} only) is rebuilt with one blank line between stanzas.
+ */
+export function poemToText(poem) {
+  if (typeof poem?.source === "string") return poem.source;
+  return (poem?.stanzas || []).map((s) => s.join("\n")).join("\n\n");
+}
 
 /**
  * Markdown import that is deliberately text-preserving: a leading `# Heading` becomes the title, list/quote/emphasis

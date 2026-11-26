@@ -1,10 +1,28 @@
 // Browser-side export. Everything is feature-detected at runtime; nothing assumes a device supports it.
-import { drawFrame, compDuration, posterCards } from "./render.js";
+import { drawFrame, compDuration, posterCards, validateScenes } from "./render.js";
+import { ensureFonts, canvasMeasure } from "./font-ready.js";
 import { FORMATS } from "./safe-zone.js";
 import { zipStore } from "./zip.js";
-import { layoutFullPoem, drawFullPoem, fullPoemCoverage, FULL_W } from "./full-poem.js";
+import { layoutFullPoem, drawFullPoem, validateFullPoem, FULL_W } from "./full-poem.js";
 
 export const FPS = 30;
+
+/** Thrown when a route refuses to export because the output would not reproduce the source poem exactly. */
+export class ExportValidationError extends Error {
+  constructor(what, messages) {
+    const shown = messages.slice(0, 6).join("; ");
+    super(`${what}: ${messages.length} problem(s) found, nothing was exported. ${shown}${messages.length > 6 ? "; …" : ""}`);
+    this.name = "ExportValidationError";
+    this.messages = messages;
+  }
+}
+const probeCtx = () => mkCanvas(16, 16).getContext("2d");
+/** Fonts ready (exact faces, Tamil glyphs proven) → THEN every scene this route will draw is validated against its source. */
+async function prepare(comp, scenes, what, { minSize = 28, extraText = "", title = "" } = {}) {
+  await ensureFonts(comp, { poemText: extraText, title }, { measure: canvasMeasure() });
+  const v = validateScenes(probeCtx(), comp, scenes, { minSize });
+  if (!v.ok) throw new ExportValidationError(what, v.messages);
+}
 const mkCanvas = (w, h) => Object.assign(document.createElement("canvas"), { width: w, height: h });
 const tick = () => new Promise((r) => setTimeout(r));
 
@@ -35,6 +53,7 @@ export async function detectCapabilities() {
 
 /** Render to H.264 (+AAC if audioBuffer) MP4. Frames are produced and encoded one at a time (bounded memory except the final buffer). */
 export async function exportMp4(comp, { onProgress, signal, audioBuffer, assets = {}, bitrate } = {}) {
+  await prepare(comp, comp.scenes, "Reel video");
   const mb = await import("mediabunny");
   const fmt = FORMATS[comp.format];
   const canvas = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(fmt.w, fmt.h) : mkCanvas(fmt.w, fmt.h);
@@ -67,6 +86,7 @@ const blobBytes = async (b) => new Uint8Array(await b.arrayBuffer());
 
 /** One still frame per scene (Story sequence). */
 export async function renderSceneStills(comp, { format = "story", type = "image/png", assets = {}, signal, onProgress } = {}) {
+  await prepare({ ...comp, format }, comp.scenes, "Story images");
   const fmt = FORMATS[format], out = [];
   const c = mkCanvas(fmt.w, fmt.h), ctx = c.getContext("2d");
   for (let i = 0; i < comp.scenes.length; i++) {
@@ -83,6 +103,12 @@ export async function renderSceneStills(comp, { format = "story", type = "image/
 export async function renderPosters(comp, { type = "image/png", assets = {}, scale = 1 } = {}) {
   const fmt = FORMATS.poster, c = mkCanvas(Math.round(fmt.w * scale), Math.round(fmt.h * scale)), ctx = c.getContext("2d");
   const { cards, overflow } = posterCards(ctx, comp);
+  const pc = { ...comp, format: "poster" };
+  const ids = comp.poster.sceneIds, chosen = comp.scenes.filter((s) => s.kind !== "title" && (!ids.length || ids.includes(s.id)));
+  const cardScenes = cards.map((card, i) => ({ kind: "stanza", lines: card.lines, durationMs: 1, id: `p${i}` }));
+  await prepare(pc, cardScenes, "Poster", { minSize: 46 });
+  const want = chosen.flatMap((s) => s.lines), got = cards.flatMap((cd) => cd.lines).filter((l) => l !== "");
+  if (want.length !== got.length || want.some((l, i) => l !== got[i])) throw new ExportValidationError("Poster", ["the poster cards do not contain every selected line, in order"]);
   const blobs = [];
   for (const card of cards) {
     ctx.clearRect(0, 0, c.width, c.height);
@@ -103,11 +129,13 @@ export async function zipBlobs(blobs, stem, ext) {
  * not fit, and verifies after layout that every line is present before drawing.
  */
 export async function renderFullPoem(comp, poem, { preset = "balanced", height = "standard", type = "image/png", scale = 1, assets = {} } = {}) {
+  // fonts first: layout measures text, so it must never run against a fallback face
+  await ensureFonts(comp, { poemText: [poem.title, ...poem.stanzas.flat()].join("\n"), title: poem.title }, { measure: canvasMeasure() });
   const probe = mkCanvas(FULL_W, 100), pctx = probe.getContext("2d");
   const layout = layoutFullPoem(pctx, comp, poem, { preset, height });
   if (!layout.fits) throw new Error("This poem does not fit this canvas at a readable size. Choose the extended-height poster or a more compact layout.");
-  const missing = fullPoemCoverage(poem, layout);
-  if (missing.length) throw new Error(`Layout check failed: ${missing.length} line(s) would be missing. Nothing was exported.`);
+  const v = validateFullPoem(poem, layout);
+  if (!v.ok) throw new ExportValidationError("Full-poem poster", v.messages);
   const k = Math.min(scale, layout.maxScale);
   const c = mkCanvas(Math.round(FULL_W * k), Math.round(layout.height * k)), ctx = c.getContext("2d");
   drawFullPoem(ctx, comp, layout, { assets, scale: k });
@@ -118,6 +146,7 @@ export async function renderFullPoem(comp, poem, { preset = "balanced", height =
 export async function renderReelCover(comp, { type = "image/png", assets = {} } = {}) {
   const sc = comp.scenes.find((x) => x.kind === "title") || comp.scenes[0];
   if (!sc) throw new Error("There are no scenes to make a cover from.");
+  await prepare({ ...comp, format: "reel" }, [sc], "Reel cover");
   const fmt = FORMATS.reel, c = mkCanvas(fmt.w, fmt.h), ctx = c.getContext("2d");
   drawFrame(ctx, { ...comp, format: "reel" }, 0, { w: fmt.w, h: fmt.h, assets, still: true, scene: sc });
   return toBlob(c, type, 0.94);

@@ -1,7 +1,8 @@
 // Deterministic frame renderer: drawFrame(ctx, comp, tMs, {w,h,fonts}) paints exactly one frame for time tMs.
 // Same function drives the on-screen preview and the export, so preview == output. No randomness: particles are
 // seeded from index so frames are reproducible.
-import { wrapLine } from "./graphemes.js";
+import { classifyInto, newResult, note, rowExtent, checkX, TOLERANCE } from "./coverage.js";
+import { wrapSpans, indentPx, lineIndent } from "./graphemes.js";
 import { FORMATS, safeRect } from "./safe-zone.js";
 import { totalDuration } from "./scenes.js";
 
@@ -90,15 +91,18 @@ export function layoutScene(ctx, c, scene, rect, { minSize = 28 } = {}) {
   const maxW = rect.w * (st.widthPct / 100);
   let size = Math.round(st.sizePx * (scene.scale || 1));
   for (let attempt = 0; attempt < 24; attempt++) {
-    ctx.font = `${st.weight} ${size}px ${family}`;
+    ctx.font = `${scene.kind === "title" ? 700 : st.weight} ${size}px ${family}`; // the weight drawFrame will paint with
     const measure = (x) => ctx.measureText(x).width;
     const lh = size * st.lineHeight, rows = [];
     let li = 0;
-    for (const ln of scene.lines) {
-      if (ln === "") { rows.push({ text: "", gap: true, h: lh * 0.6, line: li }); continue; }
-      wrapLine(ln, maxW, measure).forEach((r) => rows.push({ text: r, h: lh, line: li }));
+    scene.lines.forEach((ln, srcLine) => {
+      if (ln === "") { rows.push({ text: "", gap: true, h: lh * 0.6, line: li, srcLine }); return; }
+      // source-aware wrap: rows carry the exact source range they draw; leading whitespace becomes a bounded layout indent
+      const ipx = indentPx(ln, measure, maxW);
+      wrapSpans(ln, maxW - ipx, measure, lineIndent(ln).len).forEach((r, wrapRow) =>
+        rows.push({ text: r.text, start: r.start, end: r.end, w: measure(r.text), indentPx: ipx, line: li, srcLine, wrapRow, h: lh }));
       li++;
-    }
+    });
     const total = rows.reduce((n, r) => n + r.h, 0);
     if (total <= rect.h) return { rows, size, lh, total, maxW, fits: true };
     if (size <= minSize) return { rows, size, lh, total, maxW, fits: false };
@@ -106,6 +110,9 @@ export function layoutScene(ctx, c, scene, rect, { minSize = 28 } = {}) {
   }
   return { rows: [], size, lh: size * st.lineHeight, total: 0, maxW, fits: false };
 }
+
+/** Anchor x of a row after its layout indent: left/right anchors move by the indent, a centred row by half of it. */
+export const rowAnchor = (align, ax, ipx = 0) => (align === "left" ? ax + ipx : align === "right" ? ax - ipx : ax + ipx / 2);
 
 export function drawFrame(ctx, comp, tMs, { w, h, assets = {}, still = false, scene: forced = null, minSize = 28 } = {}) {
   const fmt = FORMATS[comp.format] || FORMATS.reel;
@@ -142,7 +149,7 @@ export function drawFrame(ctx, comp, tMs, { w, h, assets = {}, still = false, sc
       ctx.font = `${isTitle ? 700 : st.weight} ${size}px ${FONT_FAMILY[st.font]}`;
       if (st.shadow) { ctx.shadowColor = "rgba(0,0,0,0.45)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 3; } else ctx.shadowColor = "transparent";
       ctx.fillStyle = st.color;
-      ctx.fillText(r.text, ax, top + r.h / 2 + dy);
+      ctx.fillText(r.text, rowAnchor(align, ax, r.indentPx), top + r.h / 2 + dy);
       i++;
     }
     ctx.globalAlpha = 1; ctx.shadowColor = "transparent";
@@ -168,7 +175,10 @@ export function posterCards(ctx, comp) {
   const pc = { ...comp, format: "poster" };
   const ids = comp.poster.sceneIds, chosen = comp.scenes.filter((s) => s.kind !== "title" && (!ids.length || ids.includes(s.id)));
   const fit = (lines) => layoutScene(ctx, pc, { lines, scale: 1 }, rect, { minSize: POSTER_MIN }).fits;
-  const withGaps = (group) => group.flatMap((s, i) => (i ? ["", ...s.lines] : s.lines));
+  // A stanza gap goes between scenes only where the SOURCE has a stanza boundary. Consecutive parts of one split stanza
+  // join with no gap; scenes without stanza metadata (legacy) keep the old always-gap behaviour.
+  const sameStanza = (a, b) => a.stanza != null && b.stanza != null && a.stanza === b.stanza && a.part != null && b.part === a.part + 1;
+  const withGaps = (group) => group.flatMap((s, i) => (i && !sameStanza(group[i - 1], s) ? ["", ...s.lines] : s.lines));
   if (!chosen.length) return { cards: [], overflow: false };
   if (comp.poster.mode === "single") {
     const lines = withGaps(chosen);
@@ -181,4 +191,52 @@ export function posterCards(ctx, comp) {
   }
   if (cur.length) cards.push({ lines: withGaps(cur) });
   return { cards, overflow: cards.some((c) => !fit(c.lines)) };
+}
+
+/**
+ * Source-aware validation of ONE scene exactly as drawFrame would draw it: every source line must be drawn by rows whose
+ * source ranges reproduce it, and every row must sit inside the canvas, the format's safe area and clear of the signature.
+ * Pass a measuring ctx. Returns the structured result shared with the Full-Poem validator.
+ */
+export function validateScene(ctx, comp, scene, { minSize = 28, label = "scene" } = {}) {
+  const fmt = FORMATS[comp.format] || FORMATS.reel, W = fmt.w, H = fmt.h, st = comp.style;
+  const rect = safeRect(W, H, fmt.safe);
+  const lay = layoutScene(ctx, comp, scene, rect, { minSize });
+  const r = newResult();
+  scene.lines.forEach((ln, i) => {
+    if (ln === "") return;
+    classifyInto(r, `${label}, line ${i + 1} ${JSON.stringify(String(ln).slice(0, 60))}`, ln, lay.rows.filter((x) => !x.gap && x.srcLine === i));
+  });
+  if (!lay.fits) note(r, "outOfBounds", `${label}: the text does not fit the safe area at ${lay.size}px`);
+  const align = scene.align || st.align;
+  const ax = align === "left" ? rect.x : align === "right" ? rect.x + rect.w : rect.x + rect.w / 2;
+  const shift = ((scene.offsetY || 0) / 100) * rect.h;
+  let y = st.vAlign === "top" ? rect.y : st.vAlign === "bottom" ? rect.y + rect.h - lay.total : rect.y + (rect.h - lay.total) / 2;
+  y = Math.max(rect.y, Math.min(rect.y + rect.h - lay.total, y + shift));
+  const sigY = H * (comp.format === "poster" ? 0.955 : 0.8);
+  const sigTop = comp.branding?.show && comp.branding.signature ? sigY - 15 : Infinity;
+  for (const row of lay.rows) {
+    const top = y; y += row.h;
+    if (row.gap) continue;
+    const where = `${label}, ${JSON.stringify(String(row.text).slice(0, 40))}`;
+    const bad = checkX(rowExtent(align, rowAnchor(align, ax, row.indentPx), row.w), W, rect.x, rect.x + rect.w);
+    if (bad) note(r, "outOfBounds", `${where} is ${bad}`);
+    if (row.w > lay.maxW + TOLERANCE) note(r, "outOfBounds", `${where} is wider than the text column`);
+    if (top < rect.y - TOLERANCE || y > rect.y + rect.h + TOLERANCE || top < -TOLERANCE || y > H + TOLERANCE) note(r, "outOfBounds", `${where} is outside the safe area vertically`);
+    if (y > sigTop + TOLERANCE) note(r, "outOfBounds", `${where} overlaps the signature`);
+  }
+  r.partial = !lay.fits;
+  r.ok = r.messages.length === 0 && !r.partial;
+  return r;
+}
+
+/** Validate every scene a route will draw. `scenes` defaults to comp.scenes. Returns {ok, results, messages}. */
+export function validateScenes(ctx, comp, scenes = comp.scenes, opts = {}) {
+  const messages = [], results = [];
+  scenes.forEach((sc, i) => {
+    const res = validateScene(ctx, comp, sc, { ...opts, label: `Scene ${i + 1}` });
+    results.push(res);
+    messages.push(...res.messages);
+  });
+  return { ok: messages.length === 0, results, messages };
 }

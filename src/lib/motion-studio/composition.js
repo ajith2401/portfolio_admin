@@ -2,7 +2,8 @@
 // (only the text lines chosen for each scene) and never any HTML. normalizeComposition() is the single gate used
 // by the API and the client: it whitelists fields, clamps numbers and rejects anything else.
 import { FONT_KEYS, templateById } from "./templates.js";
-import { sceneDuration, MIN_SCENE_MS, MAX_SCENE_MS } from "./scenes.js";
+import { parsePoemText, MAX_POEM_CHARS } from "./poem-input.js";
+import { sceneDuration, attachStanzaMeta, MIN_SCENE_MS, MAX_SCENE_MS } from "./scenes.js";
 
 export const FORMAT_KEYS = ["reel", "story", "poster"];
 export const TEXT_IN = ["fade", "line", "rise", "none"];
@@ -34,7 +35,25 @@ export function normalizePoemSnapshot(p) {
     .map((st) => (Array.isArray(st) ? st : []).slice(0, MAX_STANZA_LINES).map((l) => str(l, MAX_LINE_CHARS)).filter((l) => l.trim() !== ""))
     .filter((st) => st.length);
   if (!stanzas.length) return undefined;
-  return { title: str(p.title, 300), stanzas };
+  const out = { title: str(p.title, 300), stanzas };
+  // Keep the verbatim source only when it still describes exactly these stanzas (never trust a stale copy), together
+  // with the blank-line counts that parsePoemText derived from it. Old projects without them simply have neither.
+  if (typeof p.source === "string" && p.source.length <= MAX_POEM_CHARS) {
+    const re = parsePoemText(p.source);
+    if (re.ok && JSON.stringify(re.stanzas) === JSON.stringify(stanzas)) {
+      out.source = re.source;
+      out.blank = re.blank;
+      out.trailingBlank = re.trailingBlank;
+    }
+  }
+  return out;
+}
+/** Source-stanza identity of a scene: stanza index + part ordering. Absent on legacy scenes (never invented). */
+function stanzaMeta(sc) {
+  const i = (v, max) => (Number.isInteger(v) && v >= 0 && v <= max ? v : null);
+  const stanza = i(sc?.stanza, 9999), part = i(sc?.part, 999), parts = i(sc?.parts, 999);
+  if (stanza == null || part == null || parts == null || part >= parts) return {};
+  return { stanza, part, parts };
 }
 function str(v, max, d = "") {
   return typeof v === "string" ? v.slice(0, max) : d;
@@ -62,19 +81,21 @@ export function normalizeComposition(input) {
       id: str(sc?.id, 40, `s${i}`) || `s${i}`,
       kind: oneOf(sc?.kind, ["title", "stanza"], "stanza"),
       lines,
+      ...stanzaMeta(sc),
       durationMs: Math.round(num(sc?.durationMs, MIN_SCENE_MS, MAX_SCENE_MS, sceneDuration(lines))),
       ...(Number.isFinite(Number(sc?.offsetY)) && Number(sc.offsetY) !== 0 ? { offsetY: num(sc.offsetY, -30, 30, 0) } : {}),
       ...(ALIGN.includes(sc?.align) ? { align: sc.align } : {}),
       ...(Number.isFinite(Number(sc?.scale)) && Number(sc.scale) !== 1 ? { scale: num(sc.scale, 0.6, 1.4, 1) } : {}),
     };
   }).filter((sc) => sc.lines.length > 0);
-  const scenes = normScenes(c.scenes);
+  const poemSnap = normalizePoemSnapshot(c.poem);
+  const scenes = attachStanzaMeta(normScenes(c.scenes), poemSnap);
   return {
     v: 1,
     format: oneOf(c.format, FORMAT_KEYS, "reel"),
     templateId: t.id,
     scenes,
-    originalScenes: normScenes(c.originalScenes),
+    originalScenes: attachStanzaMeta(normScenes(c.originalScenes), poemSnap),
     style: {
       font: oneOf(s.font, FONT_KEYS, t.style.font),
       sizePx: Math.round(num(s.sizePx, 28, 140, t.style.sizePx)),
@@ -112,6 +133,6 @@ export function normalizeComposition(input) {
     },
     full: { preset: oneOf(c.full?.preset, FULL_PRESETS, "balanced"), height: oneOf(c.full?.height, ["standard", "extended"], "standard") },
     export: { quality: oneOf(c.export?.quality, ["draft", "standard", "high"], "standard") },
-    ...(normalizePoemSnapshot(c.poem) ? { poem: normalizePoemSnapshot(c.poem) } : {}),
+    ...(poemSnap ? { poem: poemSnap } : {}),
   };
 }
