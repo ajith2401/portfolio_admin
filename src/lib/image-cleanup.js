@@ -2,7 +2,7 @@
 // shared with another document, and never a URL that is not one of ours.
 import { Writing, Project, TechBlog, Book } from '@/models';
 import { destroyAsset } from '@/lib/cloudinary';
-import { planImageDeletion, referenceFilter } from '@/lib/image-ownership';
+import { planImageDeletion, referenceFilter, classifyDestroyResult } from '@/lib/image-ownership';
 
 const MODELS = { Writing, Project, TechBlog, Book };
 
@@ -31,8 +31,10 @@ export async function deleteOwnedImages(urls, { ownerModel, ownerId }, deps = {}
   const deleted = [];
   for (const d of deletable) {
     try {
-      await destroy(d.publicId);
-      deleted.push(d.publicId);
+      const outcome = classifyDestroyResult(await destroy(d.publicId));
+      if (outcome === 'deleted') deleted.push(d.publicId);
+      else if (outcome === 'already-gone') skipped.push({ url: d.url, reason: 'already-gone' });
+      else throw new Error('Cloudinary did not confirm the deletion');
     } catch (e) {
       skipped.push({ url: d.url, reason: 'destroy-failed' });
       console.error('Image cleanup failed for one asset:', e?.message);

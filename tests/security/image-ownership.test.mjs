@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { cloudinaryPublicId, imageUrlsOf, planImageDeletion, referenceFilter } from '../../src/lib/image-ownership.js';
+import { cloudinaryPublicId, imageUrlsOf, planImageDeletion, referenceFilter, classifyDestroyResult } from '../../src/lib/image-ownership.js';
 
 const C = 'democloud';
 const u = (p) => `https://res.cloudinary.com/${C}/image/upload/${p}`;
@@ -62,5 +62,15 @@ describe('referenceFilter', () => {
     assert.ok(re.test('https://x/v1/writings/a.b.jpg'));
     assert.ok(!re.test('https://x/v1/writings/aXb.jpg'));
     assert.ok(!re.test('https://x/v1/writings/a.b-other.jpg'));
+  });
+});
+
+describe('classifyDestroyResult', () => {
+  it('only an explicit ok is a confirmed deletion', () => {
+    assert.equal(classifyDestroyResult({ result: 'ok' }), 'deleted');
+    assert.equal(classifyDestroyResult({ result: 'not found' }), 'already-gone');
+    for (const r of [{ result: 'error' }, { result: 'rate limited' }, {}, null, undefined, 'ok', { result: 'OK' }]) {
+      assert.equal(classifyDestroyResult(r), 'failed', JSON.stringify(r));
+    }
   });
 });

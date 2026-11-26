@@ -104,3 +104,14 @@ export function referenceFilter(publicId) {
     $or: IMAGE_KEYS.map((k) => ({ [`images.${k}`]: re })),
   };
 }
+
+/**
+ * Cloudinary's destroy() answers { result: 'ok' | 'not found' | ... } and does not throw for most failures.
+ * 'ok' = deleted, 'not found' = already gone (idempotent), anything else is NOT a confirmed deletion.
+ */
+export function classifyDestroyResult(res) {
+  const result = res && typeof res === "object" && "result" in res ? res.result : undefined;
+  if (result === "ok") return "deleted";
+  if (result === "not found") return "already-gone";
+  return "failed";
+}
