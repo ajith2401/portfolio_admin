@@ -30,12 +30,19 @@ export function sceneAt(comp, tMs) {
 }
 export const compDuration = (comp) => totalDuration(comp.scenes);
 
-function paintBackground(ctx, c, w, h, tMs, totalMs, assets) {
+/** Draw `img` to cover the w×h box (centre-cropped), so a baked 9:16 background also fits a taller poster. */
+function drawCover(ctx, img, x, y, w, h) {
+  const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+  if (!iw || !ih) return;
+  const k = Math.max(w / iw, h / ih), dw = iw * k, dh = ih * k;
+  ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+}
+export function paintBackground(ctx, c, w, h, tMs, totalMs, assets) {
   const st = c.style, p = clamp01(tMs / Math.max(1, totalMs)), k = c.motion.intensity;
   ctx.save();
   if (c.motion.bgMotion === "zoom") { const z = 1 + 0.06 * k * p; ctx.translate(w / 2, h / 2); ctx.scale(z, z); ctx.translate(-w / 2, -h / 2); }
   if (c.motion.bgMotion === "drift") ctx.translate(-30 * k * p, -20 * k * p);
-  if (assets.bg) ctx.drawImage(assets.bg, -30, -30, w + 60, h + 60);
+  if (assets.bg) drawCover(ctx, assets.bg, -30, -30, w + 60, h + 60);
   else {
     const g = ctx.createLinearGradient(0, 0, w * 0.3, h);
     g.addColorStop(0, st.bg.a); g.addColorStop(1, st.bg.kind === "solid" ? st.bg.a : st.bg.b);
@@ -60,13 +67,13 @@ function paintParticles(ctx, c, w, h, tMs) {
   }
   ctx.restore();
 }
-function paintVignette(ctx, w, h, v) {
+export function paintVignette(ctx, w, h, v) {
   if (v <= 0) return;
   const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.75);
   g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, `rgba(0,0,0,${0.7 * v})`);
   ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
 }
-function paintGrain(ctx, w, h, amt, tMs) {
+export function paintGrain(ctx, w, h, amt, tMs) {
   if (amt <= 0) return;
   const f = Math.floor(tMs / 120);
   ctx.save(); ctx.globalAlpha = Math.min(0.5, amt);

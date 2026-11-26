@@ -26,7 +26,7 @@ test.beforeAll(async ({ browser }) => {
 
 const wav = (sec = 4, sr = 44100) => { const n = sec * sr, b = Buffer.alloc(44 + n * 2); b.write('RIFF', 0); b.writeUInt32LE(36 + n * 2, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(sr, 24); b.writeUInt32LE(sr * 2, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(n * 2, 40); for (let i = 0; i < n; i++) b.writeInt16LE(Math.round(Math.sin(i / sr * 2 * Math.PI * 440) * 9000), 44 + i * 2); return b; };
 const probe = (f) => JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', f]).toString());
-const open = async (page) => { await page.goto('/admin/poem-motion-studio'); await expect(page.getByRole('heading', { name: 'Poem Motion Studio' })).toBeVisible(); await page.getByLabel('Start from a poem').selectOption(poemId); await expect(page.getByText(/Created \d+ scenes/)).toBeVisible(); };
+const open = async (page) => { await page.goto('/admin/poem-motion-studio'); await expect(page.getByRole('heading', { name: 'Poem Motion Studio' })).toBeVisible(); await page.getByRole('button', { name: /Portfolio poem/ }).click(); await page.getByLabel('Start from a poem').selectOption(poemId); await expect(page.getByText(/Created \d+ scenes/)).toBeVisible(); };
 const tab = (page, n) => page.getByRole('tab', { name: n, exact: true }).click();
 const advanced = (page) => page.getByRole('button', { name: 'Advanced Studio' }).click();
 
@@ -48,7 +48,7 @@ test('quick create: Tamil poem → style → preview → export (Poster PNG + Re
   await page.getByLabel('Theme').selectOption('system');
   await tab(page, 'Export');
   const poster = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export Poster PNG' }).click();
+  await page.getByRole('button', { name: 'Export Feed poster PNG' }).click();
   const pp = info.outputPath('poster.png'); await (await poster).saveAs(pp);
   expect(fs.statSync(pp).size).toBeGreaterThan(5000);
   expect(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', pp]).toString().trim()).toBe('1080,1350');
@@ -91,10 +91,10 @@ test('advanced: per-scene editing, undo/redo, restore original, no silent omissi
   await expect(page.getByRole('alert').filter({ hasText: /not in any scene/ })).toBeVisible(); // omission is flagged, not silent
   await page.getByRole('button', { name: 'Restore original arrangement' }).click();
   await tab(page, 'Project');
-  await page.getByRole('button', { name: 'Save project' }).click();
+  await page.getByRole('button', { name: 'Save project to Admin' }).click(); await page.getByRole('alertdialog').getByRole('button', { name: 'Save project to Admin' }).click();
   await expect(page.getByText('Saved.')).toBeVisible();
   await page.reload();
-  await page.getByLabel('Open a saved project').selectOption({ index: 1 });
+  await page.getByRole('button', { name: /^Continue/ }).click(); await page.getByLabel('Open a saved project').selectOption({ index: 1 });
   await advanced(page); await tab(page, 'Scenes');
   await expect(page.getByLabel('Scene 1 line 1', { exact: true })).toBeVisible();
   // safe delete confirmation
@@ -146,7 +146,7 @@ test('story frames in order (PNG + ZIP) and poster JPEG / multi-card set', async
   const zp = info.outputPath('story.zip'); await (await z).saveAs(zp);
   expect(execFileSync('unzip', ['-t', zp]).toString()).toMatch(/No errors detected/);
   expect(execFileSync('unzip', ['-l', zp]).toString()).toMatch(new RegExp(`${nFrames} files`));
-  await tab(page, 'Poster');
+  await tab(page, 'Feed poster');
   const j = page.waitForEvent('download'); await page.getByRole('button', { name: 'Poster JPEG' }).click();
   const jp = info.outputPath('poster.jpg'); await (await j).saveAs(jp);
   expect(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_name,width,height', '-of', 'csv=p=0', jp]).toString().trim()).toBe('mjpeg,1080,1350');
@@ -227,7 +227,7 @@ test('project API: auth required, origin enforced, normalisation, source change'
 test('mobile 390: no overflow, bottom tab bar, full-screen preview, large touch targets', async ({ page }) => {
   await page.goto('/admin/poem-motion-studio');
   await checkViewport(page, 390, 844);
-  await page.getByLabel('Start from a poem').selectOption(poemId);
+  await page.getByRole('button', { name: /Portfolio poem/ }).click(); await page.getByLabel('Start from a poem').selectOption(poemId);
   await expect(page.getByText(/Created \d+ scenes/)).toBeVisible();
   const m = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: innerWidth }));
   expect(m.sw).toBeLessThanOrEqual(m.iw);

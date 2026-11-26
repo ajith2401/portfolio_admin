@@ -89,7 +89,7 @@ export default function AdminShell({ children }) {
       </aside>
 
       <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-gray-200 bg-white px-4 lg:hidden">
-        <button type="button" onClick={() => setOpen(true)} aria-label="Open navigation" aria-expanded={open} className="rounded p-2 text-gray-700 hover:bg-gray-100">
+        <button type="button" onClick={() => setOpen(true)} aria-label="Open navigation" aria-expanded={open} className="inline-flex h-11 w-11 items-center justify-center rounded text-gray-700 hover:bg-gray-100">
           <Menu size={20} />
         </button>
         <span className="font-semibold">Admin CMS</span>

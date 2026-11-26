@@ -26,6 +26,8 @@ import {
   exportMp4,
   renderSceneStills,
   renderPosters,
+  renderFullPoem,
+  renderReelCover,
   zipBlobs,
 } from "@/lib/motion-studio/export";
 import * as E from "@/lib/motion-studio/scene-edit";
@@ -41,6 +43,26 @@ import {
   recordingSupport,
 } from "@/lib/motion-studio/audio";
 import { FONT_CSS } from "./fonts";
+import {
+  parsePoemText,
+  poemToText,
+  importPoemFile,
+} from "@/lib/motion-studio/poem-input";
+import {
+  layoutFullPoem,
+  drawFullPoem,
+  fullPoemCoverage,
+  PRESETS as FULL_PRESETS,
+  FULL_W,
+} from "@/lib/motion-studio/full-poem";
+import {
+  saveDraft,
+  loadDraft,
+  listDrafts,
+  deleteDraft,
+  clearDrafts,
+  newDraftId,
+} from "@/lib/motion-studio/drafts";
 
 const THEME_CSS = `
 .pms{--bg:#f6f6f4;--card:#fff;--ink:#14141a;--mute:#4a4a55;--line:#c9c9d1;--accent:#14141a;--accent-ink:#fff;--warn-bg:#fff7e0;--warn-ink:#5c3d00;--err-bg:#fdecec;--err-ink:#7a1010;--ok-bg:#e8f6ee;--ok-ink:#0b4a26;color:var(--ink);background:var(--bg)}
@@ -140,9 +162,19 @@ export default function MotionStudio() {
   const [confirmDel, setConfirmDel] = useState(false);
   const [bgReady, setBgReady] = useState(0);
   const [stills, setStills] = useState(null);
-  const [draft, setDraft] = useState(null);
   const [audioInfo, setAudioInfo] = useState(null);
   const [recState, setRecState] = useState("idle");
+  const [route, setRoute] = useState(null);
+  const [textBox, setTextBox] = useState("");
+  const [titleBox, setTitleBox] = useState("");
+  const [drafts, setDrafts] = useState([]);
+  const [cloudDialog, setCloudDialog] = useState(false);
+  const [poemText, setPoemText] = useState("");
+  const [poemTitle, setPoemTitle] = useState("");
+  const [fontTick, setFontTick] = useState(0);
+  const [draftSaved, setDraftSaved] = useState(null);
+  const draftId = useRef(null);
+  const fullCanvasRef = useRef(null);
   const canvasRef = useRef(null),
     fullRef = useRef(null),
     abortRef = useRef(null),
@@ -195,8 +227,7 @@ export default function MotionStudio() {
       if (th) setTheme(th);
       const m = localStorage.getItem("pms:mode");
       if (m) setMode(m);
-      const d = localStorage.getItem("pms:draft");
-      if (d) setDraft(JSON.parse(d));
+      localStorage.removeItem("pms:draft"); // legacy key; recovery now lives in IndexedDB
     } catch {}
   }, []);
   useEffect(() => {
@@ -216,16 +247,26 @@ export default function MotionStudio() {
       if (p.ok) setProjects(p.data.projects || []);
     })();
   }, []);
-  // recovery draft: a local copy of unsaved work survives a crash, tab discard or lost connection
+  // device-only recovery copy (IndexedDB). Never sent to the server; shown as "Saved on this device".
+  useEffect(() => {
+    listDrafts().then(setDrafts);
+    document.fonts?.ready?.then(() => setFontTick((n) => n + 1));
+    const f = () => setFontTick((n) => n + 1);
+    document.fonts?.addEventListener?.("loadingdone", f);
+    return () => document.fonts?.removeEventListener?.("loadingdone", f);
+  }, []);
   useEffect(() => {
     if (!comp) return;
-    const h = setTimeout(() => {
-      try {
-        localStorage.setItem(
-          "pms:draft",
-          JSON.stringify({ at: Date.now(), name, projectId, source, comp }),
-        );
-      } catch {}
+    const h = setTimeout(async () => {
+      if (!draftId.current) draftId.current = newDraftId();
+      const ok = await saveDraft({
+        id: draftId.current,
+        name,
+        projectId,
+        source,
+        composition: normalizeComposition(comp),
+      });
+      if (ok) setDraftSaved(Date.now());
     }, 800);
     return () => clearTimeout(h);
   });
@@ -355,8 +396,10 @@ export default function MotionStudio() {
     if (!poem.stanzas.length)
       return flash("error", "This writing has no poem lines to animate.");
     const scenes = generateScenes(poem, { title: r.data.title });
+    draftId.current = null;
     setSource({
       id,
+      kind: "writing",
       title: r.data.title,
       warnings: poem.warnings,
       version: r.data.version ?? null,
@@ -379,6 +422,88 @@ export default function MotionStudio() {
       `Created ${scenes.length} scenes from “${r.data.title}”. The original writing is unchanged.`,
     );
   };
+  const startManual = (text, title) => {
+    const p = parsePoemText(text, { title });
+    if (!p.stanzas.length)
+      return flash("error", "Write or paste at least one line of the poem first.");
+    const scenes = generateScenes({ stanzas: p.stanzas }, { title: p.title });
+    draftId.current = null;
+    setSource({ id: null, kind: "manual", title: p.title, warnings: [], poem: { stanzas: p.stanzas } });
+    start({
+      ...defaultComposition({ scenes }),
+      originalScenes: structuredClone(scenes),
+      poem: { title: p.title, stanzas: p.stanzas },
+    });
+    setName(p.title || "Untitled poem");
+    setProjectId(null);
+    setT(0);
+    setSel(0);
+    setSourceChanged(false);
+    loadedRef.current = false;
+    bgBitmap.current = null;
+    setHasBitmap(false);
+    flash(
+      p.truncated ? "error" : "ok",
+      p.truncated
+        ? `The text was longer than the ${"60,000"}-character limit and the end was cut. Created ${scenes.length} scenes from the rest.`
+        : `Created ${scenes.length} scenes from ${p.lineCount} lines. Nothing was saved to your Portfolio or Admin; a recovery copy stays on this device.`,
+    );
+  };
+  const pasteFromClipboard = async () => {
+    try {
+      const t = await navigator.clipboard.readText();
+      if (!t.trim()) return flash("error", "The clipboard is empty.");
+      setTextBox(t);
+      flash("ok", "Pasted. Check the stanza breaks, then choose Create scenes.");
+    } catch {
+      flash("error", "This browser blocked clipboard access. Tap into the box and use Paste from the keyboard or context menu instead.");
+    }
+  };
+  const onImport = async (file) => {
+    try {
+      const p = await importPoemFile(file);
+      setTextBox(poemToText(p));
+      setTitleBox(p.title);
+      setRoute("import");
+      flash("ok", `Imported “${file.name}” as text only. Review it, then choose Create scenes.`);
+    } catch (e) {
+      flash("error", e?.message || "Could not import that file.");
+    }
+  };
+  const openDraft = async (id) => {
+    const d = await loadDraft(id);
+    if (!d) return flash("error", "That recovery copy could not be opened.");
+    loadedRef.current = false;
+    bgBitmap.current = null;
+    setHasBitmap(false);
+    draftId.current = d.id;
+    start(normalizeComposition(d.composition));
+    setName(d.name);
+    setProjectId(d.projectId || null);
+    setSource(d.source || null);
+    setT(0);
+    setSel(0);
+    flash("ok", "Restored from this device.");
+  };
+  const applyPoemEdit = () => {
+    const p = parsePoemText(poemText, { title: poemTitle });
+    if (!p.stanzas.length) return flash("error", "The poem is empty, so nothing was changed.");
+    const scenes = generateScenes({ stanzas: p.stanzas }, { title: p.title });
+    setSource((x) => ({ ...x, title: p.title, poem: { stanzas: p.stanzas } }));
+    update((c) => ({
+      ...c,
+      scenes,
+      originalScenes: structuredClone(scenes),
+      poem: { title: p.title, stanzas: p.stanzas },
+    }));
+    flash("ok", `Rebuilt ${scenes.length} scenes from your edited text. Use Undo to go back.`);
+  };
+  useEffect(() => {
+    if (source?.poem) {
+      setPoemText(poemToText(source.poem));
+      setPoemTitle(source.title || "");
+    }
+  }, [source]);
   const poemMissing = useMemo(
     () =>
       comp && source?.poem ? E.missingLines(source.poem, comp.scenes) : [],
@@ -397,7 +522,7 @@ export default function MotionStudio() {
       ? await apiRequest("PUT", `/api/motion-projects/${projectId}`, body)
       : await apiRequest("POST", "/api/motion-projects", {
           ...body,
-          sourceWritingId: source?.id,
+          ...(source?.id ? { sourceWritingId: source.id } : {}),
         });
     if (!r.ok) {
       setSaveState("error");
@@ -408,9 +533,6 @@ export default function MotionStudio() {
       setProjects((p) => [r.data.project, ...p]);
     }
     setSaveState("saved");
-    try {
-      localStorage.removeItem("pms:draft");
-    } catch {}
   }, [comp, name, projectId, source]);
   useEffect(() => {
     if (!projectId || !comp) return;
@@ -436,14 +558,18 @@ export default function MotionStudio() {
     setProjectId(id);
     setT(0);
     setSel(0);
+    draftId.current = null;
     setSource(
       r.data.project.sourceWritingId
         ? {
             id: r.data.project.sourceWritingId,
+            kind: "writing",
             title: r.data.project.sourceTitle,
             warnings: [],
           }
-        : null,
+        : c.poem
+          ? { id: null, kind: "manual", title: c.poem.title, warnings: [], poem: { stanzas: c.poem.stanzas } }
+          : null,
     );
     setSourceChanged(!!r.data.sourceChanged);
     if (r.data.sourceMissing)
@@ -456,16 +582,6 @@ export default function MotionStudio() {
         "ok",
         "This project used a photo from your device. Choose it again under Background; until then a gradient is shown.",
       );
-  };
-  const restoreDraft = () => {
-    if (!draft) return;
-    loadedRef.current = false;
-    start(normalizeComposition(draft.comp));
-    setName(draft.name);
-    setProjectId(draft.projectId);
-    setSource(draft.source);
-    setDraft(null);
-    flash("ok", "Restored your unsaved work from this device.");
   };
   const ackSource = async () => {
     const r = await apiRequest("PUT", `/api/motion-projects/${projectId}`, {
@@ -774,19 +890,69 @@ export default function MotionStudio() {
     mode === "quick"
       ? [
           ["look", "Look"],
+          ["full", "Full poem"],
           ["export", "Export"],
         ]
       : [
+          ["poem", "Poem"],
           ["scenes", "Scenes"],
           ["look", "Look"],
           ["bg", "Background"],
           ["audio", "Audio"],
           ["story", "Story"],
-          ["poster", "Poster"],
+          ["full", "Full poem"],
+          ["poster", "Feed poster"],
           ["project", "Project"],
           ["export", "Export"],
         ];
   const activeTab = tabs.some(([k]) => k === tab) ? tab : tabs[0][0];
+
+  const fullPoem = useMemo(() => {
+    if (!comp) return { title: "", stanzas: [] };
+    if (source?.poem) return { title: source.title || "", stanzas: source.poem.stanzas };
+    return {
+      title: comp.scenes.find((x) => x.kind === "title")?.lines?.[0] || "",
+      stanzas: comp.scenes.filter((x) => x.kind !== "title").map((x) => x.lines),
+    };
+  }, [comp, source]);
+  const fullPreset = comp?.full?.preset || "balanced";
+  const fullHeight = comp?.full?.height || "standard";
+  const fullLayout = useMemo(() => {
+    if (!comp || activeTab !== "full" || !fullPoem.stanzas.length) return null;
+    const cx = document.createElement("canvas").getContext("2d");
+    return layoutFullPoem(cx, comp, fullPoem, { preset: fullPreset, height: fullHeight });
+  }, [comp?.style, comp?.branding, fullPoem, fullPreset, fullHeight, fontTick, activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fullMissing = useMemo(
+    () => (fullLayout ? fullPoemCoverage(fullPoem, fullLayout) : []),
+    [fullLayout, fullPoem],
+  );
+  const fullAssets = (H) =>
+    bg && bgBitmap.current ? { bg: bakeBackground(bgBitmap.current, bg, FULL_W, H) } : {};
+  useEffect(() => {
+    const c = fullCanvasRef.current;
+    if (!c || !fullLayout || activeTab !== "full") return;
+    const k = 0.34;
+    c.width = Math.round(FULL_W * k);
+    c.height = Math.round(fullLayout.height * k);
+    drawFullPoem(c.getContext("2d"), comp, fullLayout, { assets: fullAssets(fullLayout.height), scale: k });
+  }, [fullLayout, bgReady, hasBitmap]); // eslint-disable-line react-hooks/exhaustive-deps
+  const setFull_ = (patch) => update((c) => ({ ...c, full: { ...c.full, ...patch } }));
+  const doFull = (type, scale) =>
+    guard(async () => {
+      const r = await renderFullPoem(comp, fullPoem, {
+        preset: fullPreset, height: fullHeight, type, scale,
+        assets: fullAssets(fullLayout?.height || 1920),
+      });
+      const ext = type === "image/png" ? "png" : "jpg";
+      download(r.blob, `${slug(name)}-full-poem.${ext}`);
+      flash("ok", `Exported ${r.width}×${r.height} ${ext.toUpperCase()} with all ${fullPoem.stanzas.flat().length} lines on one image.`);
+    });
+  const doCover = (type) =>
+    guard(async () => {
+      const b = await renderReelCover(comp, { type, assets: exportAssets("reel") });
+      download(b, `${slug(name)}-cover.${type === "image/png" ? "png" : "jpg"}`);
+      flash("ok", "Reel cover exported (1080×1920).");
+    });
 
   const previewBlock = (idPrefix, big) => (
     <div>
@@ -894,26 +1060,6 @@ export default function MotionStudio() {
           {msg.text}
         </p>
       )}
-      {draft && !comp && (
-        <div
-          role="status"
-          className="mt-3 rounded-lg px-3 py-2 text-sm"
-          style={{ background: "var(--warn-bg)", color: "var(--warn-ink)" }}
-        >
-          Unsaved work from {new Date(draft.at).toLocaleString()} was found on
-          this device. <Btn onClick={restoreDraft}>Restore it</Btn>{" "}
-          <Btn
-            onClick={() => {
-              setDraft(null);
-              try {
-                localStorage.removeItem("pms:draft");
-              } catch {}
-            }}
-          >
-            Discard
-          </Btn>
-        </div>
-      )}
       {sourceChanged && (
         <div
           role="alert"
@@ -931,40 +1077,208 @@ export default function MotionStudio() {
         </div>
       )}
 
-      <section className="mt-4 grid gap-3 sm:grid-cols-2">
-        <Field label="Start from a poem">
-          <select
-            id="pms-src"
-            aria-label="Start from a poem"
-            className="pms-field"
-            value={source?.id || ""}
-            onChange={(e) => pick(e.target.value)}
+      {comp ? (
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+          <span lang="ta" className="min-w-0 break-words font-semibold">
+            {source?.title || name}
+          </span>
+          <span style={{ color: "var(--mute)" }}>
+            {source?.kind === "manual"
+              ? "Your own poem"
+              : source?.kind === "writing"
+                ? "From your Portfolio (read-only)"
+                : "Saved project"}
+          </span>
+          <Btn
+            onClick={() => {
+              start(null);
+              setProjectId(null);
+              setSource(null);
+              setRoute(null);
+              setPlaying(false);
+              listDrafts().then(setDrafts);
+            }}
           >
-            <option value="">Choose a poem…</option>
-            {writings.map((w) => (
-              <option key={w._id} value={w._id}>
-                {w.title}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Open a saved project">
-          <select
-            id="pms-proj"
-            aria-label="Open a saved project"
-            className="pms-field"
-            value={projectId || ""}
-            onChange={(e) => e.target.value && openProject(e.target.value)}
+            Start a different poem
+          </Btn>
+          <span style={{ color: "var(--mute)" }} aria-live="polite">
+            {projectId
+              ? "Saved to your Admin projects"
+              : draftSaved
+                ? "Saved on this device only"
+                : "Not saved yet"}
+          </span>
+        </div>
+      ) : (
+        <section aria-labelledby="start-h" className="mt-4 min-w-0">
+          <h2 id="start-h" className="text-xl font-semibold">
+            How would you like to start your poem?
+          </h2>
+          <p className="mt-1 text-sm" style={{ color: "var(--mute)" }}>
+            You don’t need a Portfolio writing. Nothing is saved to the
+            server unless you choose Save project to Admin.
+          </p>
+          <div
+            className="mt-3 grid gap-2"
+            style={{ gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,150px),1fr))" }}
+            role="group"
+            aria-label="Ways to start"
           >
-            <option value="">Saved projects ({projects.length})…</option>
-            {projects.map((p) => (
-              <option key={p._id} value={p._id}>
-                {p.name}
-              </option>
+            {[
+              ["write", "Write a poem", "Type it here"],
+              ["paste", "Paste a poem", "From Notes, WhatsApp…"],
+              ["import", "Import a file", ".txt or .md"],
+              ["existing", "Portfolio poem", "Read-only copy"],
+              ["continue", "Continue", "Saved on device or Admin"],
+            ].map(([k, l, d]) => (
+              <button
+                key={k}
+                type="button"
+                className="pms-btn text-left"
+                style={{
+                  minHeight: 64,
+                  display: "block",
+                  ...(route === k ? { background: "var(--accent)", color: "var(--accent-ink)" } : {}),
+                }}
+                aria-pressed={route === k}
+                onClick={() => setRoute(k)}
+              >
+                <span className="block font-semibold">{l}</span>
+                <span className="block text-xs opacity-80">{d}</span>
+              </button>
             ))}
-          </select>
-        </Field>
-      </section>
+          </div>
+
+          {(route === "write" || route === "paste" || route === "import") && (
+            <div className="pms-card mt-3 space-y-2">
+              {route === "paste" && (
+                <Btn onClick={pasteFromClipboard}>Paste from clipboard</Btn>
+              )}
+              {route === "import" && (
+                <Field label="Choose a .txt or .md file">
+                  <input
+                    type="file"
+                    accept=".txt,.md,.markdown,text/plain,text/markdown"
+                    className="pms-field"
+                    onChange={(e) => onImport(e.target.files?.[0])}
+                  />
+                </Field>
+              )}
+              <Field label="Title (optional)">
+                <input
+                  className="pms-field"
+                  lang="ta"
+                  value={titleBox}
+                  maxLength={300}
+                  onChange={(e) => setTitleBox(e.target.value)}
+                />
+              </Field>
+              <Field label={route === "paste" ? "Poem text (paste here)" : "Poem text"}>
+                <textarea
+                  aria-label="Poem text"
+                  className="pms-field"
+                  lang="ta"
+                  rows={12}
+                  value={textBox}
+                  placeholder={"ஒரு வரி\nஅடுத்த வரி\n\n(blank line = new stanza)"}
+                  style={{ fontSize: 16, lineHeight: 1.7, minHeight: "40vh", whiteSpace: "pre-wrap", resize: "vertical" }}
+                  onChange={(e) => setTextBox(e.target.value)}
+                />
+              </Field>
+              <p className="text-xs" style={{ color: "var(--mute)" }}>
+                A blank line starts a new stanza. Line breaks are kept exactly
+                as you wrote them.
+              </p>
+              <Btn primary onClick={() => startManual(textBox, titleBox)}>
+                Create scenes
+              </Btn>
+            </div>
+          )}
+
+          {route === "existing" && (
+            <div className="pms-card mt-3">
+              <Field label="Start from a Portfolio poem (read-only)">
+                <select
+                  id="pms-src"
+                  aria-label="Start from a poem"
+                  className="pms-field"
+                  value=""
+                  onChange={(e) => pick(e.target.value)}
+                >
+                  <option value="">Choose a poem…</option>
+                  {writings.map((w) => (
+                    <option key={w._id} value={w._id}>
+                      {w.title}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          )}
+
+          {route === "continue" && (
+            <div className="pms-card mt-3 space-y-3">
+              <div>
+                <h3 className="font-semibold">Saved on this device</h3>
+                {drafts.length === 0 ? (
+                  <p className="text-sm" style={{ color: "var(--mute)" }}>
+                    No recovery copies on this device.
+                  </p>
+                ) : (
+                  <ul className="mt-1 space-y-1">
+                    {drafts.map((d) => (
+                      <li key={d.id} className="flex flex-wrap items-center gap-2 text-sm">
+                        <span lang="ta" className="min-w-0 break-words">
+                          {d.name} · {d.lines} lines · {new Date(d.updatedAt).toLocaleString()}
+                        </span>
+                        <Btn onClick={() => openDraft(d.id)}>Open</Btn>
+                        <Btn
+                          aria-label={`Delete recovery copy ${d.name}`}
+                          onClick={async () => {
+                            await deleteDraft(d.id);
+                            setDrafts(await listDrafts());
+                          }}
+                        >
+                          Delete
+                        </Btn>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {drafts.length > 0 && (
+                  <Btn
+                    onClick={async () => {
+                      await clearDrafts();
+                      setDrafts([]);
+                    }}
+                  >
+                    Clear all device copies
+                  </Btn>
+                )}
+                <p className="mt-1 text-xs" style={{ color: "var(--mute)" }}>
+                  These stay in this browser only and are never synced.
+                </p>
+              </div>
+              <Field label="Open a project saved in Admin">
+                <select
+                  id="pms-proj"
+                  aria-label="Open a saved project"
+                  className="pms-field"
+                  value={projectId || ""}
+                  onChange={(e) => e.target.value && openProject(e.target.value)}
+                >
+                  <option value="">Saved projects ({projects.length})…</option>
+                  {projects.map((p) => (
+                    <option key={p._id} value={p._id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          )}
+        </section>
+      )}
       {source?.warnings?.length > 0 && (
         <p className="mt-2 text-sm" style={{ color: "var(--warn-ink)" }}>
           This is a legacy Markdown poem; it was converted for the preview with{" "}
@@ -972,13 +1286,9 @@ export default function MotionStudio() {
         </p>
       )}
 
-      {!comp ? (
-        <p className="mt-8" style={{ color: "var(--mute)" }}>
-          Pick a poem to begin.
-        </p>
-      ) : (
-        <div className="mt-5 grid gap-6 lg:grid-cols-[300px_1fr]">
-          <div className="lg:sticky lg:top-4 lg:self-start">
+      {!comp ? null : (
+        <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
+          <div className="min-w-0 lg:sticky lg:top-4 lg:self-start">
             {previewBlock("main")}
             <label className="mt-2 flex min-h-11 items-center gap-2 text-sm">
               <input
@@ -1006,7 +1316,7 @@ export default function MotionStudio() {
             </div>
           </div>
 
-          <div>
+          <div className="min-w-0">
             <div
               className="pms-tabs"
               role="tablist"
@@ -1984,9 +2294,136 @@ export default function MotionStudio() {
                 </section>
               )}
 
+              {activeTab === "poem" && (
+                <section aria-label="Poem" className="pms-card space-y-3">
+                  <h2 className="text-lg font-semibold">Poem text</h2>
+                  {source?.kind === "writing" ? (
+                    <>
+                      <p className="text-sm" style={{ color: "var(--mute)" }}>
+                        This poem comes from your Portfolio and is read-only
+                        here. To change the words, start a new poem by pasting
+                        a copy, or edit the original in Writings.
+                      </p>
+                      <pre lang="ta" className="max-h-80 overflow-auto whitespace-pre-wrap break-words text-sm">{poemText}</pre>
+                    </>
+                  ) : source?.poem ? (
+                    <>
+                      <Field label="Title">
+                        <input className="pms-field" lang="ta" value={poemTitle} maxLength={300} onChange={(e) => setPoemTitle(e.target.value)} />
+                      </Field>
+                      <Field label="Poem text (blank line = new stanza)">
+                        <textarea
+                          aria-label="Poem text"
+                          className="pms-field"
+                          lang="ta"
+                          rows={14}
+                          value={poemText}
+                          style={{ fontSize: 16, lineHeight: 1.7, whiteSpace: "pre-wrap", resize: "vertical" }}
+                          onChange={(e) => setPoemText(e.target.value)}
+                        />
+                      </Field>
+                      <Btn primary onClick={applyPoemEdit}>
+                        Apply and rebuild scenes
+                      </Btn>
+                      <p className="text-xs" style={{ color: "var(--mute)" }}>
+                        Rebuilding replaces your scene edits. You can Undo.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm" style={{ color: "var(--mute)" }}>
+                      This project has no stored poem text to edit.
+                    </p>
+                  )}
+                </section>
+              )}
+
+              {activeTab === "full" && (
+                <section aria-label="Full poem" className="space-y-3">
+                  <h2 className="text-lg font-semibold">Full-poem vertical poster</h2>
+                  <p className="text-sm" style={{ color: "var(--mute)" }}>
+                    The whole poem on one image. No line, stanza or punctuation
+                    is dropped, and text is never made smaller than a readable
+                    size.
+                  </p>
+                  <div role="group" aria-label="Layout" className="flex flex-wrap gap-2">
+                    {Object.entries(FULL_PRESETS).map(([k, v]) => (
+                      <Btn key={k} aria-pressed={fullPreset === k} onClick={() => setFull_({ preset: k })} title={v.note}>
+                        {v.label}
+                      </Btn>
+                    ))}
+                  </div>
+                  <div role="group" aria-label="Canvas height" className="flex flex-wrap gap-2">
+                    <Btn aria-pressed={fullHeight === "standard"} onClick={() => setFull_({ height: "standard" })}>
+                      Standard 1080×1920
+                    </Btn>
+                    <Btn aria-pressed={fullHeight === "extended"} onClick={() => setFull_({ height: "extended" })}>
+                      Extended height
+                    </Btn>
+                  </div>
+                  {fullLayout && (
+                    <>
+                      <p className="text-sm" aria-live="polite">
+                        {fullLayout.width}×{fullLayout.height}px · font size {fullLayout.size}px ·{" "}
+                        <strong>
+                          {fullLayout.level === "good" ? "Readable" : fullLayout.level === "small" ? "Small but readable" : "Too small"}
+                        </strong>
+                        {fullLayout.shrunk ? ` (reduced from ${fullLayout.presetSize}px to fit)` : ""}
+                      </p>
+                      <p className="text-xs" style={{ color: fullMissing.length ? "var(--err-ink)" : "var(--mute)" }}>
+                        {fullMissing.length
+                          ? `${fullMissing.length} line(s) are missing from this layout; export is blocked.`
+                          : `All ${fullPoem.stanzas.flat().length} lines are on the poster.`}
+                      </p>
+                      {!fullLayout.fits && (
+                        <div role="alert" className="rounded-lg p-3 text-sm" style={{ background: "var(--warn-bg)", color: "var(--warn-ink)" }}>
+                          {fullHeight === "standard" ? (
+                            <>
+                              This poem is too long to be readable on a single 9:16 image (it would need text smaller than {fullLayout.size}px).
+                              Nothing has been cut. Choose what to do:
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {fullLayout.suggestedFits && (
+                                  <Btn onClick={() => setFull_({ height: "extended" })}>
+                                    One taller image (1080×{fullLayout.suggestedHeight}, {fullLayout.suggestedSize}px text)
+                                  </Btn>
+                                )}
+                                {fullPreset !== "compact" && <Btn onClick={() => setFull_({ preset: "compact" })}>Try Compact</Btn>}
+                                <Btn onClick={() => { setMode("advanced"); setTab("story"); }}>Split into Story frames</Btn>
+                              </div>
+                            </>
+                          ) : (
+                            "This poem is too long for even the tallest single image at a readable size. Use Story frames or the Feed poster card set instead."
+                          )}
+                        </div>
+                      )}
+                      <canvas
+                        ref={fullCanvasRef}
+                        role="img"
+                        aria-label="Preview of the full-poem poster"
+                        className="mx-auto block max-w-full rounded-lg border bg-black"
+                        style={{ width: Math.round(FULL_W * 0.34), height: "auto" }}
+                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Btn primary disabled={progress !== null || !fullLayout.fits || fullMissing.length > 0} onClick={() => doFull("image/png", 1)}>
+                          PNG
+                        </Btn>
+                        <Btn disabled={progress !== null || !fullLayout.fits || fullMissing.length > 0} onClick={() => doFull("image/jpeg", 1)}>
+                          JPEG
+                        </Btn>
+                        <Btn disabled={progress !== null || !fullLayout.fits || fullMissing.length > 0 || fullLayout.maxScale < 2} onClick={() => doFull("image/png", 2)}>
+                          High-res PNG (2×)
+                        </Btn>
+                        {fullLayout.maxScale < 2 && (
+                          <span className="text-xs" style={{ color: "var(--mute)" }}>2× unavailable: too large for phone canvases.</span>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </section>
+              )}
+
               {activeTab === "poster" && (
                 <section aria-label="Poster" className="space-y-3">
-                  <h2 className="text-lg font-semibold">Poster (4:5)</h2>
+                  <h2 className="text-lg font-semibold">Feed poster (4:5)</h2>
                   <p className="text-sm" style={{ color: "var(--mute)" }}>
                     Choose the stanzas for the poster. Text is never shrunk
                     below a readable size; if it won’t fit, you’ll be told and
@@ -2073,8 +2510,8 @@ export default function MotionStudio() {
                       maxLength={120}
                       onChange={(e) => setName(e.target.value)}
                     />
-                    <Btn primary onClick={save}>
-                      {projectId ? "Save now" : "Save project"}
+                    <Btn primary onClick={projectId ? save : () => setCloudDialog(true)}>
+                      {projectId ? "Save now" : "Save project to Admin"}
                     </Btn>
                   </div>
                   <p
@@ -2092,8 +2529,20 @@ export default function MotionStudio() {
                             ? "Save failed — your work is still on screen and a copy is kept on this device."
                             : projectId
                               ? "Autosave is on."
-                              : "Not saved yet. A recovery copy is kept on this device."}
+                              : "Not saved to Admin. A recovery copy is kept on this device only."}
                   </p>
+                  {cloudDialog && !projectId && (
+                    <div role="alertdialog" aria-labelledby="cloud-h" className="mt-3 rounded-lg border p-3">
+                      <p id="cloud-h" className="text-sm font-semibold">Save this project to Admin?</p>
+                      <p className="text-sm" style={{ color: "var(--mute)" }}>
+                        This saves your poem and visual composition in your Admin creative-project library. It does not create or publish a Portfolio Writing record.
+                      </p>
+                      <div className="mt-2 flex gap-2">
+                        <Btn primary onClick={() => { setCloudDialog(false); save(); }}>Save project to Admin</Btn>
+                        <Btn onClick={() => setCloudDialog(false)}>Not now</Btn>
+                      </div>
+                    </div>
+                  )}
                   {projectId && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       <Btn onClick={duplicate}>Duplicate</Btn>
@@ -2174,9 +2623,21 @@ export default function MotionStudio() {
                     )}
                     <Btn
                       disabled={progress !== null}
+                      onClick={() => setTab("full")}
+                    >
+                      Full-poem poster…
+                    </Btn>
+                    <Btn
+                      disabled={progress !== null}
+                      onClick={() => doCover("image/png")}
+                    >
+                      Reel cover PNG
+                    </Btn>
+                    <Btn
+                      disabled={progress !== null}
                       onClick={() => doPoster("image/png", false)}
                     >
-                      Export Poster PNG
+                      Export Feed poster PNG
                     </Btn>
                     <Btn
                       disabled={progress !== null}

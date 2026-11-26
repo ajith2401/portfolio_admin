@@ -27,3 +27,11 @@ The `motionprojects` collection may be left in place (unused, harmless) or dropp
 
 ## Not verified
 Real iPhone Safari / Android Chrome devices; Preview/production runs against real data; real AAC on devices lacking an AAC encoder.
+
+## 2.1 — creation, storage and full-poem poster
+
+- **Start routes** (none needs a Writing record): write, paste (clipboard button + native paste), import `.txt`/`.md` (`poem-input.js`), read-only Portfolio poem, continue.
+- **Storage tiers**: temporary (React state) → *Saved on this device* (IndexedDB, `drafts.js`, listable/clearable, never synced) → explicit *Save project to Admin* (disclosure dialog; manual poems are stored as `composition.poem` snapshot with `sourceKind:"manual"`). Nothing is written to `writings`; no autosave to MongoDB before the explicit save.
+- **Full-poem vertical poster** (`full-poem.js`, `renderFullPoem`): whole poem on one image; presets Elegant/Balanced/Compact/Expressive; shows font size and readability; never below 40 px; when it does not fit 1080×1920 export is blocked and the author may choose an extended-height single image (≤ 1080×5400) or Compact; coverage check blocks export if any line is missing. 2× export only when it fits mobile canvas limits.
+- **Fix**: scene cap raised 60 → 400 (long poems were silently truncated).
+- **Reel cover**: `renderReelCover` (separate from the poster).

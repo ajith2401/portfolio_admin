@@ -11,7 +11,8 @@ export const PARTICLES = ["none", "dust", "rain", "stars", "light"];
 export const ALIGN = ["left", "center", "right"];
 export const VALIGN = ["top", "middle", "bottom"];
 export const BG_KINDS = ["solid", "gradient", "paper"];
-export const MAX_SCENES = 60;
+// Generous cap: a long poem must never lose scenes silently. normalizeComposition never truncates a realistic poem.
+export const MAX_SCENES = 400;
 export const MAX_LINES = 12;
 export const MAX_LINE_CHARS = 400;
 
@@ -24,7 +25,20 @@ export const safeImageUrl = (v) => {
   if (/^\/[^/\\]/.test(v)) return v;
   try { const u = new URL(v); return u.protocol === "https:" && u.hostname === "res.cloudinary.com" && !u.username && !u.password ? u.toString() : null; } catch { return null; }
 };
-const str = (v, max, d = "") => (typeof v === "string" ? v.slice(0, max) : d);
+export const FULL_PRESETS = ["elegant", "balanced", "compact", "expressive"];
+export const MAX_STANZAS = 400, MAX_STANZA_LINES = 120;
+/** Poem snapshot kept inside a project: plain text only, bounded. Never HTML. */
+export function normalizePoemSnapshot(p) {
+  if (!p || typeof p !== "object") return undefined;
+  const stanzas = (Array.isArray(p.stanzas) ? p.stanzas : []).slice(0, MAX_STANZAS)
+    .map((st) => (Array.isArray(st) ? st : []).slice(0, MAX_STANZA_LINES).map((l) => str(l, MAX_LINE_CHARS)).filter((l) => l.trim() !== ""))
+    .filter((st) => st.length);
+  if (!stanzas.length) return undefined;
+  return { title: str(p.title, 300), stanzas };
+}
+function str(v, max, d = "") {
+  return typeof v === "string" ? v.slice(0, max) : d;
+}
 
 export function defaultComposition({ format = "reel", templateId = "ink-silence", scenes = [], signature = "Ajithkumar R." } = {}) {
   const t = templateById(templateId);
@@ -96,6 +110,8 @@ export function normalizeComposition(input) {
       sceneIds: (Array.isArray(c.poster?.sceneIds) ? c.poster.sceneIds : []).slice(0, MAX_SCENES).map((x) => str(x, 40)).filter(Boolean),
       mode: oneOf(c.poster?.mode, ["single", "set"], "single"),
     },
+    full: { preset: oneOf(c.full?.preset, FULL_PRESETS, "balanced"), height: oneOf(c.full?.height, ["standard", "extended"], "standard") },
     export: { quality: oneOf(c.export?.quality, ["draft", "standard", "high"], "standard") },
+    ...(normalizePoemSnapshot(c.poem) ? { poem: normalizePoemSnapshot(c.poem) } : {}),
   };
 }

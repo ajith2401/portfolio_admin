@@ -43,7 +43,13 @@ export async function POST(request) {
       if (!w) return NextResponse.json({ error: "Source writing not found" }, { status: 404 });
       source = { sourceWritingId: w._id, sourceTitle: String(w.title || "").slice(0, 300), sourceHash: poemHash(poemFromWriting(w)), sourceVersion: Number.isFinite(w.version) ? w.version : undefined };
     }
-    const doc = await MotionProject.create({ name, ...source, createdBy: String(auth.user.userId || "").slice(0, 64), composition: normalizeComposition(body?.composition) });
+    const composition = normalizeComposition(body?.composition);
+    // A poem typed/pasted/imported in the Studio is stored ONLY as this project's own snapshot (composition.poem), after the
+    // author explicitly chose "Save project to Admin". It never creates or touches a Writing record.
+    if (body?.sourceWritingId == null && composition.poem) {
+      source = { sourceKind: "manual", sourceTitle: composition.poem.title.slice(0, 300), sourceHash: poemHash({ stanzas: composition.poem.stanzas }) };
+    } else if (source.sourceWritingId) source.sourceKind = "writing";
+    const doc = await MotionProject.create({ name, ...source, createdBy: String(auth.user.userId || "").slice(0, 64), composition });
     return NextResponse.json({ project: doc }, { status: 201 });
   } catch (e) {
     if (e instanceof SyntaxError) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });

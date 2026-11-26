@@ -2,6 +2,7 @@
 import { drawFrame, compDuration, posterCards } from "./render.js";
 import { FORMATS } from "./safe-zone.js";
 import { zipStore } from "./zip.js";
+import { layoutFullPoem, drawFullPoem, fullPoemCoverage, FULL_W } from "./full-poem.js";
 
 export const FPS = 30;
 const mkCanvas = (w, h) => Object.assign(document.createElement("canvas"), { width: w, height: h });
@@ -95,4 +96,29 @@ export async function zipBlobs(blobs, stem, ext) {
   const files = [];
   for (let i = 0; i < blobs.length; i++) files.push({ name: `${stem}-${String(i + 1).padStart(2, "0")}.${ext}`, data: await blobBytes(blobs[i]) });
   return new Blob([zipStore(files)], { type: "application/zip" });
+}
+
+/**
+ * Full-Poem Vertical Poster: ONE image with the whole poem. Refuses (throws) instead of clipping when the layout does
+ * not fit, and verifies after layout that every line is present before drawing.
+ */
+export async function renderFullPoem(comp, poem, { preset = "balanced", height = "standard", type = "image/png", scale = 1, assets = {} } = {}) {
+  const probe = mkCanvas(FULL_W, 100), pctx = probe.getContext("2d");
+  const layout = layoutFullPoem(pctx, comp, poem, { preset, height });
+  if (!layout.fits) throw new Error("This poem does not fit this canvas at a readable size. Choose the extended-height poster or a more compact layout.");
+  const missing = fullPoemCoverage(poem, layout);
+  if (missing.length) throw new Error(`Layout check failed: ${missing.length} line(s) would be missing. Nothing was exported.`);
+  const k = Math.min(scale, layout.maxScale);
+  const c = mkCanvas(Math.round(FULL_W * k), Math.round(layout.height * k)), ctx = c.getContext("2d");
+  drawFullPoem(ctx, comp, layout, { assets, scale: k });
+  return { blob: await toBlob(c, type, 0.94), layout, scale: k, width: c.width, height: c.height };
+}
+
+/** Reel cover: the title card (or first scene) as a still 1080×1920 image. Distinct from the full-poem poster. */
+export async function renderReelCover(comp, { type = "image/png", assets = {} } = {}) {
+  const sc = comp.scenes.find((x) => x.kind === "title") || comp.scenes[0];
+  if (!sc) throw new Error("There are no scenes to make a cover from.");
+  const fmt = FORMATS.reel, c = mkCanvas(fmt.w, fmt.h), ctx = c.getContext("2d");
+  drawFrame(ctx, { ...comp, format: "reel" }, 0, { w: fmt.w, h: fmt.h, assets, still: true, scene: sc });
+  return toBlob(c, type, 0.94);
 }
