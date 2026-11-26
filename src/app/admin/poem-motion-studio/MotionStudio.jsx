@@ -25,6 +25,9 @@ import {
   renderPosters,
   renderFullPoem,
   renderReelCover,
+  renderQuote,
+  exportQuoteMp4,
+  renderCarousel,
   zipBlobs,
 } from "@/lib/motion-studio/export";
 import * as E from "@/lib/motion-studio/scene-edit";
@@ -872,6 +875,22 @@ export default function MotionStudio() {
           : `Poster${blobs.length > 1 ? "s" : ""} exported.`,
       );
     });
+  const doCarousel = (type) =>
+    guard(async () => {
+      const { blobs } = await renderCarousel(comp, { type, assets: exportAssets("poster") });
+      const ext = type === "image/png" ? "png" : "jpg";
+      download(await zipBlobs(blobs, `${slug(name)}-carousel`, ext), `${slug(name)}-carousel.zip`);
+      flash("ok", `Feed carousel exported: ${blobs.length} numbered cards (cover, poem, end).`);
+    });
+  // Quote = EXCERPT only: the file name and the message say so; it is never reported as the complete poem.
+  const doQuote = (selection, format, kind) =>
+    guard(async (signal) => {
+      const r = kind === "video"
+        ? await exportQuoteMp4(comp, fullPoem, selection, { format, signal, onProgress: setProgress, assets: exportAssets(format) })
+        : await renderQuote(comp, fullPoem, selection, { format, type: "image/png", assets: exportAssets(format) });
+      download(r.blob, `${slug(name)}-quote-excerpt-${r.format}.${kind === "video" ? "mp4" : "png"}`);
+      flash("ok", `Quote exported as an EXCERPT: ${r.coverage.selected} of ${r.coverage.total} lines (not the complete poem).`);
+    });
   const doStillsZip = async () => {
     download(
       await zipBlobs(
@@ -1033,7 +1052,9 @@ export default function MotionStudio() {
     cloudDialog,
     comp,
     confirmDel,
+    doCarousel,
     doCover,
+    doQuote,
     doFull,
     doPoster,
     doStillsZip,

@@ -8,11 +8,16 @@ export function safeRect(width, height, safe = SAFE) {
 }
 /** Posters (4:5) have no UI overlay; keep a plain margin. */
 export const POSTER_SAFE = Object.freeze({ top: 0.08, bottom: 0.1, side: 0.09 });
+/** Square (1:1) feed video/image: no UI overlay, a slightly wider margin than the 4:5 poster's sides. */
+export const SQUARE_SAFE = Object.freeze({ top: 0.08, bottom: 0.12, side: 0.08 });
 export const FORMATS = Object.freeze({
   reel: { w: 1080, h: 1920, safe: SAFE },
   story: { w: 1080, h: 1920, safe: SAFE },
   poster: { w: 1080, h: 1350, safe: POSTER_SAFE },
+  square: { w: 1080, h: 1080, safe: SQUARE_SAFE },
 });
 /** Smallest text size (px, on the 1080-wide canvas) the Studio will ever render. Reel/Story scenes are SPLIT to fit, never shrunk below it. */
-export const MIN_TEXT_PX = Object.freeze({ reel: 40, story: 40, poster: 46 });
+export const MIN_TEXT_PX = Object.freeze({ reel: 40, story: 40, poster: 46, square: 44 });
+/** A quote (excerpt) is a few lines meant to be read at a glance: its floor is higher than the scene floor in every format. */
+export const QUOTE_MIN_PX = Object.freeze({ reel: 52, story: 52, poster: 56, square: 52 });
 export const FIT_ACTION_LABEL = "Fit scenes to 40px";

@@ -2,9 +2,11 @@
 // ensureFonts) and returns the shared result shape ({ok, messages, ...} from validateScene(s) / validateFullPoem /
 // newResult()). export.js runs them before drawing; formats.js exposes them per route; tests run them directly.
 // `mutate` is for negative controls only: it transforms a COPY of each layout before it is checked.
-import { validateScenes, posterCards, POSTER_MIN } from "./render.js";
+import { validateScene, validateScenes, posterCards, POSTER_MIN, pageLabelBox } from "./render.js";
 import { layoutFullPoem, validateFullPoem } from "./full-poem.js";
-import { MIN_TEXT_PX } from "./safe-zone.js";
+import { MIN_TEXT_PX, QUOTE_MIN_PX, FORMATS } from "./safe-zone.js";
+import { newResult, note, TOLERANCE } from "./coverage.js";
+import { textRect, signatureBox } from "./signature.js";
 
 export const sceneMin = (format) => MIN_TEXT_PX[format] ?? MIN_TEXT_PX.reel;
 export const FULL_NO_FIT = "This poem does not fit this canvas at a readable size. Choose the extended-height poster or a more compact layout.";
@@ -37,6 +39,90 @@ export function checkPoster(ctx, comp, { mutate = null } = {}) {
   const messages = [...v.messages];
   if (want.length !== got.length || want.some((l, i) => l !== got[i])) messages.push("the poster cards do not contain every selected line, in order");
   return { ...v, ok: messages.length === 0, messages, plan };
+}
+
+// ---------------------------------------------------------------- quote (excerpt) routes
+export const QUOTE_MAX_LINES = 8;
+export const QUOTE_SCALE = 1.3; // a quote starts larger than a scene; the floor (QUOTE_MIN_PX) is enforced, never shrunk past
+export const QUOTE_MS = 6000;
+export const quoteMin = (format) => QUOTE_MIN_PX[format] ?? QUOTE_MIN_PX.reel;
+/**
+ * The scene a quote draws, built from the SOURCE poem (never from the selection's own text). A stanza boundary between
+ * selected lines becomes a gap row. Returns null when the selection is not drawable (see checkQuote for why).
+ */
+export function quoteScene(poem, selection) {
+  const lines = [];
+  let prev = null;
+  for (const s of selection || []) {
+    const src = poem?.stanzas?.[s?.stanza]?.[s?.line];
+    if (typeof src !== "string") return null;
+    if (prev != null && s.stanza !== prev) lines.push("");
+    lines.push(src);
+    prev = s.stanza;
+  }
+  return lines.length ? { id: "quote", kind: "quote", lines, scale: QUOTE_SCALE, durationMs: QUOTE_MS } : null;
+}
+/**
+ * Quote = an EXCERPT: user-selected whole lines. Every selection must name an exact, non-empty source line (in order, no
+ * duplicates; a `text` it carries must equal the source byte for byte), and the drawn scene must pass validateScene at
+ * the quote floor in any format. The result never claims completeness: excerpt:true, complete:false, coverage.partial.
+ */
+export function checkQuote(ctx, comp, poem, selection, { format = comp.format, mutate = null } = {}) {
+  const total = (poem?.stanzas || []).flat().filter((l) => l !== "").length;
+  const sel = Array.isArray(selection) ? selection : [];
+  const r = newResult();
+  if (!sel.length) note(r, "missingLines", "Select at least one line for the quote.");
+  if (sel.length > QUOTE_MAX_LINES) note(r, "outOfBounds", `A quote is at most ${QUOTE_MAX_LINES} lines; use a poster or the full poem for more.`);
+  let prev = null;
+  sel.forEach((s, i) => {
+    const src = poem?.stanzas?.[s?.stanza]?.[s?.line];
+    const where = `quote line ${i + 1}`;
+    if (!Number.isInteger(s?.stanza) || !Number.isInteger(s?.line) || typeof src !== "string") return note(r, "missingLines", `${where} is not a line of the poem`);
+    if (src === "") note(r, "missingLines", `${where} is an empty line`);
+    if (s.text != null && s.text !== src) note(r, "orderIssues", `${where} is not the exact source text of stanza ${s.stanza + 1}, line ${s.line + 1}`);
+    if (prev && (s.stanza < prev.stanza || (s.stanza === prev.stanza && s.line <= prev.line))) note(r, "orderIssues", `${where} is out of order or repeated`);
+    prev = s;
+  });
+  const scene = r.messages.length ? null : quoteScene(poem, sel);
+  const fc = { ...comp, format: FORMATS[format] ? format : "reel" };
+  const v = scene ? validateScenes(ctx, fc, [scene], { minSize: quoteMin(fc.format), enforceMin: true, mutate }) : { ok: false, messages: [], results: [] };
+  if (scene) v.messages.forEach((m) => note(r, "outOfBounds", m.replace(/^Scene 1/, "Quote")));
+  const messages = r.messages;
+  return { ...r, ok: messages.length === 0, messages, results: v.results, scene, format: fc.format, excerpt: true, complete: false,
+    coverage: { selected: sel.length, total, partial: true } };
+}
+
+// ---------------------------------------------------------------- Feed carousel (cover + poem cards + end card, numbered)
+/** Every card a carousel draws: optional title cover, the poster SET cards, optional end card; each numbered k/N. */
+export function carouselPlan(ctx, comp) {
+  const body = posterPlan(ctx, { ...comp, poster: { ...comp.poster, mode: "set" } });
+  const title = comp.scenes.find((s) => s.kind === "title");
+  const endLines = String(comp.poster?.endText || "").split("\n").map((l) => l.replace(/\s+$/, "")).filter((l, i, a) => l !== "" || (i && a[i - 1] !== ""));
+  const end = endLines.some((l) => l !== "") ? { kind: "stanza", lines: endLines, durationMs: 1, id: "end" } : null;
+  const cards = [
+    ...(title ? [{ role: "cover", scene: { ...title, id: "cover" } }] : []),
+    ...body.cardScenes.map((scene) => ({ role: "poem", scene })),
+    ...(end ? [{ role: "end", scene: end }] : []),
+  ].map((c, i, a) => ({ ...c, page: `${i + 1}/${a.length}` }));
+  return { ...body, cards, poemCards: body.cards };
+}
+export function checkCarousel(ctx, comp, { mutate = null } = {}) {
+  const plan = carouselPlan(ctx, comp);
+  const pc = plan.pc, fmt = FORMATS.poster;
+  const body = checkPoster(ctx, { ...comp, poster: { ...comp.poster, mode: "set" } }, { mutate });
+  // cover and end cards: their text goes through the same validator as every poem card
+  const extra = plan.cards.filter((c) => c.role !== "poem").map((c) => validateScene(ctx, pc, c.scene, { minSize: POSTER_MIN, mutate, label: c.role === "end" ? "End card" : "Cover card" }));
+  const messages = [...body.messages, ...extra.flatMap((x) => x.messages)];
+  // numbering: inside the canvas and the side margins, above the text area, clear of the signature
+  const rect = textRect(pc, fmt, ctx), side = fmt.safe.side * fmt.w, sg = signatureBox(pc, fmt, ctx);
+  for (const c of plan.cards) {
+    const b = pageLabelBox(pc, fmt, ctx, c.page);
+    if (b.left < side - TOLERANCE || b.right > fmt.w - side + TOLERANCE || b.top < -TOLERANCE) messages.push(`page number ${c.page} is outside the margins`);
+    if (b.bottom > rect.y + TOLERANCE) messages.push(`page number ${c.page} overlaps the text area`);
+    if (sg && b.bottom > sg.top && b.top < sg.bottom && b.right > sg.left && b.left < sg.right) messages.push(`page number ${c.page} overlaps the signature`);
+  }
+  if (!plan.poemCards.length) messages.push("Select at least one stanza for the carousel.");
+  return { ok: messages.length === 0, messages, results: [...body.results, ...extra], plan };
 }
 
 /** Full-poem poster: layout + source-aware validation against the SOURCE poem. `fits:false` is a failure, never a clip. */

@@ -5,8 +5,8 @@
 //
 // route: { id, label, format, kind: "video"|"image"|"set", exportFn, scenesFor(comp, input, ctx), validate(ctx, comp,
 //   input), render(comp, input, opts), ui?: { panel, action, label(comp) } }
-import { exportMp4, renderSceneStills, renderPosters, renderFullPoem, renderReelCover } from "./export.js";
-import { checkScenes, checkCover, coverScene, checkPoster, posterPlan, checkFull } from "./route-checks.js";
+import { exportMp4, renderSceneStills, renderPosters, renderFullPoem, renderReelCover, renderQuote, exportQuoteMp4, renderCarousel } from "./export.js";
+import { checkScenes, checkCover, coverScene, checkPoster, posterPlan, checkFull, checkQuote, quoteScene, carouselPlan, checkCarousel } from "./route-checks.js";
 
 const withFormat = (comp, format) => ({ ...comp, format });
 const sceneVideo = (format, label, short) => ({
@@ -22,6 +22,23 @@ const posterSingle = (comp) => ({ ...comp, poster: { ...comp.poster, mode: "sing
 export const ROUTES = Object.freeze([
   sceneVideo("reel", "Reel MP4", "Reel"),
   sceneVideo("story", "Story MP4", "Story"),
+  sceneVideo("square", "Square MP4", "Square"),
+  // EXCERPT routes: only the lines the author selected (input.lines = [{stanza, line, text}]), in any format (input.format).
+  // Their validator returns excerpt:true, complete:false, coverage.partial: they never claim to be the whole poem.
+  {
+    id: "quote", label: "Quote image (excerpt)", format: "any", kind: "image", excerpt: true, exportFn: renderQuote,
+    scenesFor: (comp, input = {}) => [quoteScene(input.poem, input.lines)].filter(Boolean),
+    validate: (ctx, comp, input = {}) => checkQuote(ctx, comp, input.poem, input.lines, { format: input.format || "poster", mutate: input.mutate }),
+    render: (comp, input = {}, opts = {}) => renderQuote(comp, input.poem, input.lines, { format: input.format || "poster", ...opts }),
+    ui: { panel: "quote", action: "quote" },
+  },
+  {
+    id: "animated-quote", label: "Animated quote MP4 (excerpt)", format: "any", kind: "video", group: "quote", excerpt: true, exportFn: exportQuoteMp4,
+    scenesFor: (comp, input = {}) => [quoteScene(input.poem, input.lines)].filter(Boolean),
+    validate: (ctx, comp, input = {}) => checkQuote(ctx, comp, input.poem, input.lines, { format: input.format || "reel", mutate: input.mutate }),
+    render: (comp, input = {}, opts = {}) => exportQuoteMp4(comp, input.poem, input.lines, { format: input.format || "reel", ...opts }),
+    ui: { panel: "quote", action: "quote-mp4" },
+  },
   {
     id: "full-poem", label: "Full-poem poster", format: "full", kind: "image", exportFn: renderFullPoem,
     scenesFor: (comp, input = {}) => (input.poem?.stanzas || []).map((lines, i) => ({ id: `f${i}`, kind: "stanza", lines })),
@@ -48,6 +65,13 @@ export const ROUTES = Object.freeze([
     scenesFor: (comp, input, ctx) => posterPlan(ctx, posterSet(comp)).cardScenes,
     validate: (ctx, comp, input = {}) => checkPoster(ctx, posterSet(comp), { mutate: input.mutate }),
     render: (comp, input, opts) => renderPosters(posterSet(comp), opts),
+  },
+  {
+    id: "carousel", label: "Feed carousel", format: "poster", kind: "set", exportFn: renderCarousel,
+    scenesFor: (comp, input, ctx) => carouselPlan(ctx, comp).cards.map((c) => c.scene),
+    validate: (ctx, comp, input = {}) => checkCarousel(ctx, comp, { mutate: input.mutate }),
+    render: (comp, input, opts) => renderCarousel(comp, opts),
+    ui: { panel: "export", action: "carousel", label: () => "Export Feed carousel (ZIP)" },
   },
   {
     id: "story-stills", label: "Story frames", format: "story", kind: "set", exportFn: renderSceneStills,

@@ -6,8 +6,8 @@
 import { FONT_FAMILY } from "./render.js";
 import { safeRect } from "./safe-zone.js";
 
-export const SIG_LEGACY = Object.freeze({ size: 30, align: "center", yPct: { reel: 0.8, story: 0.8, poster: 0.955 } });
-export const SIG_DEFAULTS = Object.freeze({ size: 40, align: "center", yPct: { reel: 0.61, story: 0.61, poster: 0.955 } });
+export const SIG_LEGACY = Object.freeze({ size: 30, align: "center", yPct: { reel: 0.8, story: 0.8, poster: 0.955, square: 0.94 } });
+export const SIG_DEFAULTS = Object.freeze({ size: 40, align: "center", yPct: { reel: 0.61, story: 0.61, poster: 0.955, square: 0.94 } });
 export const SIG_SIZE_MIN = 24, SIG_SIZE_MAX = 64, SIG_Y_MIN = 0.05, SIG_Y_MAX = 0.99;
 export const SIG_WEIGHT = 500;
 const TOL = 0.5;
@@ -73,7 +73,7 @@ export function boxBoundsIssues(sg, fmt, format) {
   if (!sg.legacy) {
     const side = (fmt.safe?.side ?? 0.06) * W;
     if (sg.left < side - TOL || sg.right > W - side + TOL) out.push("signature is outside the safe margins horizontally");
-    if (!fmt.full && format !== "poster") {
+    if (!fmt.full && format !== "poster" && format !== "square") {
       const r = safeRect(W, H, fmt.safe);
       if (sg.top < r.y - TOL || sg.bottom > r.y + r.h + TOL) out.push("signature is outside the safe area vertically");
     }

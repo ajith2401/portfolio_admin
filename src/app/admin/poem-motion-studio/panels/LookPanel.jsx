@@ -19,7 +19,7 @@ export default function LookPanel() {
                   <fieldset>
                     <legend className="pms-lbl">Format</legend>
                     <div className="flex flex-wrap gap-2">
-                      {["reel", "story", "poster"].map((f) => (
+                      {["reel", "story", "poster", "square"].map((f) => (
                         <Btn
                           key={f}
                           aria-pressed={comp.format === f}

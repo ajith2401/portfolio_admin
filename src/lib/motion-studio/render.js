@@ -171,13 +171,29 @@ function layerSignature(ctx, env) {
     ctx.fillText(sg.text, sg.x, sg.y);
     ctx.globalAlpha = 1;
   }
+  if (env.pageLabel) {
+    const pb = pageLabelBox(comp, fmt, ctx, env.pageLabel);
+    ctx.globalAlpha = 0.85; ctx.fillStyle = comp.branding.color; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    ctx.font = pb.font;
+    ctx.fillText(pb.text, pb.x, pb.y);
+    ctx.globalAlpha = 1;
+  }
+}
+/** Carousel numbering ("2/5"): right-aligned in the top margin, above the text rect. Validated by checkCarousel. */
+export const PAGE_LABEL_PX = 28;
+export function pageLabelBox(comp, fmt, ctx, text) {
+  const side = (fmt.safe?.side ?? 0.06) * fmt.w, size = PAGE_LABEL_PX;
+  const font = `600 ${size}px ${FONT_FAMILY["noto-sans"]}`;
+  ctx.font = font;
+  const w = ctx.measureText(text).width, x = fmt.w - side, y = Math.round((fmt.h * (fmt.safe?.top ?? 0.08)) / 2);
+  return { text, font, size, x, y, w, left: x - w, right: x, top: y - size / 2, bottom: y + size / 2 };
 }
 
-export function drawFrame(ctx, comp, tMs, { w, h, assets = {}, still = false, scene: forced = null, minSize = defaultMinSize(comp.format) } = {}) {
+export function drawFrame(ctx, comp, tMs, { w, h, assets = {}, still = false, scene: forced = null, minSize = defaultMinSize(comp.format), pageLabel = null } = {}) {
   const fmt = FORMATS[comp.format] || FORMATS.reel;
   w = w || fmt.w; h = h || fmt.h;
   ctx.save(); ctx.scale(w / fmt.w, w / fmt.w);
-  const env = { comp, fmt, W: fmt.w, H: fmt.h, tMs, still, assets, forced, minSize, total: compDuration(comp), rect: textRect(comp, fmt, ctx) };
+  const env = { comp, fmt, W: fmt.w, H: fmt.h, tMs, still, assets, forced, minSize, pageLabel, total: compDuration(comp), rect: textRect(comp, fmt, ctx) };
   layerBg(ctx, env);
   const under = layerMaterial(ctx, env) + layerAtmosphere(ctx, env);
   if (under) resetTextState(ctx);
@@ -221,7 +237,7 @@ export function posterCards(ctx, comp) {
  * source ranges reproduce it, and every row must sit inside the canvas, the format's safe area and clear of the signature.
  * Pass a measuring ctx. Returns the structured result shared with the Full-Poem validator.
  */
-export function validateScene(ctx, comp, scene, { minSize = defaultMinSize(comp.format), label = "scene", mutate = null } = {}) {
+export function validateScene(ctx, comp, scene, { minSize = defaultMinSize(comp.format), label = "scene", mutate = null, enforceMin = false } = {}) {
   const fmt = FORMATS[comp.format] || FORMATS.reel, W = fmt.w, H = fmt.h, st = comp.style;
   const rect = textRect(comp, fmt, ctx);
   // `mutate` (negative controls only) transforms a COPY of the layout before it is checked, proving the checks bite.
@@ -237,7 +253,7 @@ export function validateScene(ctx, comp, scene, { minSize = defaultMinSize(comp.
   if (!lay.fits) note(r, "outOfBounds", `${label}: the text does not fit the safe area at ${lay.size}px`);
   // Reel/Story: text that RESOLVES below the floor (a legacy project saved at <40px, or a scene scale <1) is never exported
   // silently. Nothing is rewritten here; the author is pointed at the explicit fit action.
-  if (comp.format !== "poster" && lay.size < minSize) note(r, "outOfBounds", `${label}: text is ${lay.size}px, below the ${minSize}px minimum. Use "${FIT_ACTION_LABEL}" in Scenes to split the scenes (and raise the size) before exporting`);
+  if ((comp.format !== "poster" || enforceMin) && lay.size < minSize) note(r, "outOfBounds", `${label}: text is ${lay.size}px, below the ${minSize}px minimum. Use "${FIT_ACTION_LABEL}" in Scenes to split the scenes (and raise the size) before exporting`);
   const align = scene.align || st.align;
   const ax = align === "left" ? rect.x : align === "right" ? rect.x + rect.w : rect.x + rect.w / 2;
   const shift = ((scene.offsetY || 0) / 100) * rect.h;

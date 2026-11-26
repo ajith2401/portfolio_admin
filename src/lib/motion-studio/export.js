@@ -6,7 +6,7 @@ import { ensureFonts, canvasMeasure } from "./font-ready.js";
 import { FORMATS } from "./safe-zone.js";
 import { zipStore } from "./zip.js";
 import { drawFullPoem, FULL_W } from "./full-poem.js";
-import { checkScenes, checkCover, coverScene, checkPoster, checkFull, FULL_NO_FIT } from "./route-checks.js";
+import { checkScenes, checkCover, coverScene, checkPoster, checkFull, FULL_NO_FIT, checkQuote, quoteScene, quoteMin, checkCarousel } from "./route-checks.js";
 
 export const FPS = 30;
 
@@ -58,7 +58,7 @@ export async function exportMp4(comp, opts = {}) {
   return encodeMp4(comp, opts);
 }
 /** Encoder only: callers MUST have run ensureFonts and the route's validator first. */
-async function encodeMp4(comp, { onProgress, signal, audioBuffer, assets = {}, bitrate } = {}) {
+async function encodeMp4(comp, { onProgress, signal, audioBuffer, assets = {}, bitrate, minSize } = {}) {
   const mb = await import("mediabunny");
   const fmt = FORMATS[comp.format];
   const canvas = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(fmt.w, fmt.h) : mkCanvas(fmt.w, fmt.h);
@@ -73,7 +73,7 @@ async function encodeMp4(comp, { onProgress, signal, audioBuffer, assets = {}, b
   try {
     for (let i = 0; i < frames; i++) {
       if (signal?.aborted) throw new DOMException("Export cancelled", "AbortError");
-      drawFrame(ctx, comp, (i / FPS) * 1000, { w: fmt.w, h: fmt.h, assets });
+      drawFrame(ctx, comp, (i / FPS) * 1000, { w: fmt.w, h: fmt.h, assets, minSize });
       await video.add(i / FPS, 1 / FPS);
       if (i % 6 === 0) { onProgress?.(i / frames); await tick(); } // yield so the editor stays responsive
     }
@@ -143,6 +143,41 @@ export async function renderFullPoem(comp, poem, { preset = "balanced", height =
   return { blob: await toBlob(c, type, 0.94), layout, scale: k, width: c.width, height: c.height };
 }
 
+/**
+ * Quote (EXCERPT) image: only the selected source lines, at the quote floor, in any format. The result says so:
+ * excerpt:true, complete:false, coverage {selected, total, partial:true}. It is never presented as the whole poem.
+ */
+export async function renderQuote(comp, poem, selection, { format = "poster", type = "image/png", assets = {} } = {}) {
+  const scene = quoteScene(poem, selection);
+  const qc = { ...comp, format, scenes: scene ? [scene] : [] };
+  await fontsFor(qc, { extraText: scene ? scene.lines.join("\n") : "" });
+  const v = assertOk("Quote (excerpt)", checkQuote(probeCtx(), comp, poem, selection, { format }));
+  const fmt = FORMATS[v.format], c = mkCanvas(fmt.w, fmt.h), ctx = c.getContext("2d");
+  drawFrame(ctx, { ...qc, format: v.format }, 0, { w: fmt.w, h: fmt.h, assets, still: true, scene: v.scene, minSize: quoteMin(v.format) });
+  return { blob: await toBlob(c, type, 0.94), excerpt: true, complete: false, coverage: v.coverage, format: v.format };
+}
+/** Animated quote (EXCERPT): the selected lines as one short MP4 scene (text-in, then hold). Same labelling as renderQuote. */
+export async function exportQuoteMp4(comp, poem, selection, { format = "reel", ...opts } = {}) {
+  const scene = quoteScene(poem, selection);
+  const qc = { ...comp, format, scenes: scene ? [scene] : [] };
+  await fontsFor(qc, { extraText: scene ? scene.lines.join("\n") : "" });
+  const v = assertOk("Animated quote (excerpt)", checkQuote(probeCtx(), comp, poem, selection, { format }));
+  const blob = await encodeMp4({ ...qc, format: v.format, scenes: [v.scene] }, { ...opts, minSize: quoteMin(v.format) });
+  return { blob, excerpt: true, complete: false, coverage: v.coverage, format: v.format };
+}
+/** Feed carousel: title cover + poem cards (poster set) + optional end card, each numbered k/N; every card validated. */
+export async function renderCarousel(comp, { type = "image/png", assets = {} } = {}) {
+  await fontsFor({ ...comp, format: "poster" }, { extraText: comp.poster?.endText || "" });
+  const fmt = FORMATS.poster, c = mkCanvas(fmt.w, fmt.h), ctx = c.getContext("2d");
+  const { plan } = assertOk("Feed carousel", checkCarousel(ctx, comp));
+  const pc = { ...comp, format: "poster" }, blobs = [];
+  for (const card of plan.cards) {
+    ctx.clearRect(0, 0, c.width, c.height);
+    drawFrame(ctx, pc, 0, { w: c.width, h: c.height, assets, still: true, scene: card.scene, minSize: 46, pageLabel: card.page });
+    blobs.push(await toBlob(c, type, 0.94)); await tick();
+  }
+  return { blobs, pages: plan.cards.map((cd) => ({ role: cd.role, page: cd.page })) };
+}
 /** Reel cover: the title card (or first scene) as a still 1080×1920 image. Distinct from the full-poem poster. */
 export async function renderReelCover(comp, { type = "image/png", assets = {} } = {}) {
   const sc = coverScene(comp);

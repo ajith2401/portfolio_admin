@@ -3,12 +3,14 @@ import { Btn } from "../studio-ui";
 import { useStudio } from "../studio-context";
 import { ExportEstimate, ReadabilityNotice } from "./FitScenesDialog";
 import { panelRoutes, videoRouteFor } from "@/lib/motion-studio/formats";
+import QuotePicker from "./QuotePicker";
 
 export default function ExportPanel() {
   const {
     abortRef,
     caps,
     comp,
+    doCarousel,
     doCover,
     doPoster,
     doStory,
@@ -22,6 +24,7 @@ export default function ExportPanel() {
     "full-tab": () => setTab("full"),
     cover: () => doCover("image/png"),
     poster: () => doPoster("image/png", false),
+    carousel: () => doCarousel("image/png"),
     "story-zip": () => {
       setTab("story");
       setMode("advanced");
@@ -91,6 +94,7 @@ export default function ExportPanel() {
                       them in any video app.
                     </p>
                   )}
+                  <QuotePicker />
                 </section>
   );
 }

@@ -6,7 +6,7 @@ import { parsePoemText, MAX_POEM_CHARS } from "./poem-input.js";
 import { SIG_SIZE_MIN, SIG_SIZE_MAX, SIG_Y_MIN, SIG_Y_MAX, newSignatureDefaults, isLegacySignature } from "./signature.js";
 import { sceneDuration, attachStanzaMeta, MIN_SCENE_MS, MAX_SCENE_MS } from "./scenes.js";
 
-export const FORMAT_KEYS = ["reel", "story", "poster"];
+export const FORMAT_KEYS = ["reel", "story", "poster", "square"];
 export const TEXT_IN = ["fade", "line", "rise", "none"];
 export const BG_MOTION = ["none", "zoom", "drift"];
 export const PARTICLES = ["none", "dust", "rain", "stars", "light"];
@@ -143,6 +143,8 @@ export function normalizeComposition(input) {
     poster: {
       sceneIds: (Array.isArray(c.poster?.sceneIds) ? c.poster.sceneIds : []).slice(0, MAX_SCENES).map((x) => str(x, 40)).filter(Boolean),
       mode: oneOf(c.poster?.mode, ["single", "set"], "single"),
+      // optional closing card of a Feed carousel (plain text, drawn and validated like any scene)
+      endText: str(c.poster?.endText, 280),
     },
     full: { preset: oneOf(c.full?.preset, FULL_PRESETS, "balanced"), height: oneOf(c.full?.height, ["standard", "extended"], "standard") },
     export: { quality: oneOf(c.export?.quality, ["draft", "standard", "high"], "standard") },

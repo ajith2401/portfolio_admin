@@ -38,8 +38,8 @@ const mkComp = (over = {}) => {
 // Dense scenes: 4 long lines per scene overflow at 40px with this stub font.
 const dense = () => { const c = mkComp(); c.scenes.forEach((s, i) => { s.durationMs = i % 2 ? 7000 : s.durationMs; }); return c; };
 
-test("MIN_TEXT_PX: reel/story 40, poster 46", () => {
-  assert.deepEqual({ ...MIN_TEXT_PX }, { reel: 40, story: 40, poster: 46 });
+test("MIN_TEXT_PX: reel/story 40, poster 46, square 44 (P3)", () => {
+  assert.deepEqual({ ...MIN_TEXT_PX }, { reel: 40, story: 40, poster: 46, square: 44 });
 });
 
 test("planFit: every scene passes validateScenes at 40px, lines identical and ordered", () => {

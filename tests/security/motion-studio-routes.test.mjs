@@ -9,7 +9,10 @@ import { parsePoemText } from "../../src/lib/motion-studio/poem-input.js";
 import { generateScenes } from "../../src/lib/motion-studio/scenes.js";
 import { defaultComposition, normalizeComposition } from "../../src/lib/motion-studio/composition.js";
 import { planFit, applyFit } from "../../src/lib/motion-studio/fit-scenes.js";
-import { drawFrame } from "../../src/lib/motion-studio/render.js";
+import { drawFrame, validateScene, pageLabelBox } from "../../src/lib/motion-studio/render.js";
+import { FORMATS, MIN_TEXT_PX, QUOTE_MIN_PX } from "../../src/lib/motion-studio/safe-zone.js";
+import { checkQuote, checkCarousel, carouselPlan } from "../../src/lib/motion-studio/route-checks.js";
+import { FORMAT_KEYS } from "../../src/lib/motion-studio/composition.js";
 import { BEHAVIOURS, BEHAVIOUR_IDS, HOLD, rowState } from "../../src/lib/motion-studio/animation.js";
 import { registerFx, clearFx, listFx, unregisterFx } from "../../src/lib/motion-studio/fx/registry.js";
 
@@ -34,14 +37,17 @@ const CORPUS = {
 const TITLE = "மழையின் பாடல்";
 export function corpusComp(key, format = "reel") {
   const poem = parsePoemText(CORPUS[key], { title: TITLE });
-  const base = normalizeComposition({ ...defaultComposition({ format, scenes: generateScenes(poem, { title: TITLE }) }), poem: { title: TITLE, stanzas: poem.stanzas, source: poem.source } });
+  const d = defaultComposition({ format, scenes: generateScenes(poem, { title: TITLE }) });
+  const base = normalizeComposition({ ...d, poster: { ...d.poster, endText: "நன்றி\nSynthetic Poet" }, poem: { title: TITLE, stanzas: poem.stanzas, source: poem.source } });
   const plan = planFit(ctx, base); // explicit fit (whole lines regrouped, never edited) so every scene is legible
   return { comp: plan.ok ? applyFit(base, plan) : base, poem: { ...poem, title: TITLE } };
 }
+/** Scene routes are fitted for the format they draw (a Square composition is split for the square canvas). */
+const compFor = (key, route) => corpusComp(key, ["story", "square"].includes(route.format) ? route.format : "reel");
 /** The route-specific input (full poem, selected quote lines) for a corpus poem. */
 export function inputFor(route, poem) {
-  const lines = poem.stanzas.flatMap((st, si) => st.map((text, line) => ({ stanza: si, line, text }))).slice(0, 2);
-  return { poem, lines, preset: "compact", height: "extended" };
+  const lines = poem.stanzas.flatMap((st, si) => st.map((text, line) => ({ stanza: si, line, text }))).filter((l) => l.text !== "").slice(0, 2);
+  return { poem, lines, preset: "compact", height: "extended", format: route.id === "quote" ? "poster" : "reel" };
 }
 // mutations of either layout shape (scene rows / full-poem items)
 const drawnRows = (lay) => (lay.rows ? lay.rows.filter((r) => !r.gap) : lay.items.filter((i) => i.kind === "line"));
@@ -66,14 +72,14 @@ test("routes: ids are unique and every route has the full interface", () => {
     assert.ok(r.label && r.format && ["video", "image", "set"].includes(r.kind), r.id);
     for (const k of ["scenesFor", "validate", "render", "exportFn"]) assert.equal(typeof r[k], "function", `${r.id}.${k}`);
   }
-  for (const id of ["reel-mp4", "story-mp4", "reel-cover", "story-stills", "poster", "poster-set", "full-poem"]) assert.ok(routeById(id), id);
+  for (const id of ["reel-mp4", "story-mp4", "square-mp4", "reel-cover", "story-stills", "poster", "poster-set", "carousel", "full-poem", "quote", "animated-quote"]) assert.ok(routeById(id), id);
 });
 
 // ---------------------------------------------------------------- corpus x route
 for (const key of Object.keys(CORPUS))
   for (const route of ROUTES)
     test(`routes: ${route.id} x corpus "${key}" validates, and mutated layouts fail`, () => {
-      const { comp, poem } = corpusComp(key);
+      const { comp, poem } = compFor(key, route);
       const input = inputFor(route, poem);
       assert.ok(route.scenesFor(comp, input, ctx).length > 0, "the route draws something");
       const ok = route.validate(ctx, comp, input);
@@ -121,7 +127,7 @@ const withTimeout = (p, ms = 8000) => Promise.race([p, new Promise((_, rej) => s
 for (const route of ROUTES)
   test(`routes: ${route.id} loads fonts (ensureFonts) BEFORE any layout measurement`, async () => {
     const log = installDom();
-    const { comp, poem } = corpusComp("indent");
+    const { comp, poem } = compFor("indent", route);
     let err = null;
     try { await withTimeout(route.render(comp, inputFor(route, poem), {})); } catch (e) { err = e; }
     if (route.kind !== "video") assert.equal(err, null, `${route.id} should export: ${err?.message}`);
@@ -133,7 +139,7 @@ for (const route of ROUTES)
 for (const route of ROUTES)
   test(`routes: ${route.id} refuses (and never measures) when no font face matches`, async () => {
     const log = installDom({ empty: true });
-    const { comp, poem } = corpusComp("tabs");
+    const { comp, poem } = compFor("tabs", route);
     await assert.rejects(() => withTimeout(route.render(comp, inputFor(route, poem), {})), /fallback font/);
     assert.equal(log.indexOf("measure"), -1, "nothing measured against a fallback face");
   });
@@ -206,4 +212,81 @@ test("fx: an effect that sets alpha / blur / transform / compositing (and unbala
     assert.deepEqual(dirty.texts, clean.texts, "poem text and signature drawn with identical alpha/filter/transform/compositing");
     assert.ok(clean.texts.some((x) => x.t === "அன்பே சிவம்" && x.alpha === 1 && x.filter === "none"));
   } finally { clearFx(); }
+});
+
+// ---------------------------------------------------------------- square format
+test("square: 1080x1080 with its own margins, a 44px floor, and a whitelisted format key", () => {
+  assert.deepEqual([FORMATS.square.w, FORMATS.square.h], [1080, 1080]);
+  assert.notEqual(FORMATS.square.safe, FORMATS.poster.safe);
+  assert.equal(MIN_TEXT_PX.square, 44);
+  assert.ok(FORMAT_KEYS.includes("square"));
+  assert.equal(normalizeComposition({ ...defaultComposition({ format: "square", scenes: [] }) }).format, "square");
+});
+test("square: a scene at exactly the 44px floor passes; 43px is refused with the fit action", () => {
+  const base = normalizeComposition({ ...defaultComposition({ format: "square", scenes: [] }) });
+  const comp = { ...base, style: { ...base.style, sizePx: 44 } };
+  const scene = { id: "s", kind: "stanza", lines: ["அன்பே சிவம்", "  உள்ளம் சொல்லும்"], durationMs: 4000 };
+  const at = validateScene(ctx, comp, scene);
+  assert.equal(at.ok, true, at.messages.join("; "));
+  const below = validateScene(ctx, { ...comp, style: { ...comp.style, sizePx: 43 } }, scene);
+  assert.equal(below.ok, false);
+  assert.ok(below.messages.some((m) => /below the 44px minimum/.test(m)), below.messages.join("; "));
+});
+
+// ---------------------------------------------------------------- quote (excerpt)
+test("quote: never claims completeness, reports partial coverage, and enforces its larger floor in every format", () => {
+  const { comp, poem } = corpusComp("indent");
+  for (const format of ["reel", "story", "poster", "square"]) {
+    const sel = [{ stanza: 0, line: 0, text: poem.stanzas[0][0] }, { stanza: 1, line: 0, text: poem.stanzas[1][0] }];
+    const v = checkQuote(ctx, comp, poem, sel, { format });
+    assert.equal(v.ok, true, `${format}: ${v.messages.join("; ")}`);
+    assert.equal(v.excerpt, true);
+    assert.equal(v.complete, false);
+    assert.deepEqual(v.coverage, { selected: 2, total: poem.stanzas.flat().filter(Boolean).length, partial: true });
+    assert.deepEqual(v.scene.lines, [poem.stanzas[0][0], "", poem.stanzas[1][0]], "exact source lines, stanza gap kept");
+    assert.ok(QUOTE_MIN_PX[format] > (MIN_TEXT_PX[format] ?? 0));
+    // even selecting EVERY line is still reported as an excerpt
+    const all = poem.stanzas.flatMap((st, s) => st.map((t, l) => ({ stanza: s, line: l, text: t }))).filter((x) => x.text);
+    const va = checkQuote(ctx, comp, poem, all, { format });
+    assert.equal(va.complete, false);
+    assert.equal(va.coverage.partial, true);
+  }
+});
+test("quote: a selection whose text differs from the source by one character, or out of order, or missing, is refused", () => {
+  const { comp, poem } = corpusComp("nbsp");
+  const src = poem.stanzas[0][0];
+  const edited = checkQuote(ctx, comp, poem, [{ stanza: 0, line: 0, text: src.replace(" ", " ") }]);
+  assert.equal(edited.ok, false);
+  assert.ok(edited.messages.some((m) => /exact source text/.test(m)));
+  assert.equal(checkQuote(ctx, comp, poem, [{ stanza: 0, line: 1 }, { stanza: 0, line: 0 }]).ok, false);
+  assert.equal(checkQuote(ctx, comp, poem, [{ stanza: 0, line: 0 }, { stanza: 0, line: 0 }]).ok, false);
+  assert.equal(checkQuote(ctx, comp, poem, [{ stanza: 7, line: 0 }]).ok, false);
+  assert.equal(checkQuote(ctx, comp, poem, []).ok, false);
+});
+test("quote: text that only fits below the quote floor is refused, never shrunk", () => {
+  const { comp, poem } = corpusComp("long");
+  const tiny = { ...comp, style: { ...comp.style, sizePx: 40 } }; // 40*1.3 = 52 < 56 poster floor
+  const v = checkQuote(ctx, tiny, poem, [{ stanza: 0, line: 1 }], { format: "poster" });
+  assert.equal(v.ok, false);
+  assert.ok(v.messages.some((m) => /below the 56px minimum/.test(m)), v.messages.join("; "));
+});
+
+// ---------------------------------------------------------------- carousel
+test("carousel: cover + poem cards + end card, numbered k/N, every card validated (cover/end text included)", () => {
+  const { comp } = corpusComp("blanks");
+  const plan = carouselPlan(ctx, comp);
+  assert.equal(plan.cards[0].role, "cover");
+  assert.equal(plan.cards.at(-1).role, "end");
+  assert.deepEqual(plan.cards.map((c) => c.page), plan.cards.map((_, i) => `${i + 1}/${plan.cards.length}`));
+  const v = checkCarousel(ctx, comp);
+  assert.equal(v.ok, true, v.messages.join("; "));
+  assert.equal(v.results.length, plan.cards.length, "one validation result per card");
+  // negative control: an end card too long to fit at the poster floor is refused, not clipped
+  const long = { ...comp, poster: { ...comp.poster, endText: Array(40).fill("நன்றி நன்றி நன்றி").join("\n") } };
+  const bad = checkCarousel(ctx, long);
+  assert.equal(bad.ok, false);
+  assert.ok(bad.messages.some((m) => /^End card/.test(m)), bad.messages.join("; "));
+  // the page label sits in the top margin, inside the side margins
+  const b = pageLabelBox(comp, FORMATS.poster, ctx, "12/12");
+  assert.ok(b.top >= 0 && b.right <= FORMATS.poster.w * (1 - FORMATS.poster.safe.side) + 0.5);
 });
