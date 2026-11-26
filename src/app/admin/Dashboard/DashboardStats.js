@@ -85,7 +85,7 @@ export const DashboardStats = ({ stats = {} }) => {
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${BADGE[r.status] || BADGE.archived}`}>{r.status}</span>
                   <span className="min-w-0 flex-1 truncate font-medium" lang={/[஀-௿]/.test(r.title) ? 'ta' : undefined}>{r.title}</span>
                   <span className="text-xs text-gray-500">{r.type}</span>
-                  <span className="text-xs text-gray-400">{fmt(r.updatedAt)}</span>
+                  <span className="text-xs text-gray-600">{fmt(r.updatedAt)}</span>
                   <ArrowUpRight size={14} className="text-gray-300" aria-hidden="true" />
                 </Link>
               </li>

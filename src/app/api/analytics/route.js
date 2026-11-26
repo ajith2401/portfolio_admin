@@ -14,6 +14,15 @@ function sumViews(pv) {
   return vals.reduce((a, b) => a + (Number(b) || 0), 0);
 }
 
+function starCounts(rows) {
+  const out = [0, 0, 0, 0, 0];
+  for (const r of rows || []) {
+    const i = Math.round(Number(r?._id)) - 1;
+    if (i >= 0 && i < 5) out[i] += Number(r.count) || 0;
+  }
+  return out;
+}
+
 export async function GET(request) {
   const auth = await requireAuth(request, ['admin', 'editor']);
   if (!auth.authorized) {
@@ -110,24 +119,28 @@ export async function GET(request) {
       ])
     ]);
     
+    const dailyData = analyticsData.map(item => ({
+      date: item.date ? item.date.toISOString().split('T')[0] : '',
+      pageViews: sumViews(item.pageViews),
+      visitors: item.visitors || 0
+    }));
     return NextResponse.json({
+      // overview only carries numbers we actually measure (no placeholder bounce rate / session length)
       overview: {
-        pageViews: totalPageViews,
-        visitors: totalVisitors,
-        bounceRate: 42,
-        avgSessionDuration: '2m 45s'
+        pageViews: totalPageViews || 0,
+        visitors: totalVisitors || 0,
+        newContent: contentCreationStats.writings + contentCreationStats.techBlogs + contentCreationStats.projects
       },
-      pageViewsData: analyticsData.map(item => ({
-        date: item.date ? item.date.toISOString().split('T')[0] : '',
-        views: sumViews(item.pageViews),
-        visitors: item.visitors || 0
-      })),
+      dailyData,
+      pageViewsData: dailyData.map(d => ({ date: d.date, views: d.pageViews, visitors: d.visitors })),
       popularContent: detailedPopularContent,
+      contentStats: contentCreationStats,
       contentCreation: contentCreationStats,
+      // UI expects counts for 1..5 stars per type
       ratings: {
-        writings: ratingsDistribution[0],
-        techBlogs: ratingsDistribution[1],
-        projects: ratingsDistribution[2]
+        writings: starCounts(ratingsDistribution[0]),
+        techBlogs: starCounts(ratingsDistribution[1]),
+        projects: starCounts(ratingsDistribution[2])
       }
     });
   } catch (error) {

@@ -260,6 +260,7 @@ export const ContentList = ({
                       className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
                       onClick={() => onDelete(item._id)}
                       title="Delete"
+                      aria-label={`Delete ${item.title || 'item'}`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
