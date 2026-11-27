@@ -115,6 +115,23 @@ const withTimeout = (p, ms, what) =>
   });
 
 /**
+ * The CSS family string to DRAW and LOAD with on the canvas: next/font's family string with its automatic
+ * "'<Font> Fallback'" face removed. That face is a metric-adjusted local() alias of a desktop system font (Arial / Times
+ * New Roman); on Android it does not exist, its @font-face goes to status "error", and Chrome then rejects
+ * document.fonts.load() ("A network error occurred") and fonts.check() for the WHOLE string although the real Tamil face
+ * is fully loaded. The canvas never wants that face anyway (no silent fallback). Pure; returns the input if nothing is left.
+ */
+export function canvasFamily(cssFamily, generic = "serif") {
+  const parts = String(cssFamily || "").split(",").map((x) => x.trim()).filter(Boolean);
+  const kept = parts.filter((x) => !/\sFallback$/i.test(x.replace(/["']/g, "").trim()));
+  if (!kept.length) return String(cssFamily || "");
+  // end with a real CSS generic: the glyph-coverage proof measures the font AGAINST this generic, so it must never be
+  // the font itself (and a missing glyph then lands in the same generic on every device, not in a local() alias)
+  if (!GENERIC_FAMILIES.has(kept[kept.length - 1].replace(/["']/g, "").toLowerCase())) kept.push(generic);
+  return kept.join(", ");
+}
+
+/**
  * Compact, best-effort facts about WHY a font failed (for the error text only; never used to decide anything): the state of
  * the matching @font-face rules, the status of the font files the page requested, and the connection. Everything is guarded.
  */
@@ -292,7 +309,9 @@ export async function ensureFonts(comp, opts = {}, deps = {}) {
         `The ${f.role} font is not ready for this text (${f.font}). Nothing was exported. [fr4 ${notReadyChars(fonts, f.font, f.text)} ${fontDiagnostics(fonts, f.font)}]`,
       );
     if (deps.measure) {
-      const generic = familyOf(f.font).split(",").pop().trim();
+      // the baseline must be a TRUE generic family; measuring the font against itself would always "match the fallback"
+      const last = familyOf(f.font).split(",").pop().trim();
+      const generic = GENERIC_FAMILIES.has(last.replace(/["']/g, "").toLowerCase()) ? last : "serif";
       const w = deps.measure(f.font, TAMIL_FIXTURE),
         fb = deps.measure(`${weightOf(f.font)} 40px ${generic}`, TAMIL_FIXTURE),
         w40 = deps.measure(f.font.replace(/[\d.]+px/, "40px"), TAMIL_FIXTURE);

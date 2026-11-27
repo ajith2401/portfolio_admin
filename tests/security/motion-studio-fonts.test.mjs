@@ -581,3 +581,35 @@ test("when check() fails after every piece loaded, the error names the failing c
   assert.ok(e instanceof Error && /not ready/.test(e.message), "must stop: " + (e && e.message));
   assert.match(e.message, /fr4 notready U\+BCD/);
 });
+
+test("canvasFamily drops next/font's local() 'X Fallback' face (it errors on Android) and keeps real families and generics", async () => {
+  const { canvasFamily } = await import("../../src/lib/motion-studio/font-ready.js");
+  assert.equal(canvasFamily("'Noto Serif Tamil', 'Noto Serif Tamil Fallback'"), "'Noto Serif Tamil', serif");
+  assert.equal(canvasFamily("'Noto Sans Tamil', 'Noto Sans Tamil Fallback'", "sans-serif"), "'Noto Sans Tamil', sans-serif");
+  assert.equal(canvasFamily('"Anek Tamil", "Anek Tamil Fallback", sans-serif'), '"Anek Tamil", sans-serif');
+  // negative controls: a family merely CONTAINING the word, and a string with nothing else, are left alone
+  assert.equal(canvasFamily("'Fallback Sans', serif"), "'Fallback Sans', serif");
+  assert.equal(canvasFamily("'X', 'X Fallback', serif"), "'X', serif");
+  assert.equal(canvasFamily("'Only Fallback'"), "'Only Fallback'");
+  assert.equal(canvasFamily(""), "");
+});
+
+test("the admin studio's canvas family map applies canvasFamily to every font (source check)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../../src/app/admin/poem-motion-studio/fonts.js", import.meta.url), "utf8");
+  assert.match(src, /import \{ canvasFamily \} from "@\/lib\/motion-studio\/font-ready"/);
+  assert.match(src, /canvasFamily\(v, SERIF_IDS\.has\(k\) \? "serif" : "sans-serif"\)/);
+});
+
+test("the glyph-coverage baseline is a true generic even when the font string ends in the font itself", async () => {
+  const { ensureFonts } = await import("../../src/lib/motion-studio/font-ready.js");
+  const comp = { format: "reel", style: { font: "noto-serif", weight: 500, sizePx: 48 }, scenes: [{ kind: "stanza", lines: ["தமிழ்"] }], branding: { show: false } };
+  const fonts = new Set([{ family: "Noto Serif Tamil", weight: "100 900", status: "loaded" }]);
+  fonts.load = async () => [{}];
+  fonts.check = () => true;
+  const seen = [];
+  const measure = (font) => (seen.push(font), /serif$|sans-serif$/.test(font.trim()) && !/Tamil/.test(font) ? 100 : 140);
+  const r = await ensureFonts(comp, { poemText: "தமிழ்", title: "" }, { fonts, measure, families: { "noto-serif": "'Noto Serif Tamil'" } }).catch((e) => e);
+  assert.ok(seen.some((f) => /40px serif$/.test(f)), "baseline must be measured with a generic: " + seen.join(" | "));
+  assert.ok(!(r instanceof Error), "a real Tamil font must pass: " + (r && r.message));
+});

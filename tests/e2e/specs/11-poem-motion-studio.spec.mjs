@@ -247,3 +247,34 @@ test('mobile 390: no overflow, bottom tab bar, full-screen preview, large touch 
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(page.getByRole('tablist')).toBeVisible();
 });
+
+// ANDROID REPRODUCTION. next/font adds a "<Font> Fallback" @font-face whose only source is local(Arial)/local("Times New
+// Roman"). Android has no such font, so that face goes to status "error" and Chrome rejects document.fonts.load() for the
+// whole family string ("A network error occurred"). Desktop has the font, so we force the same failure here by adding a
+// face for each Fallback family whose local() source cannot exist, then prove (a) the condition really reproduces and
+// (b) the Studio still exports, because the canvas no longer names the Fallback family.
+test('android fallback-face failure: export still succeeds when every "<Font> Fallback" face errors', async ({ page }, info) => {
+  test.setTimeout(180_000);
+  await page.addInitScript(() => {
+    document.addEventListener('DOMContentLoaded', () => {
+      const fams = ['Noto Serif Tamil', 'Noto Sans Tamil', 'Hind Madurai', 'Anek Tamil', 'Tiro Tamil'];
+      const st = document.createElement('style');
+      st.textContent = fams.map((f) => `@font-face{font-family:"${f} Fallback";src:local("__no_such_font_on_android__")}`).join('\n');
+      document.head.appendChild(st);
+    });
+  });
+  await open(page);
+  // (a) the failure condition is real in this page: the OLD canvas string (with the Fallback family) is rejected...
+  const old = await page.evaluate(() => document.fonts.load("500 40px 'Noto Serif Tamil', 'Noto Serif Tamil Fallback'", 'தமிழ்').then(() => 'resolved', (e) => `rejected:${e.name}`));
+  expect(old).toBe('rejected:NetworkError');
+  // ...while the primary family alone loads
+  const primary = await page.evaluate(() => document.fonts.load("500 40px 'Noto Serif Tamil', serif", 'தமிழ்').then((r) => `resolved:${r.length}`, (e) => `rejected:${e.name}`));
+  expect(primary).toMatch(/^resolved:[1-9]/);
+  // (b) the Studio exports anyway, with no font error shown
+  await tab(page, 'Export');
+  const poster = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export Feed poster PNG' }).click();
+  const pp = info.outputPath('android-poster.png'); await (await poster).saveAs(pp);
+  expect(fs.statSync(pp).size).toBeGreaterThan(5000);
+  await expect(page.getByText(/could not be loaded|not ready for this text/)).toHaveCount(0);
+});

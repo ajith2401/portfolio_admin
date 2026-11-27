@@ -5,6 +5,7 @@ import {
   Noto_Serif_Tamil, Noto_Sans_Tamil, Hind_Madurai, Anek_Tamil, Tiro_Tamil,
   Kavivanar, Mukta_Malar, Catamaran, Pavanam, Baloo_Thambi_2, Meera_Inimai, Arima, Coiny, Oi,
 } from "next/font/google";
+import { canvasFamily } from "@/lib/motion-studio/font-ready";
 const serif = Noto_Serif_Tamil({ subsets: ["latin", "tamil"], display: "swap" });
 const sans = Noto_Sans_Tamil({ subsets: ["latin", "tamil"], display: "swap" });
 const hind = Hind_Madurai({ subsets: ["latin", "tamil"], weight: ["400", "500", "600", "700"], display: "swap" });
@@ -24,7 +25,10 @@ const coiny = Coiny({ subsets: ["latin", "tamil"], weight: "400", display: "swap
 const oi = Oi({ subsets: ["latin", "tamil"], weight: "400", display: "swap", preload: false });
 // Only the verified five set the page's class (unchanged); candidates' @font-face rules ship with this module's CSS.
 export const fontClass = [serif, sans, hind, anek, tiro].map((f) => f.className).join(" ");
-export const FONT_CSS = {
+// canvasFamily(): drop next/font's local() "<Font> Fallback" face, which errors on Android and makes Chrome reject the
+// whole font string (see font-ready.js). Page CSS (fontClass) is unchanged.
+const SERIF_IDS = new Set(["noto-serif", "tiro"]);
+export const FONT_CSS = Object.fromEntries(Object.entries({
   "noto-serif": serif.style.fontFamily,
   "noto-sans": sans.style.fontFamily,
   "hind-madurai": hind.style.fontFamily,
@@ -39,4 +43,4 @@ export const FONT_CSS = {
   arima: arima.style.fontFamily,
   coiny: coiny.style.fontFamily,
   oi: oi.style.fontFamily,
-};
+}).map(([k, v]) => [k, canvasFamily(v, SERIF_IDS.has(k) ? "serif" : "sans-serif")]));
