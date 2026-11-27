@@ -2,6 +2,7 @@
 // (only the text lines chosen for each scene) and never any HTML. normalizeComposition() is the single gate used
 // by the API and the client: it whitelists fields, clamps numbers and rejects anything else.
 import { normalizeWhole } from "./whole-poem.js";
+import { normalizeElements } from "./elements.js";
 import { templateById } from "./templates.js";
 import { resolveFonts } from "./font-registry.js";
 import { parsePoemText, MAX_POEM_CHARS } from "./poem-input.js";
@@ -329,6 +330,8 @@ export function normalizeComposition(input) {
     ...(poemSnap ? { poem: poemSnap } : {}),
     // Whole-Poem Video mode (whole-poem.js): stored only when the project has used it, so legacy projects are unchanged
     ...(c.whole && typeof c.whole === "object" ? { whole: normalizeWhole(c.whole) } : {}),
+    // decorative elements (elements.js): stored only when present, so legacy projects normalize unchanged
+    ...(Array.isArray(c.elements) && c.elements.length ? { elements: normalizeElements(c.elements) } : {}),
     // material (materials.js) is stored only when the input has one: legacy projects normalize unchanged
     ...(c.material && typeof c.material === "object"
       ? { material: normalizeMaterial(c.material) }

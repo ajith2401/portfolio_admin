@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="586" height="714" viewBox="-293 -347 586 714" color="#2a2622" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <g id="window">
+    <g id="window-frame">
+      <path id="window-frame-l1" d="M-220,-300L219.8,-300L220,297.9" stroke-width="3.0"/>
+      <path id="window-frame-l2" d="M-220,296.7L-220,-300" stroke-width="3.0"/>
+      <path id="window-frame-l3" d="M-202,-282L201.5,-282L202,-281.1L202,282L-201.5,282L-202,281.1L-202,-282" stroke-width="3.0"/>
+    </g>
+    <g id="window-bars">
+      <path d="M-5.4,-282L5.4,-282L5.4,282L-5.4,282ZM-202,-35.4L202,-35.4L202,-24.6L-202,-24.6Z" fill="currentColor" stroke="none" fill-opacity="0.0"/>
+      <path id="window-bars-s1" d="M-5.4,-35.9L-5.4,-282L4.4,-282L5.4,-281.6L5.4,-35.5" stroke-width="2.4000000000000004"/>
+      <path id="window-bars-s2" d="M5.4,-24.3L5.4,282L-4.4,282L-5.4,281.6L-5.4,-23.3" stroke-width="2.4000000000000004"/>
+      <path id="window-bars-s3" d="M-5.7,-24.6L-201.6,-24.6L-202,-25.6L-202,-35.4L-6.1,-35.4" stroke-width="2.4000000000000004"/>
+      <path id="window-bars-s4" d="M6.4,-35.4L200.9,-35.4L202,-35.1L202,-25.3L201.3,-24.6L5.4,-24.6" stroke-width="2.4000000000000004"/>
+    </g>
+    <g id="window-sill">
+      <path id="window-sill-s1" d="M241,298L242.4,298.2L244.7,299.7L245.9,302.2L246,314.7L245.9,316.1L244.5,318.5L242.1,319.9L240.7,320L-240.3,320L-243,319.6L-244.2,318.8L-245.1,317.8L-246,315.1L-245.6,301.2L-244,299L-241.4,298L239.6,298Z" stroke-width="3.0"/>
+    </g>
+  </g>
+</svg>

@@ -65,6 +65,15 @@ import {
   normalizeWhole,
 } from "@/lib/motion-studio/whole-poem";
 import LookPanel from "./panels/LookPanel";
+import ElementsPanel from "./panels/ElementsPanel";
+import {
+  loadElements,
+  loadElement,
+  onElementsLoaded,
+  elementBox,
+  elementStateAt,
+  decorationElements,
+} from "@/lib/motion-studio/elements";
 import PoemPanel from "./panels/PoemPanel";
 import PosterPanel from "./panels/PosterPanel";
 import ProjectPanel from "./panels/ProjectPanel";
@@ -348,6 +357,18 @@ export default function MotionStudio() {
     setT((x) => x);
   }, [bgKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ---- decorative elements: lazy-load each asset the composition uses (same-origin, bounded cache), repaint on arrival
+  const [selEl, setSelEl] = useState(null);
+  const [elTick, setElTick] = useState(0);
+  useEffect(() => onElementsLoaded(() => setElTick((n) => n + 1)), []);
+  const elKey = (comp?.elements || []).map((e) => e.asset).join(",");
+  useEffect(() => {
+    for (const id of new Set(elKey.split(",").filter(Boolean))) loadElement(id);
+  }, [elKey]);
+  useEffect(() => {
+    if (selEl && !comp?.elements?.some((e) => e.id === selEl)) setSelEl(null);
+  }, [comp, selEl]);
+
   // ---- painting
   const paintTo = useCallback(
     (c, time) => {
@@ -375,8 +396,22 @@ export default function MotionStudio() {
         ctx.strokeRect(r.x * s, r.y * s, r.w * s, r.h * s);
         ctx.restore();
       }
+      // selection outline of the element being edited (preview only, never exported)
+      const se = selEl && comp.elements?.find((e) => e.id === selEl);
+      if (se) {
+        const st = elementStateAt(se, time, { still: false });
+        const b = elementBox(se, c.width, c.height);
+        ctx.save();
+        ctx.translate(b.cx + st.dx * c.width, b.cy + st.dy * c.height);
+        ctx.rotate(((se.rot + st.rot) * Math.PI) / 180);
+        ctx.strokeStyle = "#3b82f6";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.strokeRect(-b.w / 2, -b.h / 2, b.w, b.h);
+        ctx.restore();
+      }
     },
-    [comp, guide, fmt],
+    [comp, guide, fmt, selEl, elTick], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const paint = useCallback(
     (time) => {
@@ -438,9 +473,10 @@ export default function MotionStudio() {
   };
 
   // ---- loading a poem (look: optional {format, templateId, motion} chosen in Quick Create)
-  const withLook = (scenes, { motion, whole: w, ...look } = {}) => {
+  const withLook = (scenes, { motion, whole: w, elements, ...look } = {}) => {
     const d0 = defaultComposition({ scenes, ...look });
-    const d = w ? { ...d0, whole: normalizeWhole(w) } : d0;
+    const d1 = w ? { ...d0, whole: normalizeWhole(w) } : d0;
+    const d = elements?.length ? { ...d1, elements } : d1;
     return motion ? { ...d, motion: { ...d.motion, ...motion } } : d;
   };
   const pick = async (id, look = {}) => {
@@ -566,7 +602,7 @@ export default function MotionStudio() {
     return true;
   };
   // Quick Create: the same creation path, with the chosen output's format and look (and the author's motion feel)
-  const quickCreate = async (choice, { routeId, templateId }) => {
+  const quickCreate = async (choice, { routeId, templateId, decor }) => {
     const r = routeById(routeId);
     const motion = motionPrefsOf({
       pref: P.prefs.motionPref,
@@ -575,6 +611,7 @@ export default function MotionStudio() {
     const look = {
       format: formatForRoute(r),
       templateId,
+      ...(decor && decor !== "none" ? { elements: decorationElements(decor) } : {}),
       ...(Object.keys(motion).length ? { motion } : {}),
       ...(r?.group === "whole" || r?.id === "whole-cover"
         ? { whole: { on: true } }
@@ -1003,6 +1040,12 @@ export default function MotionStudio() {
       await fontsReady().catch((e) => {
         if (e?.name === "AbortError") throw e;
       });
+      // every decorative element must be loaded before frame 0: never export a frame with missing art
+      const missingEl = await loadElements(comp);
+      if (missingEl.length)
+        throw new Error(
+          `Some decorative elements could not be loaded (${missingEl.join(", ")}). Remove them or try again.`,
+        );
       await fn(abortRef.current.signal);
       // nothing blocks an export: anything the route had to adjust (or could not) is shown, never silent
       const adjusted = takeExportWarnings();
@@ -1202,6 +1245,7 @@ export default function MotionStudio() {
       ? [
           ...(whole ? [["whole", "Whole poem"]] : []),
           ["look", "Look"],
+          ["elements", "Elements"],
           ["full", "Full poem"],
           ["export", "Export"],
         ]
@@ -1210,6 +1254,7 @@ export default function MotionStudio() {
           ["poem", "Poem"],
           ["scenes", "Scenes"],
           ["look", "Look"],
+          ["elements", "Elements"],
           ["bg", "Background"],
           ["audio", "Audio"],
           ["story", "Story"],
@@ -1461,18 +1506,81 @@ export default function MotionStudio() {
     }
   };
 
+  // drag a decorative element on the preview (pointer: mouse, touch, pen). Locked elements cannot be moved; the
+  // Elements panel offers position presets and sliders as the non-drag alternative.
+  const dragRef = useRef(null);
+  const elPointerDown = (e) => {
+    const els = comp?.elements;
+    if (!els?.length) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const fx = (e.clientX - r.left) / r.width,
+      fy = (e.clientY - r.top) / r.height;
+    const hit = [...els].reverse().find((el) => {
+      if (el.hidden) return false;
+      const b = elementBox(el, r.width, r.height);
+      return (
+        Math.abs(fx * r.width - b.cx) <= b.w / 2 &&
+        Math.abs(fy * r.height - b.cy) <= b.h / 2
+      );
+    });
+    if (!hit) return;
+    setSelEl(hit.id);
+    if (hit.locked) return;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    dragRef.current = { id: hit.id, fx, fy, x: hit.x, y: hit.y };
+  };
+  const elPointerMove = (e) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const nx = d.x + (e.clientX - r.left) / r.width - d.fx,
+      ny = d.y + (e.clientY - r.top) / r.height - d.fy;
+    update(
+      (c) => ({
+        ...c,
+        elements: c.elements.map((el) =>
+          el.id === d.id
+            ? {
+                ...el,
+                x: Math.round(Math.min(1.2, Math.max(-0.2, nx)) * 1000) / 1000,
+                y: Math.round(Math.min(1.2, Math.max(-0.2, ny)) * 1000) / 1000,
+              }
+            : el,
+        ),
+      }),
+      `el-drag-${d.id}`,
+    );
+  };
+  const elPointerUp = () => {
+    dragRef.current = null;
+  };
+  const dragProps = comp?.elements?.length
+    ? {
+        onPointerDown: elPointerDown,
+        onPointerMove: elPointerMove,
+        onPointerUp: elPointerUp,
+        onPointerCancel: elPointerUp,
+      }
+    : {};
+
   const previewBlock = (idPrefix, big) => (
     <div>
       <canvas
         ref={big ? fullRef : canvasRef}
         width={big ? 540 : previewW * 2}
         height={big ? Math.round((540 * fmt.h) / fmt.w) : previewH * 2}
-        style={
-          big
+        style={{
+          ...(big
             ? { height: "min(78vh,100%)", aspectRatio: `${fmt.w}/${fmt.h}` }
-            : { width: previewW, height: previewH }
-        }
+            : { width: previewW, height: previewH }),
+          // only while an element is selected does a touch drag move it instead of scrolling the page
+          ...(selEl ? { touchAction: "none" } : {}),
+        }}
         className="mx-auto rounded-lg border bg-black"
+        onPointerDown={dragProps.onPointerDown}
+        onPointerMove={dragProps.onPointerMove}
+        onPointerUp={dragProps.onPointerUp}
+        onPointerCancel={dragProps.onPointerCancel}
         role="img"
         aria-label="Preview of the current frame"
       />
@@ -1627,6 +1735,9 @@ export default function MotionStudio() {
     setScrimPct,
     setSel,
     setTab,
+    selEl,
+    setSelEl,
+    elTick,
     source,
     stills,
     toggleRecord,
@@ -2163,6 +2274,7 @@ export default function MotionStudio() {
                 className="mt-4 space-y-4"
               >
                 {activeTab === "look" && <LookPanel />}
+                {activeTab === "elements" && <ElementsPanel />}
 
                 {activeTab === "scenes" && scenesPanel}
 

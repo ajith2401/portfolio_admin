@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { parsePoemText } from "@/lib/motion-studio/poem-input";
 import { routeById } from "@/lib/motion-studio/formats";
+import { DECORATION_PRESETS, DECORATION_KEYS } from "@/lib/motion-studio/elements";
 import {
   quickRoutes,
   routeKindLabel,
@@ -37,6 +38,7 @@ export default function QuickCreate({
   const [templateId, setTemplateId] = useState(
     prefs.recentTemplates[0] || "ink-silence",
   );
+  const [decor, setDecor] = useState("none");
   const [busy, setBusy] = useState(false);
   const parsed = useMemo(() => parsePoemText(text, { title }), [text, title]);
   const issues = [];
@@ -53,7 +55,7 @@ export default function QuickCreate({
         from === "writing"
           ? { kind: "writing", id: writingId }
           : { kind: "manual", text, title },
-        { routeId, templateId },
+        { routeId, templateId, decor },
       );
     } finally {
       setBusy(false);
@@ -160,6 +162,22 @@ export default function QuickCreate({
           recent={prefs.recentTemplates}
           onFavourite={onFavourite}
         />
+        <label className="pms-lbl mt-3 block">
+          Decoration (optional)
+          <select
+            aria-label="Decoration"
+            className="pms-field"
+            style={{ minHeight: 44 }}
+            value={decor}
+            onChange={(e) => setDecor(e.target.value)}
+          >
+            {DECORATION_KEYS.map((k) => (
+              <option key={k} value={k}>
+                {DECORATION_PRESETS[k].label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
       {issues.length > 0 && (
         <ul

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1192" height="1078" viewBox="-596 -402 1192 1078" color="#2a2622" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <g id="doorway">
+    <g id="door-frame">
+      <path id="door-frame-l1" d="M-206,400L-206,-325.4L-205.2,-326L205.2,-326L206,-325.4L206,400" stroke-width="3.0"/>
+      <path id="door-frame-l2" d="M-180,400L-179.9,-300L179.9,-300L180,400" stroke-width="3.0"/>
+    </g>
+    <g id="door">
+      <path d="M-180,-300L-18,-270L-18,380L-180,400Z" fill="currentColor" stroke="none" fill-opacity="0.14"/>
+      <path id="door-s1" d="M-180,-300L-19,-270.2L-18,-269.6L-18,379.7L-180,399.7L-180,-298.6Z" stroke-width="3.0"/>
+    </g>
+    <g id="door-knob">
+      <path d="M-31.7,50L-32,52.3L-32.9,54.5L-34.3,56.4L-36.2,57.8L-38.4,58.7L-40.7,59L-43,58.7L-45.2,57.8L-47,56.4L-48.5,54.5L-49.4,52.3L-49.7,50L-49.4,47.7L-48.5,45.5L-47,43.6L-45.2,42.2L-43,41.3L-40.7,41L-38.4,41.3L-36.2,42.2L-34.3,43.6L-32.9,45.5L-32,47.7Z" fill="currentColor" stroke="none"/>
+    </g>
+    <g id="exterior-scene">
+      <g id="sun">
+        <path id="sun-l1" d="M147,70L146.2,61.6L143.4,52.2L139.5,44.8L133.3,37.2L126.8,31.9L118.1,27.3L110.1,24.9L101.7,24L91.9,24.9L83.9,27.3L75.2,31.9L68.7,37.2L62.5,44.8L58.6,52.2L55.8,61.6L55,70" stroke-width="2.4"/>
+      </g>
+      <g id="hills">
+        <path id="hills-l1" d="M-18,100L-12,96.4L14.5,78.2L29.1,69.8L38,65.8L46,63L55.5,60.7L62.4,60L70.8,60.2L80.6,61.3L103.9,66.2L128.1,73.1L180,90" stroke-width="2.2" stroke-opacity="0.65"/>
+        <path id="hills-l2" d="M-18,180L73.8,158.3L100,153L119.5,150.1L133.6,149.4L147.6,150.7L159.9,153.5L180,160" stroke-width="2.2" stroke-opacity="0.65"/>
+      </g>
+      <g id="path-out">
+        <path id="path-out-l1" d="M22,400L55.3,324L65.2,299.2L71.8,280.6L76.8,263L81.4,242.4L85.3,221.7L92,180" stroke-width="2.2" stroke-opacity="0.7"/>
+        <path id="path-out-l2" d="M170,400L143.1,322.8L135.4,298.7L129.9,279.8L126,263.3L121.9,242.6L112,180" stroke-width="2.2" stroke-opacity="0.7"/>
+      </g>
+    </g>
+  </g>
+  <g id="light">
+    <g id="light-spill">
+      <path d="M-18,400L180,400L340,600L22,600Z" fill="currentColor" stroke="none" fill-opacity="0.1"/>
+    </g>
+  </g>
+  <g id="ground-g">
+    <g id="floor">
+      <path id="floor-l1" d="M-520,400L-206,400" stroke-width="2.4" stroke-opacity="0.6"/>
+      <path id="floor-l2" d="M206,400L520,400" stroke-width="2.4" stroke-opacity="0.6"/>
+    </g>
+  </g>
+</svg>

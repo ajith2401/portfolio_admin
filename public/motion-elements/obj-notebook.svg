@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="558" height="818" viewBox="-273 -355 558 818" color="#2a2622" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <g id="notebook">
+    <g id="notebook-cover">
+      <path id="notebook-cover-s1" d="M154.4,-300L202,-300L206.2,-299.5L210.1,-298L212.5,-296.5L216.4,-292.7L217.9,-290.3L219.4,-286.4L220,-280.8L219.9,283.2L219.6,285.9L218.2,289.9L215.9,293.4L212.8,296.3L209.2,298.4L206.6,299.3L201.1,300L154.9,300" stroke-width="3.0"/>
+      <path id="notebook-cover-s2" d="M139.5,300L-202,300L-206.2,299.5L-210.1,298L-213.6,295.7L-215.6,293.7L-217.9,290.3L-219.4,286.4L-220,280.8L-220,-281.8L-219.6,-285.9L-218.2,-289.9L-215.9,-293.4L-212.8,-296.3L-210.5,-297.8L-206.6,-299.3L-201.1,-300L139,-300" stroke-width="3.0"/>
+      <path id="notebook-cover-s3" d="M222,-286L231.6,-280.2L232,-279.1L232,289L231.7,290.2L222.1,296L222,-284.6Z" stroke-width="3.0"/>
+    </g>
+    <g id="notebook-band">
+      <path id="notebook-band-s1" d="M140,-302L154,-302L154,-300.6L154,301.3L153.3,302L140.7,302L140,301.3L140,-300.6Z" stroke-width="2.4"/>
+    </g>
+    <g id="ribbon">
+      <path id="ribbon-l1" d="M-40,300L-34.5,339.2L-33.8,351.9L-34,360.4L-35.4,368.7L-38.4,379.6L-50,410" stroke-width="3.0"/>
+    </g>
+  </g>
+</svg>

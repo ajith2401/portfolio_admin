@@ -11,6 +11,7 @@ import { totalDuration } from "./scenes.js";
 import { rowState, activeBehaviour, buildPlan, animFrame, prefParams } from "./animation.js";
 import { runFx, runMaterial } from "./fx/registry.js";
 import { paintTextures } from "./textures.js";
+import { paintElements } from "./elements.js";
 import { materialPlan, effectiveIntensity } from "./materials.js";
 import { registryFamilies } from "./font-registry.js";
 
@@ -170,7 +171,7 @@ export const rowAnchor = (align, ax, ipx = 0) => (align === "left" ? ax + ipx : 
 // drawFrame paints explicit ordered layers: bg -> material -> atmosphere (under text) -> text -> surface (over text) ->
 // signature. material/atmosphere/surface accept registered effects (fx/registry.js, empty by default). The text layer
 // takes no state from any effect: effects run isolated, and the text state is re-asserted before the text is drawn.
-export const LAYERS = Object.freeze(["bg", "material", "atmosphere", "text", "surface", "signature"]);
+export const LAYERS = Object.freeze(["bg", "material", "atmosphere", "elements", "text", "surface", "signature"]);
 export const resetTextState = (ctx) => { ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.filter = "none"; ctx.shadowColor = "transparent"; };
 function layerBg(ctx, env) { paintBackground(ctx, env.comp, env.W, env.H, env.still ? 0 : env.tMs, env.total, env.assets); }
 // surface texture + film grain (textures.js) first: the paper the material presets then sit on
@@ -179,6 +180,7 @@ function layerAtmosphere(ctx, env) {
   if (!env.still) paintParticles(ctx, env.comp, env.W, env.H, env.tMs);
   return runFx("atmosphere", ctx, env) + runMaterial("atmosphere", ctx, env);
 }
+function layerElements(ctx, env) { return paintElements(ctx, env.comp, env.W, env.H, env.tMs, { still: env.still }); }
 function layerText(ctx, env) {
   const { comp, rect, still, minSize } = env, st = comp.style;
   const at = env.forced ? { scene: env.forced, index: 0, local: 1e6, last: true } : sceneAt(comp, env.tMs);
@@ -279,7 +281,7 @@ export function drawFrame(ctx, comp, tMs, { w, assets = {}, still = false, scene
     plan: materialPlan(comp), intensity: effectiveIntensity(comp), seed: comp.material?.seed ?? 1, fxTrace, fxReport };
 
   layerBg(ctx, env);
-  const under = layerMaterial(ctx, env) + layerAtmosphere(ctx, env);
+  const under = layerMaterial(ctx, env) + layerAtmosphere(ctx, env) + layerElements(ctx, env);
   if (under) resetTextState(ctx);
   layerText(ctx, env);
   if (layerSurface(ctx, env)) resetTextState(ctx);

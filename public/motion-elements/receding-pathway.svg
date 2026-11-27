@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1284" height="864" viewBox="-642 -82 1284 864" color="#2a2622" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <g id="land">
+    <g id="horizon">
+      <path id="horizon-l1" d="M-560,0L560,0" stroke-width="2.0" stroke-opacity="0.5"/>
+    </g>
+  </g>
+  <g id="path">
+    <g id="path-edges">
+      <path id="path-edges-l1" d="M-14,0L-420,700" stroke-width="2.6"/>
+      <path id="path-edges-l2" d="M14,0L420,700" stroke-width="2.6"/>
+    </g>
+  </g>
+  <g id="posts">
+    <g id="lamp-posts">
+      <path id="lamp-posts-l1" d="M-534,665L-534,133" stroke-width="2.6"/>
+      <path id="lamp-posts-l2" d="M-534,133L-509.3,123.5" stroke-width="2.6"/>
+      <path id="lamp-posts-l3" d="M-346.3,412.3L-346.3,82.5" stroke-width="2.6"/>
+      <path id="lamp-posts-l4" d="M-346.3,82.5L-331,76.6" stroke-width="2.6"/>
+      <path id="lamp-posts-l5" d="M-229.9,255.6L-229.9,51.1" stroke-width="2.6"/>
+      <path id="lamp-posts-l6" d="M-229.9,51.1L-220.4,47.5" stroke-width="2.6"/>
+      <path id="lamp-posts-l7" d="M-157.7,158.5L-157.7,31.7" stroke-width="2.6"/>
+      <path id="lamp-posts-l8" d="M-157.7,31.7L-151.8,29.4" stroke-width="2.6"/>
+      <path id="lamp-posts-l9" d="M-113,98.3L-113,19.7" stroke-width="2.6"/>
+      <path id="lamp-posts-l10" d="M-113,19.7L-109.3,18.2" stroke-width="2.6"/>
+      <path id="lamp-posts-l11" d="M-85.3,60.9L-85.3,12.2" stroke-width="2.6"/>
+      <path id="lamp-posts-l12" d="M534,665L534,133" stroke-width="2.6"/>
+      <path id="lamp-posts-l13" d="M534,133L509.3,123.5" stroke-width="2.6"/>
+      <path id="lamp-posts-l14" d="M346.3,412.3L346.3,82.5" stroke-width="2.6"/>
+      <path id="lamp-posts-l15" d="M346.3,82.5L331,76.6" stroke-width="2.6"/>
+      <path id="lamp-posts-l16" d="M229.9,255.6L229.9,51.1" stroke-width="2.6"/>
+      <path id="lamp-posts-l17" d="M229.9,51.1L220.4,47.5" stroke-width="2.6"/>
+      <path id="lamp-posts-l18" d="M157.7,158.5L157.7,31.7" stroke-width="2.6"/>
+      <path id="lamp-posts-l19" d="M157.7,31.7L151.8,29.4" stroke-width="2.6"/>
+      <path id="lamp-posts-l20" d="M113,98.3L113,19.7" stroke-width="2.6"/>
+      <path id="lamp-posts-l21" d="M113,19.7L109.3,18.2" stroke-width="2.6"/>
+      <path id="lamp-posts-l22" d="M85.3,60.9L85.3,12.2" stroke-width="2.6"/>
+    </g>
+  </g>
+</svg>

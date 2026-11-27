@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="578" height="373" viewBox="-258 -174 578 373" color="#2a2622" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <g id="pen">
+    <g id="pen-body">
+      <path id="pen-body-s1" d="M-134.5,92.1L-127,85.9L-116.6,78.7L-85.3,60.2" stroke-width="3.0"/>
+      <path id="pen-body-s2" d="M34.1,-7.3L127.7,-60.7L194.7,-98.4L237.8,-121.8L260.5,-132.7L268.5,-135.3L271.1,-134.8L271.6,-133.9L270.8,-131.3L265.6,-123L265,-120.2L267.4,-119.2L277.2,-119.4L281,-118.3L280.3,-115.7L274.1,-110L249.8,-93.6L199.6,-63L123.6,-18.2L-5.8,57.1L-74.2,98L-100,112.2L-110.1,116.9L-118,119.7" stroke-width="3.0"/>
+      <path id="pen-body-s3" d="M-85.8,59.5L-86,56.8L-84.3,54.7L28.1,-10.2L29.5,-10.6L32.1,-9.9L33.4,-7.5" stroke-width="3.0"/>
+    </g>
+    <g id="pen-grip">
+      <path id="pen-grip-s1" d="M-176.5,119.4L-133.2,91.4L-132.3,91.9L-117,118.4L-117.6,119.3L-162.2,142.2" stroke-width="3.0"/>
+    </g>
+    <g id="pen-nib">
+      <path id="pen-nib-s1" d="M-220,160L-195.6,133.3L-175.2,118.7L-174.3,119.1L-171.5,124L-161.8,140.9L-161.8,141.8L-184.6,152.2L-218.6,159.7Z" stroke-width="3.0"/>
+    </g>
+  </g>
+</svg>

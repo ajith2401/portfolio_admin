@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1032" height="694" viewBox="-16 123 1032 694" color="#2a2622" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+<path d="M514,490C590,330 770,170 940,190C970,220 940,320 840,410C760,470 640,510 514,522Z" fill="currentColor" fill-opacity="0.06" stroke-width="3.2"/>
+<path d="M486,490C410,330 230,170 60,190C30,220 60,320 160,410C240,470 360,510 486,522Z" fill="currentColor" fill-opacity="0.06" stroke-width="3.2"/>
+<path d="M514,524C660,514 800,560 830,660C845,720 790,760 740,750C680,735 590,660 514,580Z" fill="currentColor" fill-opacity="0.06" stroke-width="3.2"/>
+<path d="M486,524C340,514 200,560 170,660C155,720 210,760 260,750C320,735 410,660 486,580Z" fill="currentColor" fill-opacity="0.06" stroke-width="3.2"/>
+<path d="M530,490C640,350 760,250 900,220M530,504C660,420 800,350 930,270M530,516C660,480 790,440 870,390" stroke-width="1.5" stroke-opacity="0.65"/>
+<path d="M470,490C360,350 240,250 100,220M470,504C340,420 200,350 70,270M470,516C340,480 210,440 130,390" stroke-width="1.5" stroke-opacity="0.65"/>
+<path d="M530,530C660,550 760,600 800,670M530,546C620,600 700,670 730,730" stroke-width="1.5" stroke-opacity="0.65"/>
+<path d="M470,530C340,550 240,600 200,670M470,546C380,600 300,670 270,730" stroke-width="1.5" stroke-opacity="0.65"/>
+<circle cx="850" cy="270" r="10" fill="currentColor" fill-opacity="0.5" stroke="none"/>
+<circle cx="150" cy="270" r="10" fill="currentColor" fill-opacity="0.5" stroke="none"/>
+<circle cx="800" cy="690" r="8" fill="currentColor" fill-opacity="0.5" stroke="none"/>
+<circle cx="200" cy="690" r="8" fill="currentColor" fill-opacity="0.5" stroke="none"/>
+<circle cx="750" cy="730" r="5" fill="currentColor" fill-opacity="0.5" stroke="none"/>
+<circle cx="250" cy="730" r="5" fill="currentColor" fill-opacity="0.5" stroke="none"/>
+<path d="M500,450C514,460 514,630 500,750C486,630 486,460 500,450Z" fill="currentColor" fill-opacity="0.85" stroke-width="2"/>
+<circle cx="500" cy="436" r="15" fill="currentColor" stroke="none"/>
+<path d="M506,424C530,350 580,290 635,258" stroke-width="2"/>
+<circle cx="635" cy="258" r="5" fill="currentColor" stroke="none"/>
+<path d="M494,424C470,350 420,290 365,258" stroke-width="2"/>
+<circle cx="365" cy="258" r="5" fill="currentColor" stroke="none"/>
+</svg>

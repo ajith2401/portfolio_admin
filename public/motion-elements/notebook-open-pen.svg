@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="871" height="643" viewBox="-436 -321 871 643" color="#2a2622" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <g id="notebook">
+    <g id="notebook-cover">
+      <path id="notebook-cover-s1" d="M336.4,-264.1L340.5,-263.5L344,-261.3L346.3,-257.8L347.1,-253.7L379.3,205.6L379.2,208.3L378.3,211L375.8,214.3L372.2,216.3L369.4,216.8L-324.4,265.3L-337,266.1L-341,265.2L-343.4,263.7L-345.2,261.7L-346.5,259.2L-347,256.4L-379.1,-202.9L-379.1,-205.7L-378.5,-208.4L-377.1,-210.8L-375.1,-212.7L-372.7,-214.1L-368.6,-214.8L335,-264Z" stroke-width="3.0"/>
+    </g>
+    <g id="page">
+      <path id="page-s1" d="M3.5,136L10.3,233.7L-95.9,233.8L-130.9,234.5L-158.8,235.7L-188.1,237.8L-224.3,241.3L-332.8,253.8L-333.2,252.8L-335.3,222.1L-365.2,-205L-255.6,-219.2L-219.4,-223L-191.5,-225.2L-162.1,-226.3L-128.5,-226.7L-22.2,-225L-21.7,-224.1L0.8,96.9" stroke-width="3.0"/>
+      <path id="page-s2" d="M15.2,131L22.3,232.9L127.5,218.2L160.8,214.1L187.3,211.5L215.2,209.6L252.9,207.8L364.8,205L365.1,204L333.1,-253.9L222.6,-252.6L186.2,-251.4L158.3,-249.7L129.1,-246.7L95.8,-242.3L-9.3,-225.9L-9.7,-224.9L12.3,90.5" stroke-width="3.0"/>
+      <path id="page-l1" d="M-15.6,-223.5L-5.1,-31.6L-1.4,21.6L4.4,94.3" stroke-width="2.4000000000000004"/>
+      <path id="page-l2" d="M7.8,134.8L16.5,235.4" stroke-width="2.4000000000000004"/>
+    </g>
+    <g id="page-rules">
+      <path id="page-rules-l1" d="M-319.2,-120.6L-49.8,-139.5" stroke-width="1.35" stroke-opacity="0.45"/>
+      <path id="page-rules-l2" d="M30,-145L299.3,-163.9" stroke-width="1.35" stroke-opacity="0.45"/>
+      <path id="page-rules-l3" d="M-315.9,-73.1L-46.5,-91.9" stroke-width="1.35" stroke-opacity="0.45"/>
+      <path id="page-rules-l4" d="M33.3,-97.5L302.6,-116.4" stroke-width="1.35" stroke-opacity="0.45"/>
+      <path id="page-rules-l5" d="M-312.5,-25.6L-43.2,-44.4" stroke-width="1.35" stroke-opacity="0.45"/>
+      <path id="page-rules-l6" d="M36.6,-50L305.9,-68.8" stroke-width="1.35" stroke-opacity="0.45"/>
+      <path id="page-rules-l7" d="M-309.2,22L-39.9,3.1" stroke-width="1.35" stroke-opacity="0.45"/>
+      <path id="page-rules-l8" d="M39.9,-2.5L227.9,-15.6" stroke-width="1.35" stroke-opacity="0.45"/>
+      <path id="page-rules-l9" d="M272.8,-18.7L309.3,-21.3" stroke-width="1.35" stroke-opacity="0.45"/>
+      <path id="page-rules-l10" d="M-305.9,69.5L-36.6,50.6" stroke-width="1.35" stroke-opacity="0.45"/>
+      <path id="page-rules-l11" d="M43.2,45.1L120.4,39.7" stroke-width="1.35" stroke-opacity="0.45"/>
+      <path id="page-rules-l12" d="M190.5,34.8L312.6,26.2" stroke-width="1.35" stroke-opacity="0.45"/>
+      <path id="page-rules-l13" d="M-302.6,117L-33.2,98.2" stroke-width="1.35" stroke-opacity="0.45"/>
+      <path id="page-rules-l14" d="M88.7,89.6L315.9,73.8" stroke-width="1.35" stroke-opacity="0.45"/>
+      <path id="page-rules-l15" d="M-299.3,164.5L-80.4,149.2" stroke-width="1.35" stroke-opacity="0.45"/>
+      <path id="page-rules-l16" d="M49.9,140.1L319.2,121.3" stroke-width="1.35" stroke-opacity="0.45"/>
+    </g>
+  </g>
+  <g id="pen">
+    <g id="pen-body">
+      <path id="pen-body-s1" d="M-60.7,137.8L-54,132.9L-43.3,126.2L-11.4,108.7" stroke-width="3.0"/>
+      <path id="pen-body-s2" d="M111.5,44.6L214.6,-8.9L242.3,-22.5L257.7,-29.1L264.5,-30.9L267.2,-30.6L267.5,-28.1L265.3,-23L265.4,-20.4L266.6,-19.7L272.1,-18.7L274.5,-17.4L273.6,-14.8L268.3,-10.2L249.4,1.8L211.7,23.1L67.5,100.9L3.7,135.9L-28.7,152.6L-40.2,157.7L-48.1,160.6" stroke-width="3.0"/>
+      <path id="pen-body-s3" d="M-10.6,107.5L-10.8,104.8L-9,102.8L105.7,41.8L107,41.4L109.6,42.3L110.8,44.7" stroke-width="3.0"/>
+    </g>
+    <g id="pen-grip">
+      <path id="pen-grip-s1" d="M-103.9,163.1L-59.4,137.1L-58.5,137.7L-46.8,159.8L-93.2,182.2" stroke-width="3.0"/>
+    </g>
+    <g id="pen-nib">
+      <path id="pen-nib-s1" d="M-150,200L-124.5,176.5L-102.3,162.3L-92.1,181.5L-116.3,191.9L-148.7,199.7Z" stroke-width="3.0"/>
+    </g>
+  </g>
+</svg>

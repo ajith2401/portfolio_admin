@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1192" height="663" viewBox="-496 44 1192 663" color="#2a2622" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <g id="sea">
+    <g id="sea-lines">
+      <path id="sea-lines-l1" d="M-310.4,150L-203.7,148L-97.1,150" stroke-width="2.0" stroke-opacity="0.6"/>
+      <path id="sea-lines-l2" d="M114.1,150L248.7,148L383.3,150" stroke-width="2.0" stroke-opacity="0.6"/>
+      <path id="sea-lines-l3" d="M-144.3,179.7L-52.8,177.7L-19,178.1L40.2,179.7" stroke-width="2.0" stroke-opacity="0.6"/>
+      <path id="sea-lines-l4" d="M240.2,179.7L399,177.7L458,178.1L559.2,179.7" stroke-width="2.0" stroke-opacity="0.6"/>
+      <path id="sea-lines-l5" d="M1,224.8L47.3,222.8L93.6,224.8" stroke-width="2.0" stroke-opacity="0.6"/>
+      <path id="sea-lines-l6" d="M-110.3,285.3L-33,283.8" stroke-width="2.0" stroke-opacity="0.6"/>
+      <path id="sea-lines-l7" d="M33.1,283.3L58.4,283.6" stroke-width="2.0" stroke-opacity="0.6"/>
+      <path id="sea-lines-l8" d="M123,284.8L151.1,285.3" stroke-width="2.0" stroke-opacity="0.6"/>
+      <path id="sea-lines-l9" d="M262.6,285.3L355.2,283.3L390.3,283.7L449.3,285.3" stroke-width="2.0" stroke-opacity="0.6"/>
+    </g>
+    <g id="horizon">
+      <path id="horizon-l1" d="M-420,120L620,120" stroke-width="2.2"/>
+    </g>
+  </g>
+  <g id="couple">
+    <g id="person-one">
+      <g id="person-one-figure-root">
+        <g id="person-one-head">
+          <g id="person-one-neck">
+            <path id="person-one-neck-s1" d="M15.1,313.2L15.8,327.2" stroke-width="2.6"/>
+            <path id="person-one-neck-s2" d="M-15.8,326.6L-15.1,312.6" stroke-width="2.6"/>
+          </g>
+          <g id="person-one-head-shape">
+            <path id="person-one-head-shape-s1" d="M33,274L32.7,279.6L31.4,287.8L27.3,296.7L22.8,303.8L17.4,310.2L12.1,314.7L6,318L0.5,319L-3.6,318.6L-8.9,316.7L-14.6,312.8L-20.5,306.8L-26.7,297.6L-31,288.8L-32.3,283.4L-32.9,277.8L-32.8,269.4L-31.3,259.8L-28.7,251.9L-24.8,244.4L-19.7,237.9L-14.3,233.5L-9.3,230.9L-2.6,229.2L3,229.2L9.7,231L13.4,232.9L16.8,235.3L21.8,240.2L26.5,247.2L29.8,254.8L32.2,264.3L32.9,272.6Z" stroke-width="2.6"/>
+          </g>
+        </g>
+        <g id="person-one-torso">
+          <g id="person-one-torso-shape">
+            <path id="person-one-torso-shape-s1" d="M72.6,347.7L51.7,339.9L35.1,332.5L25.8,329.3L20.4,328.1L12.1,327L-6.1,326.6L-20,328L-30.8,330.9L-51.3,339.7L-73.6,348.1L-78.4,350.8L-82.7,354.5" stroke-width="2.6"/>
+            <path id="person-one-torso-shape-s2" d="M-63.9,539.7L-66.3,570.3L-70.8,589.4L-71.6,594.9L-71.5,597.7L-70.2,601.6L-68.4,603.7L-66,605.2L-60.7,607L-52.5,608.4L-24.6,611.2L-5.1,612L11.7,611.9L25.6,611.1L54.8,608.1L63,606.3L66.9,604.7L70,602L71.2,599.4L71.6,596.7L70.9,589.7L66.3,570.7L63.9,538.6L64,528.9L64.8,519.1L68.6,497.1" stroke-width="2.6"/>
+          </g>
+        </g>
+        <g id="person-one-arm-left">
+          <g id="person-one-arm-left-shape">
+            <path id="person-one-arm-left-shape-s1" d="M-93.3,469.3L-95,374.4L-94.6,370.2L-93.5,366.2L-91.5,362.5L-88.9,359.3L-85.7,356.6L-82,354.6L-78,353.4L-73.9,353L-69.7,353.5L-63.2,356L-57.9,360.5L-54.9,365.2L-53.1,371.9L-58.8,476.4" stroke-width="2.6"/>
+            <path id="person-one-arm-left-shape-s2" d="M-88,493L-89.9,490.9L-91.9,487.2L-93,481.8" stroke-width="2.6"/>
+            <path id="person-one-arm-left-shape-s3" d="M-93.4,479.4L-94,475.3L-93.5,471.1" stroke-width="2.6"/>
+            <path id="person-one-arm-left-shape-s4" d="M-58.7,477.4L-45.2,525.8L-45.2,530L-46.4,534L-48,536.3L-51.1,539L-55,540.6L-60.5,540.7L-64.4,539.3L-67.7,536.7L-69.9,533.2L-86.9,494.8" stroke-width="2.6"/>
+          </g>
+        </g>
+        <g id="person-one-arm-right">
+          <g id="person-one-arm-right-shape">
+            <path id="person-one-arm-right-shape-s1" d="M55.8,385.4L53.6,378.8L53,374.6L53.6,369.1L55.6,363.9L58.9,359.4L63.3,356L68.4,353.8L73.9,353" stroke-width="2.6"/>
+          </g>
+        </g>
+      </g>
+    </g>
+    <g id="person-two">
+      <g id="person-two-figure-root">
+        <g id="person-two-head">
+          <g id="person-two-hair">
+            <path id="person-two-hair-s1" d="M57.9,304.3L57.1,298.8L57.3,290.4L57.9,286.3L59.9,279.6L61.7,275.8L65.8,270.1L68.8,267.2L74.8,263.6L81.5,261.6L85.6,261.3L92.6,262.1L96.6,263.3L102.9,266.2L106.4,268.5L112.7,274L116.3,278.3" stroke-width="2.21"/>
+            <path id="person-two-hair-s2" d="M57.9,305L58.3,310.6L60.2,317.3L68.7,336.5L80.3,366.5L81.8,374.7L82.6,390.1L83.5,392.7L85.1,395L87.6,396.3L90.3,396.5L93.1,395.9L96.7,393.9L107.8,385.4L113,383.2L126.3,379.1L142.1,370.1L146.1,368.9L155.7,367.3L159.8,366.2L163.3,363.9L164.9,361.7L165.5,359L164.2,355L161.6,351.8L152.5,343.1L147.5,336.4L132.9,307.7L124.4,288.5L120.6,282.6L116.7,278.7" stroke-width="2.21"/>
+          </g>
+        </g>
+        <g id="person-two-torso">
+          <g id="person-two-torso-shape">
+            <path id="person-two-torso-shape-s1" d="M79.5,366.7L67.7,374.2L62.1,378.4L58.5,382.6L55.2,388.8" stroke-width="2.6"/>
+            <path id="person-two-torso-shape-s2" d="M92.9,545.7L91,562.4L88.7,573.3L88.9,576.1L90.3,578.4L94.1,580.1L103.9,580.7L127.6,579.9L145.7,578.2L166.4,574.7L189.4,569L198.8,566.2L203.6,563.4L205,561L205.1,558.3L204.1,555.7L199.4,547.1L193.5,532.9" stroke-width="2.6"/>
+            <path id="person-two-torso-shape-s3" d="M186,370.3L182.2,366.2L177.7,363L172.6,360.7L165.9,358.6" stroke-width="2.6"/>
+          </g>
+        </g>
+        <g id="person-two-arm-left">
+          <g id="person-two-arm-left-shape">
+            <path id="person-two-arm-left-shape-s1" d="M68.1,490.2L51.3,399.7L51.5,396.9L52.7,392.9L55.9,388.4L59.2,385.8L61.7,384.7L64.4,383.9L68.6,383.8L73.9,385.3L77.4,387.6L80.9,391.9L82.4,395.8L95.2,492.5" stroke-width="2.6"/>
+            <path id="person-two-arm-left-shape-s2" d="M73.6,507.1L71.1,503.7L69.9,499.8" stroke-width="2.6"/>
+            <path id="person-two-arm-left-shape-s3" d="M69.5,498.2L68.6,495.5L68.2,491.4" stroke-width="2.6"/>
+            <path id="person-two-arm-left-shape-s4" d="M95.6,493.8L111.7,537L111.9,539.7L110.9,543.8L109.4,546.1L107.2,547.9L103.4,549.4L99.2,549.2L96.6,548.1L93.5,545.4L74.5,508.1" stroke-width="2.6"/>
+          </g>
+        </g>
+        <g id="person-two-arm-right">
+          <g id="person-two-arm-right-shape">
+            <path id="person-two-arm-right-shape-s1" d="M177.8,480.1L161.8,385.2L162,381.1L164,375.9L167.6,371.7L172.5,369L175.2,368.4L179.4,368.3L184.7,369.9L189.1,373.2L191.5,376.6L192.6,379.2L193.4,383.3L203.2,470.6" stroke-width="2.6"/>
+            <path id="person-two-arm-right-shape-s2" d="M204.3,480.3L204.3,484.5L202.4,489.7" stroke-width="2.6"/>
+            <path id="person-two-arm-right-shape-s3" d="M203.5,471.9L204.3,474.6L204.3,478.8" stroke-width="2.6"/>
+            <path id="person-two-arm-right-shape-s4" d="M202,491.1L194.7,529.5L193.8,532.1L191.2,535.4L187.6,537.4L184.9,537.8L180.8,537.1L178.4,535.7L176.4,533.7L175.1,531.3L174.4,528.6L177.9,482.7" stroke-width="2.6"/>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+  <g id="shore-g">
+    <g id="sand">
+      <path id="sand-l1" d="M-300,606L-193.6,603.1L-126.3,602L-77.3,602.1L54.4,603.7L120.2,604L228.1,603.2L420,601" stroke-width="2.2" stroke-opacity="0.6"/>
+      <path id="sand-l2" d="M-200,630L-50.1,628.4L39.5,628L134.7,628.7L300,631" stroke-width="2.2" stroke-opacity="0.6"/>
+    </g>
+  </g>
+</svg>
