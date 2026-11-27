@@ -4,6 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as EXPORTS from "../../src/lib/motion-studio/export.js";
+const { takeExportWarnings } = EXPORTS;
 import { ROUTES, routeById } from "../../src/lib/motion-studio/formats.js";
 import { parsePoemText } from "../../src/lib/motion-studio/poem-input.js";
 import { generateScenes } from "../../src/lib/motion-studio/scenes.js";
@@ -137,11 +138,17 @@ for (const route of ROUTES)
     assert.ok(firstMeasure > lastFont, `${route.id}: measured before fonts were ready (${log.slice(0, 12).join(",")})`);
   });
 for (const route of ROUTES)
-  test(`routes: ${route.id} refuses (and never measures) when no font face matches`, async () => {
-    const log = installDom({ empty: true });
+  test(`routes: ${route.id} never blocks when no font face matches — it exports and WARNS (never silent)`, async () => {
+    installDom({ empty: true });
+    takeExportWarnings();
     const { comp, poem } = compFor("tabs", route);
-    await assert.rejects(() => withTimeout(route.render(comp, inputFor(route, poem), {})), /fallback font/);
-    assert.equal(log.indexOf("measure"), -1, "nothing measured against a fallback face");
+    let err = null;
+    try { await withTimeout(route.render(comp, inputFor(route, poem), {})); } catch (e) { err = e; }
+    if (route.kind !== "video") assert.equal(err, null, `${route.id} must still export: ${err?.message}`);
+    else assert.doesNotMatch(String(err?.message || ""), /fallback font/, "a font problem must not be the reason a video stops");
+    const w = takeExportWarnings();
+    assert.ok(w.some((m) => /^Font check:.*fallback font/s.test(m)), `${route.id}: the font problem is reported: ${JSON.stringify(w)}`);
+    assert.deepEqual(takeExportWarnings(), [], "takeExportWarnings clears the list");
   });
 
 // ---------------------------------------------------------------- animation hold-state invariant
@@ -289,4 +296,49 @@ test("carousel: cover + poem cards + end card, numbered k/N, every card validate
   // the page label sits in the top margin, inside the side margins
   const b = pageLabelBox(comp, FORMATS.poster, ctx, "12/12");
   assert.ok(b.top >= 0 && b.right <= FORMATS.poster.w * (1 - FORMATS.poster.safe.side) + 0.5);
+});
+
+// ---------------------------------------------------------------- nothing blocks an export: the auto-fix ladder
+test("resolveRoute: passes straight through (no warning, no change) when the check is ok", () => {
+  takeExportWarnings();
+  const comp = { motion: { textIn: "rise" }, style: { font: "noto-serif" } };
+  const r = EXPORTS.resolveRoute("X", comp, () => ({ ok: true, messages: [] }), { minSize: 40 });
+  assert.equal(r.comp, comp); assert.equal(r.minSize, 40);
+  assert.deepEqual(takeExportWarnings(), []);
+});
+test("resolveRoute: lowers the text floor stepwise, draws with the SAME floor, never below 16px, and says so", () => {
+  takeExportWarnings();
+  const comp = { motion: { textIn: "fade" }, style: { font: "noto-serif" } };
+  const seen = [];
+  const r = EXPORTS.resolveRoute("Video", comp, (c, ms) => { seen.push(ms); return ms <= 30 ? { ok: true, messages: [] } : { ok: false, messages: ["a", "b"] }; }, { minSize: 40 });
+  assert.equal(r.v.ok, true); assert.equal(r.minSize, 28); // 40*0.7
+  assert.ok(seen.every((m) => m >= EXPORTS.SOFT_FLOOR_PX));
+  const w = takeExportWarnings();
+  assert.ok(w.some((m) => /Video: .*smaller \(down to 28px\)/.test(m)), JSON.stringify(w));
+});
+test("resolveRoute: simplifies the animation only when that helps; an unhelpful step is NOT kept", () => {
+  takeExportWarnings();
+  const comp = { motion: { textIn: "rise" }, style: { font: "noto-serif" } };
+  const r = EXPORTS.resolveRoute("Video", comp, (c) => (c.motion.textIn === "fade" ? { ok: true, messages: [] } : { ok: false, messages: ["anim"] }));
+  assert.equal(r.comp.motion.textIn, "fade");
+  assert.ok(takeExportWarnings().some((m) => /simplified to a fade/.test(m)));
+  // negative control: fade does not help -> the user's animation is kept
+  const r2 = EXPORTS.resolveRoute("Video", comp, () => ({ ok: false, messages: ["other"] }));
+  assert.equal(r2.comp.motion.textIn, "rise");
+  const w = takeExportWarnings();
+  assert.ok(!w.some((m) => /simplified/.test(m)));
+  assert.ok(w.some((m) => /could not be fixed automatically.*other/.test(m)), "an unfixable problem is still reported, never silent");
+});
+
+test("font size: the author can choose down to 16px; a deliberate small size is the floor (not a failure), never below 16", async () => {
+  const { sceneMin, SIZE_PX_MIN } = await import("../../src/lib/motion-studio/route-checks.js");
+  assert.equal(SIZE_PX_MIN, 16);
+  assert.equal(sceneMin("reel"), MIN_TEXT_PX.reel);
+  assert.equal(sceneMin("reel", { style: { sizePx: 64 } }), MIN_TEXT_PX.reel, "a larger size keeps the format floor");
+  assert.equal(sceneMin("reel", { style: { sizePx: 22 } }), 22);
+  assert.equal(sceneMin("reel", { style: { sizePx: 9 } }), 16, "negative control: never below 16");
+  const c = normalizeComposition({ ...defaultComposition({ title: "", stanzas: [["அ"]] }), style: { ...defaultComposition({ title: "", stanzas: [["அ"]] }).style, sizePx: 17 } });
+  assert.equal(c.style.sizePx, 17);
+  const c2 = normalizeComposition({ ...c, style: { ...c.style, sizePx: 3 } });
+  assert.equal(c2.style.sizePx, 16);
 });

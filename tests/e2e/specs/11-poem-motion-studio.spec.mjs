@@ -93,7 +93,7 @@ test('advanced: per-scene editing, undo/redo, restore original, no silent omissi
   await expect(page.getByLabel('Scene 3 line 3', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Redo' }).click();
   await expect(page.getByLabel('Scene 3 line 3', { exact: true })).toBeVisible();
-  await page.getByLabel('Scene 1 seconds').fill('6'); await page.getByLabel('Scene 1 text position').fill('10');
+  await page.getByLabel('Scene 1 seconds', { exact: true }).fill('6'); await page.getByLabel('Scene 1 text position', { exact: true }).fill('10');
   await page.getByRole('button', { name: 'Restore original arrangement' }).click();
   await expect(page.getByLabel('Scene 2 line 1', { exact: true })).toHaveValue('அன்பே சிவம்');
   await page.getByRole('button', { name: /Remove scene 3 from the video/ }).click();

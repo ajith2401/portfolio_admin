@@ -128,3 +128,27 @@ test('reduced motion: template preview is a still frame and says so', async ({ p
   await page.getByRole('button', { name: 'Preview template Monsoon Memories' }).click();
   await expect(page.getByText(/Reduced motion is on/)).toBeVisible();
 });
+
+test('textures + film grain visibly change the real preview, keep the poem text, and Reduce effects removes them', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await begin(page);
+  await page.getByRole('tab', { name: 'Look' }).click();
+  const preview = page.locator('canvas[aria-label^=Preview]').first();
+  const snap = () => preview.evaluate((cv) => Array.from(cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data.filter((_, i) => i % 32 === 0)));
+  const diff = (a, b) => a.reduce((n, v, i) => n + (Math.abs(v - b[i]) > 6 ? 1 : 0), 0) / a.length;
+  await page.waitForTimeout(400);
+  const plain = await snap();
+  const swatches = page.getByRole('group', { name: 'Surface textures' });
+  await expect(swatches.getByRole('button')).toHaveCount(15);
+  for (const name of ['Paper', 'Watercolour wash', 'Canvas']) {
+    await swatches.getByRole('button', { name: `Texture: ${name}` }).click();
+    await expect(swatches.getByRole('button', { name: `Texture: ${name}` })).toHaveAttribute('aria-pressed', 'true');
+    await page.waitForTimeout(400);
+    const d = diff(plain, await snap());
+    expect(d, `${name} changes the preview (${d})`).toBeGreaterThan(0.05);
+  }
+  await page.getByLabel('Film grain', { exact: true }).fill('0.8');
+  await page.getByLabel('Reduce effects').check();
+  await page.waitForTimeout(400);
+  expect(diff(plain, await snap()), 'Reduce effects restores the plain look').toBeLessThan(0.01);
+});

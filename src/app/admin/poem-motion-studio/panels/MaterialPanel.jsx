@@ -10,6 +10,13 @@ import {
   DEFAULT_INTENSITY,
   normalizeMaterial,
 } from "@/lib/motion-studio/materials";
+import {
+  TEXTURES,
+  TEXTURE_NONE,
+  TEXTURE_FAMILIES,
+  DEFAULT_TEXTURE_AMOUNT,
+  paintTextureSwatch,
+} from "@/lib/motion-studio/textures";
 import { Btn, Range } from "../studio-ui";
 import { useStudio } from "../studio-context";
 
@@ -56,6 +63,31 @@ function Swatch({ comp, id, tick }) {
   );
 }
 
+function TextureSwatch({ comp, id }) {
+  const ref = useRef(null);
+  const bgKey = JSON.stringify(comp.style.bg) + (comp.material?.seed ?? 1);
+  useEffect(() => {
+    const cv = ref.current;
+    if (!cv || id === TEXTURE_NONE) return;
+    const ctx = cv.getContext("2d");
+    try {
+      paintTextureSwatch(ctx, comp, id, cv.width, cv.height);
+    } catch {
+      /* decorative */
+    }
+  }, [bgKey, id]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <canvas
+      ref={ref}
+      width={112}
+      height={112}
+      style={{ width: 56, height: 56, background: comp.style.bg?.a }}
+      className="rounded"
+      aria-hidden="true"
+    />
+  );
+}
+
 export default function MaterialPanel() {
   const { comp, fontTick, update } = useStudio();
   const m = normalizeMaterial(comp.material || { id: MATERIAL_NONE });
@@ -69,7 +101,7 @@ export default function MaterialPanel() {
     }, key);
   const options = [{ id: MATERIAL_NONE, label: "None" }, ...MATERIALS];
   return (
-    <fieldset>
+    <fieldset style={{ minWidth: 0, maxWidth: "100%" }}>
       <legend className="pms-lbl">Material</legend>
       <div
         className="flex flex-wrap gap-2"
@@ -90,8 +122,77 @@ export default function MaterialPanel() {
           </Btn>
         ))}
       </div>
-      {m.id !== MATERIAL_NONE && (
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+      <div className="mt-3">
+        <span className="pms-lbl">Surface texture</span>
+        <div
+          className="pms-scroller mt-1"
+          role="group"
+          aria-label="Surface textures"
+        >
+          {[{ id: TEXTURE_NONE, label: "None", family: "" }, ...TEXTURES].map(
+            (t) => (
+              <Btn
+                key={t.id}
+                aria-pressed={(m.texture || TEXTURE_NONE) === t.id}
+                aria-label={`Texture: ${t.label}`}
+                title={t.family ? `${t.family} · ${t.label}` : t.label}
+                style={{ minHeight: 44, minWidth: 64 }}
+                className="flex shrink-0 flex-col items-center gap-1"
+                onClick={() =>
+                  set({
+                    texture: t.id,
+                    textureAmount: m.textureAmount ?? DEFAULT_TEXTURE_AMOUNT,
+                  })
+                }
+              >
+                <TextureSwatch comp={comp} id={t.id} />
+                <span className="text-xs">{t.label}</span>
+              </Btn>
+            ),
+          )}
+        </div>
+        <p className="mt-1 text-xs" style={{ color: "var(--mute)" }}>
+          {TEXTURE_FAMILIES.join(" · ")} — the strength is capped
+          automatically so the poem always stays readable.
+        </p>
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        {m.texture && (
+          <Range
+            label="Texture strength"
+            value={m.textureAmount ?? DEFAULT_TEXTURE_AMOUNT}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => set({ textureAmount: v }, "texture-amount")}
+            fmt={(v) => `${Math.round(v * 100)}%`}
+          />
+        )}
+        <Range
+          label="Film grain"
+          value={m.grain || 0}
+          min={0}
+          max={1}
+          step={0.05}
+          onChange={(v) => set({ grain: v }, "film-grain")}
+          fmt={(v) => `${Math.round(v * 100)}%`}
+        />
+        {m.grain > 0 && (
+          <label
+            className="pms-lbl flex items-center gap-2"
+            style={{ minHeight: 44 }}
+          >
+            <input
+              type="checkbox"
+              aria-label="Moving grain"
+              style={{ width: 24, height: 24 }}
+              checked={m.grainMove !== false}
+              onChange={(e) => set({ grainMove: e.target.checked })}
+            />
+            Moving grain (video)
+          </label>
+        )}
+        {m.id !== MATERIAL_NONE && (
           <Range
             label="Material intensity"
             value={m.intensity}
@@ -101,6 +202,8 @@ export default function MaterialPanel() {
             onChange={(v) => set({ intensity: v }, "material-intensity")}
             fmt={(v) => v.toFixed(2)}
           />
+        )}
+        {(m.id !== MATERIAL_NONE || m.texture || m.grain > 0) && (
           <label
             className="pms-lbl flex items-center gap-2"
             style={{ minHeight: 44 }}
@@ -112,11 +215,11 @@ export default function MaterialPanel() {
               checked={m.reduce}
               onChange={(e) => set({ reduce: e.target.checked })}
             />
-            Reduce effects (turns all material effects off, in preview and
-            export)
+            Reduce effects (turns material, texture and grain off, in preview
+            and export)
           </label>
-        </div>
-      )}
+        )}
+      </div>
     </fieldset>
   );
 }

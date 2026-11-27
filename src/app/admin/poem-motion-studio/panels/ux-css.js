@@ -20,6 +20,16 @@ export const UX_CSS = `
 .pms-routes{display:grid;gap:6px;grid-template-columns:repeat(auto-fill,minmax(min(100%,150px),1fr))}
 .pms-routes .pms-btn{min-height:56px;text-align:left;display:block}
 .pms-routes .pms-btn[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
+.pms-scroller{display:flex;max-width:100%;min-width:0;gap:6px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+.pms-scroller>*{scroll-snap-align:start}
+.pms-scroller .pms-btn{padding:4px 6px}
+@media (max-width:640px){
+.pms-routes{grid-template-columns:repeat(2,minmax(0,1fr))}
+.pms-routes .pms-btn{min-height:48px;padding:4px 8px;font-size:13px}
+.pms-gallery{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.pms-card{padding:10px}
+.pms h1{font-size:1.15rem}
+}
 .pms-kbd{font-family:ui-monospace,monospace;border:1px solid var(--line);border-radius:6px;padding:1px 6px;white-space:nowrap}
 .pms[data-reduce-ui=true] *,.pms[data-reduce-ui=true] *::before{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 @media (prefers-reduced-motion:reduce){.pms-modal{animation:none!important}.pms *{transition:none!important}}

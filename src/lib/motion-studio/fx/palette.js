@@ -6,7 +6,7 @@ import { hexRgb, lum, ratio } from "../contrast.js";
  *  template's own contrast when that is already lower). */
 export const CONTRAST_TARGET = 4.5;
 /** Worst-case number of tinted (toward-text) ops a plan may stack on one pixel; per-op alpha is budgeted for it. */
-export const TINT_OVERLAP = 8;
+export const TINT_OVERLAP = 4;
 export const FX_FPS = 30;
 
 // ---------------------------------------------------------------- deterministic PRNG (mulberry32 over a hashed key)

@@ -86,10 +86,10 @@ export default function FullPoemPanel() {
                         style={{ width: Math.round(FULL_W * 0.34), height: "auto" }}
                       />
                       <div className="flex flex-wrap items-center gap-2">
-                        <Btn primary disabled={progress !== null || !fullLayout.fits || fullMissing.length > 0} onClick={() => doFull("image/png", 1)}>
+                        <Btn primary disabled={progress !== null || (fullLayout.fits && fullMissing.length > 0)} onClick={() => doFull("image/png", 1)} title={fullLayout.fits ? undefined : "Exports on the taller canvas so every line fits"}>
                           PNG
                         </Btn>
-                        <Btn disabled={progress !== null || !fullLayout.fits || fullMissing.length > 0} onClick={() => doFull("image/jpeg", 1)}>
+                        <Btn disabled={progress !== null || (fullLayout.fits && fullMissing.length > 0)} onClick={() => doFull("image/jpeg", 1)}>
                           JPEG
                         </Btn>
                         <Btn disabled={progress !== null || !fullLayout.fits || fullMissing.length > 0 || fullLayout.maxScale < 2} onClick={() => doFull("image/png", 2)}>

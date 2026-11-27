@@ -152,6 +152,7 @@ export function buildManifest({ generatedAt, poem, comp, preset, entries }) {
       sourceLines: e.sourceLines ?? sourceLineCount(poem),
       ...(e.coverage ? { coverage: e.coverage } : {}),
       fontReview: e.fontReview || "reviewed",
+      ...(e.warnings?.length ? { warnings: e.warnings } : {}),
       width: e.width ?? null,
       height: e.height ?? null,
       scale: e.scale ?? null,
@@ -181,6 +182,7 @@ export function buildReadme(m) {
             ? "complete"
             : "PARTIAL (not every source line)";
     L.push(`- ${r.label} [${r.id}] ${tag}`);
+    for (const w of r.warnings || []) L.push(`    CHECK: ${w}`);
     for (const f of r.files) L.push(`    ${f.name}  ${f.size} bytes`);
   }
   L.push(
@@ -204,6 +206,8 @@ const reasonOf = (e) =>
  *   preflight(route, input) -> validator result {ok, messages, plan?}  (MUST run ensureFonts + the route's validator fresh)
  *   render(route, input, { preset, size, signal, onProgress }) -> the route's own result (renderers re-validate)
  *   measureCtx: a measuring ctx for coverage; release(): frees canvases after each route; live(): canvases alive
+ *   takeWarnings(): (optional) what the renderer had to adjust for the route just drawn; recorded per route in the
+ *     manifest/README. A preflight may also return {ok:true, warnings:[...]} for a route it lets through with a note.
  * Returns { ok, stopped, failures, manifest, zip (Uint8Array|null), files }.
  */
 export async function runBundle({
@@ -221,6 +225,7 @@ export async function runBundle({
   onProgress,
   release = () => {},
   live = () => 0,
+  takeWarnings = () => [],
 }) {
   if (generatedAt == null)
     throw new TypeError(
@@ -270,7 +275,10 @@ export async function runBundle({
           e,
           "the text does not fit legibly on one poster card and would be clipped; use the poster set or the carousel",
         );
-      else if (v.fontReview) e.fontReview = v.fontReview;
+      else {
+        if (v.fontReview) e.fontReview = v.fontReview;
+        if (v.warnings?.length) e.warnings = [...v.warnings];
+      }
     } catch (err) {
       if (isAbort(err)) throw err;
       refuse(e, reasonOf(err));
@@ -350,6 +358,8 @@ export async function runBundle({
         Object.assign(e, { complete: false, partial: true });
       if (r?.coverage) e.coverage = r.coverage;
       if (r?.fontReview) e.fontReview = r.fontReview;
+      const w = takeWarnings() || [];
+      if (w.length) e.warnings = [...new Set([...(e.warnings || []), ...w])];
     } catch (err) {
       if (isAbort(err)) throw err; // finally releases; nothing is kept
       refuse(e, reasonOf(err));

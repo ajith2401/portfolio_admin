@@ -77,7 +77,10 @@ test('F: long poem is never silently cut — warning, author chooses extended si
   await tab(page, 'Full poem');
   const alert = page.getByRole('alert').filter({ hasText: 'too long' });
   await expect(alert).toBeVisible();
-  await expect(page.getByRole('button', { name: 'PNG', exact: true })).toBeDisabled(); // no export while it would be cut
+  // nothing blocks the export: PNG works right away, switches to the taller canvas itself, and SAYS so (never a cut)
+  const auto = await dl(page, () => page.getByRole('button', { name: 'PNG', exact: true }).click());
+  expect(pngSize(auto.f).h).toBeGreaterThan(1920);
+  await expect(page.getByRole('status').filter({ hasText: /taller \(extended\) canvas was used/ })).toBeVisible();
   await alert.getByRole('button', { name: /One taller image/ }).click();
   await expect(page.getByText(/All 54 lines are on the poster/)).toBeVisible();
   const d = await dl(page, () => page.getByRole('button', { name: 'PNG', exact: true }).click());

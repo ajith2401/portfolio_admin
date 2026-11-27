@@ -14,7 +14,15 @@ import { verifyMaterial } from "./fx/verify.js";
 import { materialActive } from "./materials.js";
 import { fontById, canBody, canTitle, fontLabel, fontReviewOf, CANDIDATE_EXPORT_WARNING } from "./font-registry.js";
 
-export const sceneMin = (format) => MIN_TEXT_PX[format] ?? MIN_TEXT_PX.reel;
+export const SIZE_PX_MIN = 16; // the smallest body size the author may choose (Look -> Font size)
+/**
+ * The text floor for a format. With a composition, an author who deliberately chose a SMALLER font size than the
+ * format floor gets that size as the floor (their choice, not a failure); never below SIZE_PX_MIN.
+ */
+export const sceneMin = (format, comp = null) => {
+  const f = MIN_TEXT_PX[format] ?? MIN_TEXT_PX.reel, own = Number(comp?.style?.sizePx);
+  return Number.isFinite(own) && own < f ? Math.max(SIZE_PX_MIN, Math.round(own)) : f;
+};
 export const FULL_NO_FIT = "This poem does not fit this canvas at a readable size. Choose the extended-height poster or a more compact layout.";
 
 // ---------------------------------------------------------------- material (fx) verification, shared by every route
@@ -72,7 +80,7 @@ export function sceneDraws(comp, scenes, minSize, extra = {}) {
 // every line/word fully shown in reading order, offsets/zoom bounded and inside the safe area, deterministic). Routes that
 // draw stills (poster, cover, carousel, story frames, quote image, full poem) always draw the HOLD state instead.
 // `scenes` are the scenes in play order: the last one has no out phase.
-export function checkAnimation(ctx, comp, scenes, { minSize = sceneMin(comp.format), behaviour = activeBehaviour(comp) } = {}) {
+export function checkAnimation(ctx, comp, scenes, { minSize = sceneMin(comp.format, comp), behaviour = activeBehaviour(comp) } = {}) {
   const messages = [], results = [];
   scenes.forEach((sc, i) => {
     const v = validateAnimation(behaviour, sc, sceneGeometry(ctx, comp, sc, { minSize }), {
@@ -91,7 +99,7 @@ function withAnimation(result, ctx, comp, scenes, opts) {
 }
 
 /** Every scene a scene-based route draws, validated exactly as drawFrame lays it out. `animated:false` = stills only. */
-export function checkScenes(ctx, comp, scenes = comp.scenes, { minSize = sceneMin(comp.format), mutate = null, animated = true } = {}) {
+export function checkScenes(ctx, comp, scenes = comp.scenes, { minSize = sceneMin(comp.format, comp), mutate = null, animated = true } = {}) {
   const v = validateScenes(ctx, comp, scenes, { minSize, mutate });
   return withMaterial(animated ? withAnimation(v, ctx, comp, scenes, { minSize }) : v, ctx, comp, sceneDraws(comp, scenes, minSize));
 }

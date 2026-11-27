@@ -10,6 +10,7 @@ export const defaultMinSize = (format) => (format === "poster" ? 28 : MIN_TEXT_P
 import { totalDuration } from "./scenes.js";
 import { rowState, activeBehaviour, buildPlan, animFrame, prefParams } from "./animation.js";
 import { runFx, runMaterial } from "./fx/registry.js";
+import { paintTextures } from "./textures.js";
 import { materialPlan, effectiveIntensity } from "./materials.js";
 import { registryFamilies } from "./font-registry.js";
 
@@ -154,7 +155,8 @@ export const rowAnchor = (align, ax, ipx = 0) => (align === "left" ? ax + ipx : 
 export const LAYERS = Object.freeze(["bg", "material", "atmosphere", "text", "surface", "signature"]);
 export const resetTextState = (ctx) => { ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.filter = "none"; ctx.shadowColor = "transparent"; };
 function layerBg(ctx, env) { paintBackground(ctx, env.comp, env.W, env.H, env.still ? 0 : env.tMs, env.total, env.assets); }
-function layerMaterial(ctx, env) { return runFx("material", ctx, env) + runMaterial("material", ctx, env); }
+// surface texture + film grain (textures.js) first: the paper the material presets then sit on
+function layerMaterial(ctx, env) { return paintTextures(ctx, env) + runFx("material", ctx, env) + runMaterial("material", ctx, env); }
 function layerAtmosphere(ctx, env) {
   if (!env.still) paintParticles(ctx, env.comp, env.W, env.H, env.tMs);
   return runFx("atmosphere", ctx, env) + runMaterial("atmosphere", ctx, env);

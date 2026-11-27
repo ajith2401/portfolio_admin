@@ -256,13 +256,13 @@ export function QuickCreateCheck({ routeId, onDone }) {
             style={{ background: "var(--warn-bg)", color: "var(--warn-ink)" }}
           >
             <p className="font-semibold">
-              {route.label} cannot be exported yet. Nothing was changed.
+              {route.label} can still be exported — it will adjust itself and tell you what changed.
             </p>
             <ul className="mt-1 list-disc pl-5">
               {!formatOk && (
                 <li>
-                  The format was changed after Quick Create. Use the Export tab
-                  for this format.
+                  The format was changed after Quick Create; the video uses the
+                  current format ({comp.format}).
                 </li>
               )}
               {(gate.messages || []).slice(0, 8).map((m, i) => (
@@ -284,7 +284,7 @@ export function QuickCreateCheck({ routeId, onDone }) {
       </div>
       <Btn
         primary
-        disabled={!allowed || progress !== null}
+        disabled={progress !== null}
         onClick={() => EXPORTS[routeId]?.(s)}
       >
         Export {route.label}

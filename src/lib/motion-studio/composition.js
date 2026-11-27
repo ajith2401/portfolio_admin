@@ -229,7 +229,7 @@ export function normalizeComposition(input) {
     style: {
       font: fonts.font,
       ...(fonts.titleFont ? { titleFont: fonts.titleFont } : {}),
-      sizePx: Math.round(num(s.sizePx, 28, 140, t.style.sizePx)),
+      sizePx: Math.round(num(s.sizePx, 16, 140, t.style.sizePx)), // 16 = SIZE_PX_MIN (route-checks.js)
       weight: oneOf(Number(s.weight), [400, 500, 600, 700], t.style.weight),
       color: hex(s.color, t.style.color),
       align: oneOf(s.align, ALIGN, t.style.align),

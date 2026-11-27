@@ -7,7 +7,8 @@ import { FORMATS } from "./safe-zone.js";
 import { fontReviewOf, CANDIDATE_EXPORT_WARNING } from "./font-registry.js";
 import { zipStore } from "./zip.js";
 import { drawFullPoem, FULL_W } from "./full-poem.js";
-import { checkScenes, checkCover, coverScene, checkPoster, checkFull, FULL_NO_FIT, checkQuote, quoteScene, quoteMin, checkCarousel } from "./route-checks.js";
+import { checkScenes, checkCover, coverScene, checkPoster, checkFull, FULL_NO_FIT, checkQuote, quoteScene, quoteMin, checkCarousel, sceneMin, fontIssues } from "./route-checks.js";
+import { materialActive } from "./materials.js";
 import { createLease } from "./canvas-lease.js";
 import { outputSize, presetById } from "./output-size.js";
 
@@ -24,11 +25,61 @@ export class ExportValidationError extends Error {
 }
 // A tiny 16x16 measuring canvas (measureText does not depend on canvas size or transform); not an output canvas.
 const probeCtx = () => Object.assign(document.createElement("canvas"), { width: 16, height: 16 }).getContext("2d");
-/** Fonts first: nothing may be measured against a fallback face. */
-const fontsFor = (comp, { extraText = "", title = "" } = {}) => ensureFonts(comp, { poemText: extraText, title }, { measure: canvasMeasure() });
+// ---------------------------------------------------------------- NOTHING BLOCKS AN EXPORT
+// Every check still runs, but a failed check no longer refuses the export. Instead the route tries, in order, the
+// smallest change that fixes it (weaker material -> no material -> simple fade text-in -> a verified body font ->
+// a smaller text floor) and keeps a change ONLY if it reduces the problems. Whatever was changed, and anything still
+// wrong, is reported as a warning (takeExportWarnings) so it is never silent. Layout and drawing always use the SAME
+// adjusted composition and floor, so what was checked is exactly what is drawn.
+let pending = [];
+const warn = (m) => { if (m && !pending.includes(m)) pending.push(m); };
+/** Warnings from the last export(s); clears the list. The UI shows them after a successful export. */
+export const takeExportWarnings = () => { const w = pending; pending = []; return w; };
+export const SOFT_FLOOR_PX = 16; // the smallest text the auto-fit may use (the user can always set a larger size)
+const DEFAULT_BODY_FONT = "noto-serif";
+const short = (m) => String(m || "").replace(/\s*\[fr4[^\]]*\]/g, "").replace(/\s*\[[^\]]{40,}\]/g, "").slice(0, 240);
+/** Fonts first, but never blocking: if a face cannot be proven, the export continues with the font the browser has. */
+const fontsFor = async (comp, { extraText = "", title = "" } = {}) => {
+  try { await ensureFonts(comp, { poemText: extraText, title }, { measure: canvasMeasure() }); }
+  catch (e) {
+    if (e?.name === "AbortError") throw e;
+    warn(`Font check: ${short(e?.message || e)} The export continued with the closest font this device has; check the result before posting.`);
+  }
+};
+const count = (v) => (v?.ok ? 0 : Math.max(1, (v?.messages || []).length));
+/**
+ * Run `check(comp, minSize)` and, while it fails, try the auto-fix ladder. Returns { v, comp, minSize }: the result,
+ * composition and floor to DRAW with. Never throws for a failed check.
+ */
+export function resolveRoute(what, comp, check, { minSize = null } = {}) {
+  let c = comp, ms = minSize, v = check(c, ms);
+  if (v.ok) return { v, comp: c, minSize: ms };
+  const steps = [];
+  if (materialActive(c)) {
+    steps.push(["the texture/effect strength was lowered to keep the text readable", (x) => ({ ...x, material: { ...x.material, intensity: Math.round(x.material.intensity * 50) / 100 } })]);
+    steps.push(["the texture/effect was left out to keep the text readable", (x) => ({ ...x, material: undefined })]);
+  }
+  if (c.motion?.textIn && c.motion.textIn !== "fade") steps.push(["the text animation was simplified to a fade", (x) => ({ ...x, motion: { ...x.motion, textIn: "fade" } })]);
+  if (fontIssues(c).length) steps.push(["the poem font was replaced with Noto Serif Tamil", (x) => ({ ...x, style: { ...x.style, font: DEFAULT_BODY_FONT, titleFont: null } })]);
+  for (const [why, fn] of steps) {
+    if (v.ok) break;
+    const c2 = fn(c), v2 = check(c2, ms);
+    if (count(v2) < count(v)) { c = c2; v = v2; warn(`${what}: ${why}.`); }
+  }
+  if (!v.ok && ms != null) {
+    for (const f of [0.85, 0.7, 0.55, 0.4]) {
+      const ms2 = Math.max(SOFT_FLOOR_PX, Math.floor(ms * f));
+      if (ms2 >= ms) continue;
+      const v2 = check(c, ms2);
+      if (count(v2) < count(v)) { v = v2; warn(`${what}: some lines were set smaller (down to ${ms2}px) so every word fits.`); ms = ms2; }
+      if (v.ok || ms2 === SOFT_FLOOR_PX) break;
+    }
+  }
+  if (!v.ok) warn(`${what}: exported with ${v.messages.length} issue(s) that could not be fixed automatically — please check: ${v.messages.slice(0, 3).join("; ")}${v.messages.length > 3 ? "; …" : ""}`);
+  return { v, comp: c, minSize: ms };
+}
 /** Object results of a route say fontReview:'unreviewed' (+ the warning) whenever a candidate font was used. */
 export const fontReviewFor = (comp) => (fontReviewOf(comp) ? { fontReview: fontReviewOf(comp), fontWarning: CANDIDATE_EXPORT_WARNING } : {});
-const assertOk = (what, v) => { if (!v.ok) throw new ExportValidationError(what, v.messages); return v; };
 // Memory guard: every OUTPUT canvas comes from this lease (at most 1 alive) and is released in a finally block.
 const lease = createLease((w, h, offscreen) => (offscreen && typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(w, h) : Object.assign(document.createElement("canvas"), { width: w, height: h })), { max: 1 });
 export const canvasLease = Object.freeze({ live: () => lease.live(), peak: () => lease.peak(), releaseAll: () => lease.releaseAll() });
@@ -79,8 +130,8 @@ export async function detectCapabilities() {
 /** Render to H.264 (+AAC if audioBuffer) MP4. Frames are produced and encoded one at a time (bounded memory except the final buffer). */
 export async function exportMp4(comp, opts = {}) {
   await fontsFor(comp);
-  assertOk("Reel video", checkScenes(probeCtx(), comp, comp.scenes));
-  return encodeMp4(comp, opts);
+  const r = resolveRoute("Video", comp, (c, ms) => checkScenes(probeCtx(), c, c.scenes, { minSize: ms }), { minSize: sceneMin(comp.format, comp) });
+  return encodeMp4(r.comp, { ...opts, minSize: r.minSize });
 }
 /** Encoder only: callers MUST have run ensureFonts and the route's validator first. */
 async function encodeMp4(comp, { preset, ...opts } = {}) {
@@ -118,13 +169,14 @@ const blobBytes = async (b) => new Uint8Array(await b.arrayBuffer());
 /** One still frame per scene (Story sequence). */
 export async function renderSceneStills(comp, { format = "story", type = "image/png", assets = {}, signal, onProgress, preset } = {}) {
   await fontsFor({ ...comp, format });
-  assertOk("Story images", checkScenes(probeCtx(), { ...comp, format }, comp.scenes, { animated: false })); // stills: HOLD
+  const r = resolveRoute("Story images", { ...comp, format }, (c, ms) => checkScenes(probeCtx(), c, c.scenes, { animated: false, minSize: ms }), { minSize: sceneMin(format, comp) }); // stills: HOLD
+  comp = r.comp;
   const size = sizeFor(format, preset), out = [];
   return withCanvas(size.w, size.h, async (c, ctx) => {
     for (let i = 0; i < comp.scenes.length; i++) {
       if (signal?.aborted) throw new DOMException("Export cancelled", "AbortError");
       ctx.clearRect(0, 0, size.w, size.h);
-      drawFrame(ctx, { ...comp, format }, 0, { w: size.w, h: size.h, assets, still: true, scene: comp.scenes[i] });
+      drawFrame(ctx, { ...comp, format }, 0, { w: size.w, h: size.h, assets, still: true, scene: comp.scenes[i], minSize: r.minSize });
       out.push(await toBlob(c, type, 0.92));
       onProgress?.((i + 1) / comp.scenes.length); await tick();
     }
@@ -138,7 +190,9 @@ export async function renderPosters(comp, { type = "image/png", assets = {}, sca
   await fontsFor({ ...comp, format: "poster" });
   const fmt = FORMATS.poster;
   const size = preset != null ? sizeFor("poster", preset) : { w: Math.round(fmt.w * scale), h: Math.round(fmt.h * scale) };
-  const { plan: { cards, overflow } } = assertOk("Poster", checkPoster(probeCtx(), comp)); // native layout, native floor
+  const r = resolveRoute("Poster", comp, (c) => checkPoster(probeCtx(), c)); // native layout, native floor
+  comp = r.comp;
+  const { plan: { cards, overflow } } = r.v;
   return withCanvas(size.w, size.h, async (c, ctx) => {
     const blobs = [];
     for (const card of cards) {
@@ -163,15 +217,24 @@ export async function zipBlobs(blobs, stem, ext) {
  */
 export async function renderFullPoem(comp, poem, { preset = "balanced", height = "standard", type = "image/png", scale = 1, assets = {}, output } = {}) {
   // fonts first: layout measures text, so it must never run against a fallback face
-  await ensureFonts(comp, { poemText: [poem.title, ...poem.stanzas.flat()].join("\n"), title: poem.title }, { measure: canvasMeasure() });
-  const v = checkFull(probeCtx(), comp, poem, { preset, height });
+  await fontsFor(comp, { extraText: [poem.title, ...poem.stanzas.flat()].join("\n"), title: poem.title });
+  let v = checkFull(probeCtx(), comp, poem, { preset, height });
+  // does not fit: try the taller canvas, then the compact layout, before anything else (never clip)
+  for (const [h2, p2, why] of [["extended", preset, "the taller (extended) canvas was used so the whole poem fits"], ["extended", "compact", "the compact layout on the taller canvas was used so the whole poem fits"]]) {
+    if (v.fits) break;
+    const v2 = checkFull(probeCtx(), comp, poem, { preset: p2, height: h2 });
+    if (v2.fits) { v = v2; preset = p2; height = h2; warn(`Full-poem poster: ${why}.`); }
+  }
   if (!v.fits) throw new Error(FULL_NO_FIT);
-  const { layout } = assertOk("Full-poem poster", v);
+  const r = resolveRoute("Full-poem poster", comp, (c) => (c === comp ? v : checkFull(probeCtx(), c, poem, { preset, height })));
+  comp = r.comp;
+  const { layout } = r.v;
   // `output` is a resolution preset id (bundle); `scale` the legacy 1x/2x choice. Layout is always native.
   const want = output != null ? (presetById(output)?.scale ?? sizeFor("full", output).scale) : scale;
   const k = Math.min(want, layout.maxScale);
   return withCanvas(Math.round(FULL_W * k), Math.round(layout.height * k), async (c, ctx) => {
-    drawFullPoem(ctx, comp, layout, { assets, scale: k });
+    // `assets` may be a function of the layout height: an auto-chosen taller canvas gets a background baked to fit it
+    drawFullPoem(ctx, comp, layout, { assets: typeof assets === "function" ? assets(layout.height) || {} : assets, scale: k });
     return { blob: await toBlob(c, type, 0.94), layout, scale: k, width: c.width, height: c.height, ...fontReviewFor(comp) };
   });
 }
@@ -184,7 +247,9 @@ export async function renderQuote(comp, poem, selection, { format = "poster", ty
   const scene = quoteScene(poem, selection);
   const qc = { ...comp, format, scenes: scene ? [scene] : [] };
   await fontsFor(qc, { extraText: scene ? scene.lines.join("\n") : "" });
-  const v = assertOk("Quote (excerpt)", checkQuote(probeCtx(), comp, poem, selection, { format }));
+  const r = resolveRoute("Quote", comp, (c) => checkQuote(probeCtx(), c, poem, selection, { format }));
+  if (!r.v.scene) throw new ExportValidationError("Quote (excerpt)", r.v.messages);
+  comp = r.comp; const v = r.v;
   const size = sizeFor(v.format, preset);
   return withCanvas(size.w, size.h, async (c, ctx) => {
     drawFrame(ctx, { ...qc, format: v.format }, 0, { w: size.w, h: size.h, assets, still: true, scene: v.scene, minSize: quoteMin(v.format) });
@@ -196,14 +261,18 @@ export async function exportQuoteMp4(comp, poem, selection, { format = "reel", .
   const scene = quoteScene(poem, selection);
   const qc = { ...comp, format, scenes: scene ? [scene] : [] };
   await fontsFor(qc, { extraText: scene ? scene.lines.join("\n") : "" });
-  const v = assertOk("Animated quote (excerpt)", checkQuote(probeCtx(), comp, poem, selection, { format, animated: true }));
-  const blob = await encodeMp4({ ...qc, format: v.format, scenes: [v.scene] }, { ...opts, minSize: quoteMin(v.format) });
+  const r = resolveRoute("Animated quote", comp, (c) => checkQuote(probeCtx(), c, poem, selection, { format, animated: true }));
+  if (!r.v.scene) throw new ExportValidationError("Animated quote (excerpt)", r.v.messages);
+  const v = r.v;
+  const blob = await encodeMp4({ ...r.comp, format: v.format, scenes: [v.scene] }, { ...opts, minSize: quoteMin(v.format) });
   return { blob, excerpt: true, complete: false, coverage: v.coverage, format: v.format, ...fontReviewFor(comp) };
 }
 /** Feed carousel: title cover + poem cards (poster set) + optional end card, each numbered k/N; every card validated. */
 export async function renderCarousel(comp, { type = "image/png", assets = {}, preset, signal } = {}) {
   await fontsFor({ ...comp, format: "poster" }, { extraText: comp.poster?.endText || "" });
-  const { plan } = assertOk("Feed carousel", checkCarousel(probeCtx(), comp)); // native layout, native floor
+  const r = resolveRoute("Feed carousel", comp, (c) => checkCarousel(probeCtx(), c)); // native layout, native floor
+  comp = r.comp;
+  const { plan } = r.v;
   const size = sizeFor("poster", preset);
   const pc = { ...comp, format: "poster" };
   return withCanvas(size.w, size.h, async (c, ctx) => {
@@ -222,10 +291,11 @@ export async function renderReelCover(comp, { type = "image/png", assets = {}, p
   const sc = coverScene(comp);
   if (!sc) throw new Error("There are no scenes to make a cover from.");
   await fontsFor({ ...comp, format: "reel" });
-  assertOk("Reel cover", checkCover(probeCtx(), comp));
+  const r = resolveRoute("Reel cover", comp, (c, ms) => checkCover(probeCtx(), c, { minSize: ms }), { minSize: sceneMin("reel", comp) });
+  comp = r.comp;
   const size = sizeFor("reel", preset);
   return withCanvas(size.w, size.h, async (c, ctx) => {
-    drawFrame(ctx, { ...comp, format: "reel" }, 0, { w: size.w, h: size.h, assets, still: true, scene: sc });
+    drawFrame(ctx, { ...comp, format: "reel" }, 0, { w: size.w, h: size.h, assets, still: true, scene: coverScene(comp) || sc, minSize: r.minSize });
     return toBlob(c, type, 0.94);
   });
 }

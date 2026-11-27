@@ -19,6 +19,7 @@ import { drawFrame } from "../../src/lib/motion-studio/render.js";
 import { FORMATS, MIN_TEXT_PX } from "../../src/lib/motion-studio/safe-zone.js";
 import {
   runBundle,
+  buildReadme,
   buildManifest,
   poemFingerprint,
   sourceLineCount,
@@ -1101,4 +1102,28 @@ test("routes: bundle offers every non-excerpt route; the route registry is uncha
   assert.equal(ROUTES.length, 11);
   const ui = src("src/app/admin/poem-motion-studio/panels/BundleExport.jsx");
   assert.match(ui, /ROUTES\.filter\(\(r\) => !r\.excerpt\)/);
+});
+
+test("bundle: adjustments are never silent — preflight notes and renderer warnings land in MANIFEST + README per route", async () => {
+  let pending = ["Reel cover: the text animation was simplified to a fade."];
+  const r = await runBundle({
+    ...base(),
+    items: [item("reel-cover"), item("quote")],
+    preflight: async (route, input) => {
+      const v = await preflightReal()(route, input);
+      return route.id === "quote" ? { ...v, ok: true, warnings: ["Font check: synthetic note"] } : v;
+    },
+    render: fakeRender(),
+    takeWarnings: () => { const w = pending; pending = []; return w; },
+  });
+  assert.ok(r.zip, "the bundle is written");
+  const byId = Object.fromEntries(r.manifest.routes.map((x) => [x.id, x]));
+  assert.deepEqual(byId["reel-cover"].warnings, ["Reel cover: the text animation was simplified to a fade."]);
+  assert.deepEqual(byId.quote.warnings, ["Font check: synthetic note"]);
+  const readme = buildReadme(r.manifest);
+  assert.match(readme, /CHECK: Reel cover: the text animation was simplified/);
+  assert.match(readme, /CHECK: Font check: synthetic note/);
+  // negative control: a route with nothing adjusted carries no warnings key
+  const clean = await runBundle({ ...base(), items: [item("reel-cover")], preflight: preflightReal(), render: fakeRender() });
+  assert.equal("warnings" in clean.manifest.routes[0], false);
 });

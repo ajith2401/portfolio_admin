@@ -16,6 +16,7 @@ import { SURFACE_CAP } from "./registry.js";
 import { fxBases, floorFor } from "./palette.js";
 import { parseColor } from "./guard.js";
 import { materialActive, materialById } from "../materials.js";
+import { textureById } from "../textures.js";
 
 const ID = () => [1, 0, 0, 1, 0, 0];
 /** A context that tracks state (save/restore stack, transform, styles) and records every fillText with that state. */
@@ -300,7 +301,7 @@ export function verifyMaterial(
 ) {
   if (!materialActive(comp))
     return { ok: true, messages: [], checked: 0, skipped: true, stats: [] };
-  const name = `${label} "${materialById(comp.material.id)?.label || comp.material.id}"`;
+  const name = `${label} "${[materialById(comp.material.id)?.label, textureById(comp.material.texture)?.label, comp.material.grain > 0 ? "Film grain" : null].filter(Boolean).join(" + ") || comp.material.id}"`;
   const messages = [],
     stats = [],
     plain = withoutMaterial(comp);

@@ -121,8 +121,9 @@ export default function LookPanel() {
                       <Range
                         label="Font size"
                         value={comp.style.sizePx}
-                        min={28}
+                        min={16}
                         max={140}
+                        step={1}
                         onChange={(v) =>
                           update((c) => {
                             c.style.sizePx = v;
@@ -262,7 +263,7 @@ export default function LookPanel() {
                         fmt={(v) => v.toFixed(2)}
                       />
                       <Range
-                        label="Film grain"
+                        label="Dust specks"
                         value={comp.style.grain}
                         min={0}
                         max={1}

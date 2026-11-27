@@ -9,7 +9,7 @@ import { defaultComposition, normalizeComposition, motionPrefsOf, MAX_SCENES } f
 import { drawFrame, compDuration, setFontFamilies } from "@/lib/motion-studio/render";
 import { FORMATS, safeRect } from "@/lib/motion-studio/safe-zone";
 import { runBundle } from "@/lib/motion-studio/bundle";
-import { detectCapabilities, canvasLease, exportMp4, renderSceneStills, renderPosters, renderFullPoem, renderReelCover, renderQuote, exportQuoteMp4, renderCarousel, zipBlobs } from "@/lib/motion-studio/export";
+import { detectCapabilities, canvasLease, exportMp4, renderSceneStills, renderPosters, renderFullPoem, renderReelCover, renderQuote, exportQuoteMp4, renderCarousel, zipBlobs, takeExportWarnings } from "@/lib/motion-studio/export";
 import * as E from "@/lib/motion-studio/scene-edit";
 import { bakeBackground, readabilityScrim, decodeImageFile } from "@/lib/motion-studio/background";
 import { decodeAudio, shapeAudio, startRecording, recordingSupport } from "@/lib/motion-studio/audio";
@@ -52,17 +52,18 @@ const THEME_CSS = `
 .pms-field{width:100%;min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:0 10px;font-size:14px}
 .pms-card{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:12px}
 .pms-lbl{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
+.pms-step{flex:none;width:36px;height:36px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:18px;line-height:1;font-weight:600}.pms-step:disabled{opacity:.4}
 .pms-tabs .pms-btn{flex:0 0 auto;white-space:nowrap}
 .pms-handle,.pms-grip{display:none}
 @media (max-width:1023px){
-.pms-sheet{position:fixed;left:0;right:0;bottom:var(--kb,0px);z-index:30;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-bottom:0;border-radius:16px 16px 0 0;box-shadow:0 -8px 24px rgba(0,0,0,.18);max-height:min(62dvh,calc(var(--vvh,100dvh)*.62));padding-bottom:env(safe-area-inset-bottom)}
+.pms-sheet{position:fixed;left:0;right:0;bottom:var(--kb,0px);z-index:30;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-bottom:0;border-radius:16px 16px 0 0;box-shadow:0 -8px 24px rgba(0,0,0,.18);max-height:min(55dvh,calc(var(--vvh,100dvh)*.55));padding-bottom:env(safe-area-inset-bottom)}
 .pms-sheet [role=tabpanel]{overflow-y:auto;overscroll-behavior:contain;padding:0 12px 12px;margin-top:8px}
 .pms-sheet[data-open=false] [role=tabpanel]{display:none}
 .pms-handle{display:flex;flex-direction:column;align-items:center;gap:4px;min-height:44px;width:100%;justify-content:center;font-size:12px;font-weight:600;color:var(--mute);background:transparent;border:0}
 .pms-grip{display:block;width:40px;height:4px;border-radius:2px;background:var(--line)}
 .pms-tabs{padding-bottom:0}
-.pms[data-sheet=open]{padding-bottom:calc(62dvh + 16px)}
-.pms[data-sheet=open] canvas[aria-label^=Preview]{height:34dvh!important;width:auto!important;aspect-ratio:9/16}
+.pms[data-sheet=open]{padding-bottom:calc(55dvh + 16px)}
+.pms[data-sheet=open] canvas[aria-label^=Preview]{height:38dvh!important;width:auto!important;aspect-ratio:9/16}
 .pms[data-sheet=closed]{padding-bottom:calc(120px + env(safe-area-inset-bottom))}
 }
 @media (min-width:1024px){.pms-tabs{border-bottom:1px solid var(--line)}}
@@ -787,9 +788,18 @@ export default function MotionStudio() {
     abortRef.current = new AbortController();
     setProgress(0);
     setMsg(null);
+    takeExportWarnings();
     try {
-      await fontsReady();
+      // fonts are best-effort here: a face that will not load is reported, never a reason to stop the export
+      await fontsReady().catch((e) => { if (e?.name === "AbortError") throw e; });
       await fn(abortRef.current.signal);
+      // nothing blocks an export: anything the route had to adjust (or could not) is shown, never silent
+      const adjusted = takeExportWarnings();
+      if (adjusted.length)
+        setMsg((m) => ({
+          kind: m?.kind === "error" ? "error" : "warn",
+          text: `${m?.text ? m.text + " " : ""}Exported — please check: ${adjusted.join(" ")}`,
+        }));
       // a candidate (unreviewed) font: the export succeeded, but the result always carries the review warning
       if (fontReviewOf(comp))
         setMsg((m) => ({
@@ -974,7 +984,7 @@ export default function MotionStudio() {
     guard(async () => {
       const r = await renderFullPoem(comp, fullPoem, {
         preset: fullPreset, height: fullHeight, type, scale,
-        assets: fullAssets(fullLayout?.height || 1920),
+        assets: (H) => fullAssets(H),
       });
       const ext = type === "image/png" ? "png" : "jpg";
       download(r.blob, `${slug(name)}-full-poem.${ext}`);
@@ -1001,6 +1011,7 @@ export default function MotionStudio() {
     const probeMeasure = () => Object.assign(document.createElement("canvas"), { width: 16, height: 16 }).getContext("2d");
     try {
       const items = routeIds.map(routeById).filter(Boolean).map((route) => ({ route, input: bundleInput(route) }));
+      takeExportWarnings();
       const r = await runBundle({
         items,
         comp,
@@ -1014,29 +1025,42 @@ export default function MotionStudio() {
         onProgress: (p) => p.phase === "render" && setProgress(p.fraction),
         release: () => canvasLease.releaseAll(),
         live: () => canvasLease.live(),
+        takeWarnings: () => takeExportWarnings(),
         preflight: async (route, input) => {
           if (route.kind === "video" && !caps?.mp4) return { ok: false, messages: [caps?.reason || "This device cannot encode MP4 video."] };
           const c = route.kind === "video" ? videoSetup(route.format).c : comp;
-          await ensureFonts(
-            c,
-            { poemText: [fullPoem.title, ...fullPoem.stanzas.flat(), comp.poster?.endText || ""].join("\n"), title: fullPoem.title },
-            { measure: canvasMeasure() },
-          );
+          const notes = [];
+          try {
+            await ensureFonts(
+              c,
+              { poemText: [fullPoem.title, ...fullPoem.stanzas.flat(), comp.poster?.endText || ""].join("\n"), title: fullPoem.title },
+              { measure: canvasMeasure() },
+            );
+          } catch (e) {
+            if (e?.name === "AbortError") throw e;
+            notes.push(`Font check: ${e?.message || e}`);
+          }
           const v = route.validate(probeMeasure(), c, input);
           if (route.id === "full-poem" && v.layout?.height) fullH.set(route.id, v.layout.height);
-          return v;
+          // nothing blocks: a failed check goes through (the renderer auto-fixes and reports); a single poster that
+          // would clip is the one refusal kept, because exporting it would cut the poem
+          if (v.plan?.overflow) return v;
+          return { ...v, ok: true, warnings: [...notes, ...(v.ok ? [] : v.messages || [])] };
         },
         render: (route, input, { preset: p, signal, onProgress }) => {
           if (route.kind === "video") {
             const { c, audioBuffer } = videoSetup(route.format);
             return route.render(c, input, { preset: p, signal, onProgress, audioBuffer, assets: exportAssets(route.format) });
           }
-          if (route.id === "full-poem") return route.render(comp, input, { preset: p, type: "image/png", assets: fullAssets(fullH.get(route.id) || 1920) });
+          if (route.id === "full-poem") return route.render(comp, input, { preset: p, type: "image/png", assets: (H) => fullAssets(H) });
           return route.render(comp, input, { preset: p, type: "image/png", signal, onProgress, assets: exportAssets(route.format) });
         },
       });
       if (r.zip) download(new Blob([r.zip], { type: "application/zip" }), `${slug(name)}-bundle.zip`);
       if (r.zip && fontReviewOf(comp)) flash("error", `Font review: unreviewed. ${CANDIDATE_EXPORT_WARNING}`);
+      const adj = (r.manifest?.routes || []).filter((x) => x.warnings?.length);
+      if (r.zip && adj.length && !fontReviewOf(comp))
+        flash("warn", `Bundle exported — please check ${adj.map((x) => x.label).join(", ")}: some settings were adjusted so every line fits and stays readable (listed in README.txt).`);
       return r;
     } catch (e) {
       canvasLease.releaseAll();
@@ -1247,10 +1271,11 @@ export default function MotionStudio() {
       {msg && (
         <p
           role={msg.kind === "error" ? "alert" : "status"}
+          data-kind={msg.kind}
           className="mt-3 rounded-lg px-3 py-2 text-sm"
           style={{
-            background: msg.kind === "error" ? "var(--err-bg)" : "var(--ok-bg)",
-            color: msg.kind === "error" ? "var(--err-ink)" : "var(--ok-ink)",
+            background: msg.kind === "error" ? "var(--err-bg)" : msg.kind === "warn" ? "var(--warn-bg)" : "var(--ok-bg)",
+            color: msg.kind === "error" ? "var(--err-ink)" : msg.kind === "warn" ? "var(--warn-ink)" : "var(--ok-ink)",
           }}
         >
           {msg.text}

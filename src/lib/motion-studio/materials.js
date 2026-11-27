@@ -4,6 +4,7 @@
 // "Reduce effects" forces the effective intensity to 0: nothing is drawn, preview and export alike.
 import { effectById, SURFACE_CAP } from "./fx/registry.js";
 import "./fx/effects.js";
+import { TEXTURE_IDS, TEXTURE_NONE, DEFAULT_TEXTURE_AMOUNT, texturePasses } from "./textures.js";
 
 export const MATERIAL_NONE = "none";
 export const MATERIALS = Object.freeze(
@@ -153,6 +154,11 @@ export function normalizeMaterial(m) {
       Math.round(num(o.intensity, 0, 1, DEFAULT_INTENSITY) * 100) / 100,
     reduce: o.reduce === true,
     seed: Math.trunc(num(o.seed, 0, 2147483647, 1)),
+    // surface texture + film grain (textures.js): stored only when set, so older projects normalize unchanged
+    ...(o.texture != null && o.texture !== TEXTURE_NONE && TEXTURE_IDS.includes(o.texture)
+      ? { texture: o.texture, textureAmount: Math.round(num(o.textureAmount, 0, 1, DEFAULT_TEXTURE_AMOUNT) * 100) / 100 }
+      : {}),
+    ...(num(o.grain, 0, 1, 0) > 0 ? { grain: Math.round(num(o.grain, 0, 1, 0) * 100) / 100, grainMove: o.grainMove !== false } : {}),
   };
 }
 
@@ -173,4 +179,5 @@ export function materialPlan(comp) {
     .map((l, index) => ({ def: effectById(l.fx), params: l.params, index }))
     .filter((e) => e.def);
 }
-export const materialActive = (comp) => materialPlan(comp).length > 0;
+/** True when anything at all is drawn for the material: a preset plan, a surface texture or film grain. */
+export const materialActive = (comp) => materialPlan(comp).length > 0 || texturePasses(comp).length > 0;

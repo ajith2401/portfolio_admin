@@ -12,6 +12,7 @@ import {
   resetTextState,
 } from "./render.js";
 import { runMaterial } from "./fx/registry.js";
+import { paintTextures } from "./textures.js";
 import { materialPlan, effectiveIntensity } from "./materials.js";
 import { signatureBox as sigBox, boxBoundsIssues, overlapsSignature } from "./signature.js";
 
@@ -324,7 +325,7 @@ export function drawFullPoem(
     1,
     assets,
   );
-  if (runMaterial("material", ctx, fxEnv) + runMaterial("atmosphere", ctx, fxEnv)) resetTextState(ctx);
+  if (paintTextures(ctx, fxEnv) + runMaterial("material", ctx, fxEnv) + runMaterial("atmosphere", ctx, fxEnv)) resetTextState(ctx);
   const align = st.align,
     side = (PRESETS[layout.preset] || PRESETS.balanced).side;
   const ax =
