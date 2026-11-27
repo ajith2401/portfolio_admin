@@ -204,6 +204,27 @@ const CATALOG = {
    "sha": "767108884563f3b9"
   },
   {
+   "id": "couple-on-bench",
+   "name": "Couple on a Bench",
+   "pack": 2,
+   "category": "couples",
+   "kind": "vector",
+   "style": "line",
+   "file": "/motion-elements/couple-on-bench.json",
+   "thumb": "/motion-elements/couple-on-bench.svg",
+   "aspect": 1.139,
+   "opacity": 0.9,
+   "placement": "Lower third or lower corner; keep the centre free for the poem",
+   "animation": "stroke reveal via draw-order.json; then hold. Optional ±1° sway of person-two",
+   "drawOn": true,
+   "strokes": 80,
+   "shapes": 80,
+   "grade": "APPROVED WITH LIMITATIONS",
+   "note": "Redrawn after review (see the pack's REVISION-NOTES.md).",
+   "provenance": "AI-generated (Claude, Anthropic); procedurally authored vector geometry for this project. Not public domain / CC0.",
+   "sha": "908138ccf875dcbd"
+  },
+  {
    "id": "couple-back-to-back",
    "name": "Couple Sitting Back to Back",
    "pack": 2,
@@ -244,6 +265,27 @@ const CATALOG = {
    "note": "Faceless mannequin figures with simplified hands: use at decoration scale, not as a focal portrait.",
    "provenance": "AI-generated (Claude, Anthropic); procedurally authored vector geometry for this project. Not public domain / CC0.",
    "sha": "767f9a580ad33baf"
+  },
+  {
+   "id": "couple-under-tree",
+   "name": "Couple Under a Tree",
+   "pack": 2,
+   "category": "couples",
+   "kind": "vector",
+   "style": "silhouette",
+   "file": "/motion-elements/couple-under-tree.json",
+   "thumb": "/motion-elements/couple-under-tree.svg",
+   "aspect": 0.947,
+   "opacity": 0.88,
+   "placement": "Lower corner or bottom band; the canopy can frame the poem from above",
+   "animation": "canopy group gentle sway (rotate ±0.8° about trunk base); figures static; fade-in",
+   "drawOn": true,
+   "strokes": 2,
+   "shapes": 21,
+   "grade": "APPROVED WITH LIMITATIONS",
+   "note": "Redrawn after review (see the pack's REVISION-NOTES.md).",
+   "provenance": "AI-generated (Claude, Anthropic); procedurally authored vector geometry for this project. Not public domain / CC0.",
+   "sha": "36743b96c24ed448"
   },
   {
    "id": "couple-under-umbrella",
@@ -680,17 +722,17 @@ const CATALOG = {
    "style": "silhouette",
    "file": "/motion-elements/reader-by-window.json",
    "thumb": "/motion-elements/reader-by-window.svg",
-   "aspect": 1.098,
+   "aspect": 1.094,
    "opacity": 0.9,
    "placement": "Side or lower corner; the window pane can frame a short line of verse",
    "animation": "curtain sway; page group flip as a page-turn accent; fade-in",
    "drawOn": true,
-   "strokes": 20,
-   "shapes": 35,
+   "strokes": 19,
+   "shapes": 34,
    "grade": "APPROVED WITH LIMITATIONS",
    "note": "Faceless mannequin figures with simplified hands: use at decoration scale, not as a focal portrait.",
    "provenance": "AI-generated (Claude, Anthropic); procedurally authored vector geometry for this project. Not public domain / CC0.",
-   "sha": "71fe7fa3286283d5"
+   "sha": "61866fe9d4429898"
   },
   {
    "id": "reader-on-floor",
@@ -732,6 +774,27 @@ const CATALOG = {
    "grade": "APPROVED",
    "provenance": "AI-generated (Claude, Anthropic); procedurally authored vector geometry for this project. Not public domain / CC0.",
    "sha": "149f098ee74ea675"
+  },
+  {
+   "id": "writer-desk-lamp",
+   "name": "Writer at a Desk Lamp",
+   "pack": 2,
+   "category": "literary",
+   "kind": "vector",
+   "style": "silhouette",
+   "file": "/motion-elements/writer-desk-lamp.json",
+   "thumb": "/motion-elements/writer-desk-lamp.svg",
+   "aspect": 1.615,
+   "opacity": 0.9,
+   "placement": "Lower half or side panel; the dark sky area above can hold the poem",
+   "animation": "light-cone opacity pulse 0.12<->0.18; hand group tiny up-down loop to suggest writing",
+   "drawOn": true,
+   "strokes": 2,
+   "shapes": 20,
+   "grade": "APPROVED WITH LIMITATIONS",
+   "note": "Redrawn after review (see the pack's REVISION-NOTES.md).",
+   "provenance": "AI-generated (Claude, Anthropic); procedurally authored vector geometry for this project. Not public domain / CC0.",
+   "sha": "a249e2994a966f51"
   },
   {
    "id": "mountain-horizon",
@@ -1177,6 +1240,48 @@ const CATALOG = {
    "note": "Faceless mannequin figures with simplified hands: use at decoration scale, not as a focal portrait.",
    "provenance": "AI-generated (Claude, Anthropic); procedurally authored vector geometry for this project. Not public domain / CC0.",
    "sha": "4b3653ba793e96a5"
+  },
+  {
+   "id": "man-rooftop-moon",
+   "name": "Man on a Rooftop Under the Moon",
+   "pack": 2,
+   "category": "solitude",
+   "kind": "vector",
+   "style": "silhouette",
+   "file": "/motion-elements/man-rooftop-moon.json",
+   "thumb": "/motion-elements/man-rooftop-moon.svg",
+   "aspect": 0.961,
+   "opacity": 0.9,
+   "placement": "Lower half; the moon and sky leave room above",
+   "animation": "moon glow (opacity 0.7->1); stars twinkle; skyline static",
+   "drawOn": true,
+   "strokes": 0,
+   "shapes": 13,
+   "grade": "APPROVED WITH LIMITATIONS",
+   "note": "Redrawn after review (see the pack's REVISION-NOTES.md).",
+   "provenance": "AI-generated (Claude, Anthropic); procedurally authored vector geometry for this project. Not public domain / CC0.",
+   "sha": "427924b7b6621a56"
+  },
+  {
+   "id": "man-reading-alone",
+   "name": "Man Reading Alone",
+   "pack": 2,
+   "category": "solitude",
+   "kind": "vector",
+   "style": "silhouette",
+   "file": "/motion-elements/man-reading-alone.json",
+   "thumb": "/motion-elements/man-reading-alone.svg",
+   "aspect": 0.966,
+   "opacity": 0.9,
+   "placement": "Lower corner or side; pairs well with a short stanza",
+   "animation": "fade-in; page group can flip (scaleX 1->-1) as a page-turn accent",
+   "drawOn": true,
+   "strokes": 2,
+   "shapes": 12,
+   "grade": "APPROVED WITH LIMITATIONS",
+   "note": "Redrawn after review (see the pack's REVISION-NOTES.md).",
+   "provenance": "AI-generated (Claude, Anthropic); procedurally authored vector geometry for this project. Not public domain / CC0.",
+   "sha": "be50259e45c5d5f2"
   },
   {
    "id": "man-under-tree",
@@ -1715,9 +1820,9 @@ const CATALOG = {
   {
    "id": "couple-on-bench",
    "pack": 2,
-   "source": "human-moments-poetry-scenes/couples-relationships/couple-on-bench.svg",
-   "grade": "NEEDS REVIEW",
-   "note": "Line art is crude; the woman's arm reads wrong."
+   "source": "human-moments-poetry-scenes-revised/couples-relationships/couple-on-bench.svg",
+   "grade": "APPROVED WITH LIMITATIONS",
+   "note": "Redrawn after review (see the pack's REVISION-NOTES.md)."
   },
   {
    "id": "couple-sunset-shore",
@@ -1750,9 +1855,9 @@ const CATALOG = {
   {
    "id": "couple-under-tree",
    "pack": 2,
-   "source": "human-moments-poetry-scenes/couples-relationships/couple-under-tree.svg",
-   "grade": "NEEDS REVIEW",
-   "note": "Figures are tiny relative to the tree."
+   "source": "human-moments-poetry-scenes-revised/couples-relationships/couple-under-tree.svg",
+   "grade": "APPROVED WITH LIMITATIONS",
+   "note": "Redrawn after review (see the pack's REVISION-NOTES.md)."
   },
   {
    "id": "couple-gazing-moon",
@@ -1792,9 +1897,9 @@ const CATALOG = {
   {
    "id": "man-rooftop-moon",
    "pack": 2,
-   "source": "human-moments-poetry-scenes/solitude-reflection/man-rooftop-moon.svg",
-   "grade": "NEEDS REVIEW",
-   "note": "The figure reads as a stick."
+   "source": "human-moments-poetry-scenes-revised/solitude-reflection/man-rooftop-moon.svg",
+   "grade": "APPROVED WITH LIMITATIONS",
+   "note": "Redrawn after review (see the pack's REVISION-NOTES.md)."
   },
   {
    "id": "man-under-tree",
@@ -1806,9 +1911,9 @@ const CATALOG = {
   {
    "id": "man-reading-alone",
    "pack": 2,
-   "source": "human-moments-poetry-scenes/solitude-reflection/man-reading-alone.svg",
-   "grade": "NEEDS REVIEW",
-   "note": "Stiff pose; arms and book are awkward."
+   "source": "human-moments-poetry-scenes-revised/solitude-reflection/man-reading-alone.svg",
+   "grade": "APPROVED WITH LIMITATIONS",
+   "note": "Redrawn after review (see the pack's REVISION-NOTES.md)."
   },
   {
    "id": "man-journal-night",
@@ -1834,14 +1939,14 @@ const CATALOG = {
   {
    "id": "writer-desk-lamp",
    "pack": 2,
-   "source": "human-moments-poetry-scenes/literary-life/writer-desk-lamp.svg",
-   "grade": "NEEDS REVIEW",
-   "note": "The lamp shape is odd."
+   "source": "human-moments-poetry-scenes-revised/literary-life/writer-desk-lamp.svg",
+   "grade": "APPROVED WITH LIMITATIONS",
+   "note": "Redrawn after review (see the pack's REVISION-NOTES.md)."
   },
   {
    "id": "reader-by-window",
    "pack": 2,
-   "source": "human-moments-poetry-scenes/literary-life/reader-by-window.svg",
+   "source": "human-moments-poetry-scenes-revised/literary-life/reader-by-window.svg",
    "grade": "APPROVED WITH LIMITATIONS",
    "note": "Faceless mannequin figures with simplified hands: use at decoration scale, not as a focal portrait."
   },
