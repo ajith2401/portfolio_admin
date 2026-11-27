@@ -5,6 +5,8 @@
 //
 // route: { id, label, format, kind: "video"|"image"|"set", exportFn, scenesFor(comp, input, ctx), validate(ctx, comp,
 //   input), render(comp, input, opts), ui?: { panel, action, label(comp) } }
+// opts.preset on render() is always the OUTPUT resolution preset (output-size.js): it scales the final bitmap only;
+// validators never see it, so layout, wrapping and the minimum text size are always checked at the native canvas.
 import { exportMp4, renderSceneStills, renderPosters, renderFullPoem, renderReelCover, renderQuote, exportQuoteMp4, renderCarousel } from "./export.js";
 import { checkScenes, checkCover, coverScene, checkPoster, posterPlan, checkFull, checkQuote, quoteScene, carouselPlan, checkCarousel } from "./route-checks.js";
 
@@ -43,7 +45,8 @@ export const ROUTES = Object.freeze([
     id: "full-poem", label: "Full-poem poster", format: "full", kind: "image", exportFn: renderFullPoem,
     scenesFor: (comp, input = {}) => (input.poem?.stanzas || []).map((lines, i) => ({ id: `f${i}`, kind: "stanza", lines })),
     validate: (ctx, comp, input = {}) => checkFull(ctx, comp, input.poem, input),
-    render: (comp, input = {}, opts = {}) => renderFullPoem(comp, input.poem, { preset: input.preset, height: input.height, ...opts }),
+    // opts.preset is the OUTPUT resolution preset (output-size.js); input.preset is the full-poem LAYOUT preset
+    render: (comp, input = {}, opts = {}) => renderFullPoem(comp, input.poem, { ...opts, preset: input.preset, height: input.height, output: opts.preset }),
     ui: { panel: "export", action: "full-tab", label: () => "Full-poem poster…" },
   },
   {

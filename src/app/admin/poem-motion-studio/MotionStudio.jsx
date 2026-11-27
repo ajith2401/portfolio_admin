@@ -8,7 +8,8 @@ import { ensureFonts, canvasMeasure } from "@/lib/motion-studio/font-ready";
 import { defaultComposition, normalizeComposition, motionPrefsOf, MAX_SCENES } from "@/lib/motion-studio/composition";
 import { drawFrame, compDuration, setFontFamilies } from "@/lib/motion-studio/render";
 import { FORMATS, safeRect } from "@/lib/motion-studio/safe-zone";
-import { detectCapabilities, exportMp4, renderSceneStills, renderPosters, renderFullPoem, renderReelCover, renderQuote, exportQuoteMp4, renderCarousel, zipBlobs } from "@/lib/motion-studio/export";
+import { runBundle } from "@/lib/motion-studio/bundle";
+import { detectCapabilities, canvasLease, exportMp4, renderSceneStills, renderPosters, renderFullPoem, renderReelCover, renderQuote, exportQuoteMp4, renderCarousel, zipBlobs } from "@/lib/motion-studio/export";
 import * as E from "@/lib/motion-studio/scene-edit";
 import { bakeBackground, readabilityScrim, decodeImageFile } from "@/lib/motion-studio/background";
 import { decodeAudio, shapeAudio, startRecording, recordingSupport } from "@/lib/motion-studio/audio";
@@ -798,11 +799,10 @@ export default function MotionStudio() {
     }
     setProgress(null);
   };
-  const doVideo = () =>
-    guard(async (signal) => {
-      const fm = comp.format === "poster" ? "reel" : comp.format;
-      let c = { ...comp, format: fm },
-        audioBuffer = null;
+  // the composition a video route encodes (+ shaped audio): shared by the single MP4 export and the bundle
+  const videoSetup = (fm) => {
+    let c = { ...comp, format: fm },
+      audioBuffer = null;
       const A = audioRef.current;
       if (A.buffer && comp.audio.source !== "none") {
         const clipMs =
@@ -819,6 +819,12 @@ export default function MotionStudio() {
         }
         audioBuffer = shapeAudio(A.buffer, comp.audio, compDuration(c));
       }
+    return { c, audioBuffer };
+  };
+  const doVideo = () =>
+    guard(async (signal) => {
+      const fm = comp.format === "poster" ? "reel" : comp.format;
+      const { c, audioBuffer } = videoSetup(fm);
       const blob = await exportMp4(c, {
         onProgress: setProgress,
         signal,
@@ -973,6 +979,66 @@ export default function MotionStudio() {
       download(b, `${slug(name)}-cover.${type === "image/png" ? "png" : "jpg"}`);
       flash("ok", "Reel cover exported (1080×1920).");
     });
+  // ---- Export all (bundle): every route is validated from scratch on EVERY run (Retry never reuses a result), one
+  // route at a time, canvases released between routes. A refused route stops the bundle unless the author confirmed
+  // "continue without failed routes"; the manifest always lists it.
+  const bundleInput = (route) =>
+    route.id === "full-poem" ? { poem: fullPoem, preset: fullPreset, height: fullHeight } : { poem: fullPoem };
+  const runBundleExport = async ({ routeIds, preset, continueOnFailure = false }) => {
+    setPlaying(false);
+    const ac = new AbortController();
+    abortRef.current = ac;
+    setProgress(0);
+    setMsg(null);
+    const fullH = new Map();
+    const probeMeasure = () => Object.assign(document.createElement("canvas"), { width: 16, height: 16 }).getContext("2d");
+    try {
+      const items = routeIds.map(routeById).filter(Boolean).map((route) => ({ route, input: bundleInput(route) }));
+      const r = await runBundle({
+        items,
+        comp,
+        poem: fullPoem,
+        preset,
+        generatedAt: new Date().toISOString(),
+        stem: slug(name),
+        measureCtx: probeMeasure(),
+        continueOnFailure,
+        signal: ac.signal,
+        onProgress: (p) => p.phase === "render" && setProgress(p.fraction),
+        release: () => canvasLease.releaseAll(),
+        live: () => canvasLease.live(),
+        preflight: async (route, input) => {
+          if (route.kind === "video" && !caps?.mp4) return { ok: false, messages: [caps?.reason || "This device cannot encode MP4 video."] };
+          const c = route.kind === "video" ? videoSetup(route.format).c : comp;
+          await ensureFonts(
+            c,
+            { poemText: [fullPoem.title, ...fullPoem.stanzas.flat(), comp.poster?.endText || ""].join("\n"), title: fullPoem.title },
+            { measure: canvasMeasure() },
+          );
+          const v = route.validate(probeMeasure(), c, input);
+          if (route.id === "full-poem" && v.layout?.height) fullH.set(route.id, v.layout.height);
+          return v;
+        },
+        render: (route, input, { preset: p, signal, onProgress }) => {
+          if (route.kind === "video") {
+            const { c, audioBuffer } = videoSetup(route.format);
+            return route.render(c, input, { preset: p, signal, onProgress, audioBuffer, assets: exportAssets(route.format) });
+          }
+          if (route.id === "full-poem") return route.render(comp, input, { preset: p, type: "image/png", assets: fullAssets(fullH.get(route.id) || 1920) });
+          return route.render(comp, input, { preset: p, type: "image/png", signal, onProgress, assets: exportAssets(route.format) });
+        },
+      });
+      if (r.zip) download(new Blob([r.zip], { type: "application/zip" }), `${slug(name)}-bundle.zip`);
+      if (r.zip && fontReviewOf(comp)) flash("error", `Font review: unreviewed. ${CANDIDATE_EXPORT_WARNING}`);
+      return r;
+    } catch (e) {
+      canvasLease.releaseAll();
+      if (e?.name === "AbortError") return { cancelled: true };
+      return { error: e?.message || String(e) };
+    } finally {
+      setProgress(null);
+    }
+  };
 
   const previewBlock = (idPrefix, big) => (
     <div>
@@ -1067,6 +1133,8 @@ export default function MotionStudio() {
     confirmDel,
     doCarousel,
     doCover,
+    runBundleExport,
+    bundleInput,
     doQuote,
     doFull,
     doPoster,

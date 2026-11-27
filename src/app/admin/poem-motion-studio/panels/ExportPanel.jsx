@@ -4,6 +4,7 @@ import { useStudio } from "../studio-context";
 import { ExportEstimate, ReadabilityNotice } from "./FitScenesDialog";
 import { panelRoutes, videoRouteFor } from "@/lib/motion-studio/formats";
 import QuotePicker from "./QuotePicker";
+import BundleExport from "./BundleExport";
 
 export default function ExportPanel() {
   const {
@@ -94,6 +95,7 @@ export default function ExportPanel() {
                       them in any video app.
                     </p>
                   )}
+                  <BundleExport />
                   <QuotePicker />
                 </section>
   );
