@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import connectDB from "@/lib/mongodb";
 import { Writing } from "@/models";
 import MotionProject from "@/lib/motion-studio/project-model";
-import { normalizeComposition } from "@/lib/motion-studio/composition";
+import { normalizeComposition, overLongLine, overLongMessage } from "@/lib/motion-studio/composition";
 import { poemFromWriting } from "@/lib/motion-studio/poem";
 import { poemHash } from "@/lib/motion-studio/poem-hash";
 import { requireAuth, validateOrigin } from "@/lib/auth";
@@ -47,6 +47,7 @@ export async function PUT(request, { params }) {
       if (!n) return NextResponse.json({ error: "Name is required" }, { status: 400 });
       set.name = n;
     }
+    { const o = overLongLine(body?.composition); if (o) return NextResponse.json({ error: overLongMessage(o), code: "LINE_TOO_LONG" }, { status: 422 }); }
     if (body?.composition !== undefined) set.composition = normalizeComposition(body.composition);
     await connectDB();
     const existing = await MotionProject.findById(id).select("createdBy").lean();

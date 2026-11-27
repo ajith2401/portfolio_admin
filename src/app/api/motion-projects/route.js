@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import connectDB from "@/lib/mongodb";
 import { Writing } from "@/models";
 import MotionProject from "@/lib/motion-studio/project-model";
-import { normalizeComposition } from "@/lib/motion-studio/composition";
+import { normalizeComposition, overLongLine, overLongMessage } from "@/lib/motion-studio/composition";
 import { poemFromWriting } from "@/lib/motion-studio/poem";
 import { poemHash } from "@/lib/motion-studio/poem-hash";
 import { requireAuth, validateOrigin } from "@/lib/auth";
@@ -43,6 +43,7 @@ export async function POST(request) {
       if (!w) return NextResponse.json({ error: "Source writing not found" }, { status: 404 });
       source = { sourceWritingId: w._id, sourceTitle: String(w.title || "").slice(0, 300), sourceHash: poemHash(poemFromWriting(w)), sourceVersion: Number.isFinite(w.version) ? w.version : undefined };
     }
+    { const o = overLongLine(body?.composition); if (o) return NextResponse.json({ error: overLongMessage(o), code: "LINE_TOO_LONG" }, { status: 422 }); }
     const composition = normalizeComposition(body?.composition);
     // A poem typed/pasted/imported in the Studio is stored ONLY as this project's own snapshot (composition.poem), after the
     // author explicitly chose "Save project to Admin". It never creates or touches a Writing record.

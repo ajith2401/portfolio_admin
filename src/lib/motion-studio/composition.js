@@ -64,6 +64,24 @@ export const safeImageUrl = (v) => {
 export const FULL_PRESETS = ["elegant", "balanced", "compact", "expressive"];
 export const MAX_STANZAS = 400,
   MAX_STANZA_LINES = 120;
+/**
+ * Server-side guard: the first poem or scene line longer than MAX_LINE_CHARS in a raw composition, or null. The normalizer
+ * cuts such a line, so the API REFUSES the request first (nothing is saved) instead of silently truncating a poem.
+ * Uses UTF-16 length, the same unit the normalizer cuts at.
+ */
+export function overLongLine(c) {
+  const long = (l) => typeof l === "string" && l.length > MAX_LINE_CHARS;
+  const arr = (v) => (Array.isArray(v) ? v : []);
+  for (const [si, st] of arr(c?.poem?.stanzas).entries())
+    for (const [li, l] of arr(st).entries())
+      if (long(l)) return { where: "poem", stanza: si + 1, line: li + 1, length: l.length };
+  for (const [si, sc] of arr(c?.scenes).entries())
+    for (const [li, l] of arr(sc?.lines).entries())
+      if (long(l)) return { where: "scene", scene: si + 1, line: li + 1, length: l.length };
+  return null;
+}
+export const overLongMessage = (o) =>
+  `A ${o.where} line has ${o.length} characters; the limit is ${MAX_LINE_CHARS}. Nothing was saved. Shorten or split the line.`;
 /** Poem snapshot kept inside a project: plain text only, bounded. Never HTML. */
 export function normalizePoemSnapshot(p) {
   if (!p || typeof p !== "object") return undefined;
