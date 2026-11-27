@@ -9,6 +9,7 @@ import {
   paintBackground,
   paintVignette,
   paintGrain,
+  paintParticles,
   resetTextState,
 } from "./render.js";
 import { runMaterial } from "./fx/registry.js";
@@ -159,9 +160,10 @@ export function layoutFullPoem(
   ctx,
   comp,
   poem,
-  { preset: presetKey = "balanced", height = "standard" } = {},
+  { preset: presetKey = "balanced", height = "standard", tune = null, min = MIN_READABLE } = {},
 ) {
-  const preset = PRESETS[presetKey] || PRESETS.balanced;
+  // tune: optional {size, lh, gap, side} from the Whole-Poem Video controls; min: the floor the size search stops at
+  const preset = { ...(PRESETS[presetKey] || PRESETS.balanced), ...(tune || {}) };
   const footer = footerFor(comp);
   const frame = (H, size) => {
     const m = measureAt(ctx, comp, poem, preset, size);
@@ -205,7 +207,7 @@ export function layoutFullPoem(
   // 1) standard canvas: largest size ≤ preset size that fits, never below MIN_READABLE
   let size = preset.size,
     std = null;
-  for (; size >= MIN_READABLE; size -= 2) {
+  for (; size >= min; size -= 2) {
     const f = frame(FULL_STD_H, size);
     if (f.need <= FULL_STD_H) {
       std = size;
@@ -216,11 +218,11 @@ export function layoutFullPoem(
     if (std != null) return chosen(FULL_STD_H, std);
     // Cannot fit legibly in the standard canvas. Nothing is clipped or dropped: the layout reports fits:false (callers must
     // not export it) and says which canvas height and size would work.
-    const ext = layoutFullPoem(ctx, comp, poem, { preset: presetKey, height: "extended" });
-    return { ...chosen(FULL_STD_H, MIN_READABLE), fits: false, neededAtMinimum: Math.ceil(frame(FULL_STD_H, MIN_READABLE).need), suggestedHeight: ext.height, suggestedSize: ext.size, suggestedFits: ext.fits };
+    const ext = layoutFullPoem(ctx, comp, poem, { preset: presetKey, height: "extended", tune, min });
+    return { ...chosen(FULL_STD_H, min), fits: false, neededAtMinimum: Math.ceil(frame(FULL_STD_H, min).need), suggestedHeight: ext.height, suggestedSize: ext.size, suggestedFits: ext.fits };
   }
   // 2) extended canvas: keep the preset size, grow height up to FULL_MAX_H; shrink (not below minimum) only if even that is not enough
-  for (let s = preset.size; s >= MIN_READABLE; s -= 2) {
+  for (let s = preset.size; s >= min; s -= 2) {
     const f = frame(FULL_MAX_H, s);
     if (f.need <= FULL_MAX_H) {
       const H = Math.max(FULL_STD_H, Math.ceil(f.need / 10) * 10);
@@ -228,10 +230,10 @@ export function layoutFullPoem(
     }
   }
   return {
-    ...chosen(FULL_MAX_H, MIN_READABLE),
+    ...chosen(FULL_MAX_H, min),
     fits: false,
     extended: true,
-    neededAtMinimum: Math.ceil(frame(FULL_MAX_H, MIN_READABLE).need),
+    neededAtMinimum: Math.ceil(frame(FULL_MAX_H, min).need),
   };
 }
 
@@ -307,25 +309,33 @@ export function drawFullPoem(
   ctx,
   comp,
   layout,
-  { assets = {}, scale = 1, fxTrace = null, fxReport = null } = {},
+  { assets = {}, scale = 1, fxTrace = null, fxReport = null, anim = null } = {},
 ) {
+  // anim (Whole-Poem Video only): { bgMs, fxMs, total, motionK, textAlpha }. The POEM never moves: only the background,
+  // textures, materials and particles take time; textAlpha is the optional opening/closing fade. null = the still poster.
   const W = FULL_W,
     H = layout.height,
-    st = comp.style;
+    st = comp.style,
+    still = !anim;
+  const fxMs = still ? 0 : anim.fxMs;
   // material layers (materials.js): no-ops unless comp.material selects a preset. Same guard/isolation as drawFrame.
-  const fxEnv = { comp, W, H, tMs: 0, still: true, assets, rect: { x: 0, y: 0, w: W, h: H }, plan: materialPlan(comp), intensity: effectiveIntensity(comp), seed: comp.material?.seed ?? 1, fxTrace, fxReport };
+  const fxEnv = { comp, W, H, tMs: fxMs, still, assets, rect: { x: 0, y: 0, w: W, h: H }, plan: materialPlan(comp), intensity: effectiveIntensity(comp), seed: comp.material?.seed ?? 1, fxTrace, fxReport };
   ctx.save();
   ctx.scale(scale, scale);
   paintBackground(
     ctx,
-    { ...comp, motion: { ...comp.motion, bgMotion: "none" } },
+    still
+      ? { ...comp, motion: { ...comp.motion, bgMotion: "none" } }
+      : { ...comp, motion: { ...comp.motion, intensity: (comp.motion.intensity ?? 1) * anim.motionK } },
     W,
     H,
-    0,
-    1,
+    still ? 0 : anim.bgMs,
+    still ? 1 : anim.total,
     assets,
   );
-  if (paintTextures(ctx, fxEnv) + runMaterial("material", ctx, fxEnv) + runMaterial("atmosphere", ctx, fxEnv)) resetTextState(ctx);
+  const atm = still ? 0 : paintParticles(ctx, comp, W, H, fxMs, anim.motionK);
+  if (atm + paintTextures(ctx, fxEnv) + runMaterial("material", ctx, fxEnv) + runMaterial("atmosphere", ctx, fxEnv)) resetTextState(ctx);
+  const textAlpha = still ? 1 : Math.max(0, Math.min(1, anim.textAlpha ?? 1));
   const align = st.align,
     side = (PRESETS[layout.preset] || PRESETS.balanced).side;
   const ax =
@@ -345,7 +355,7 @@ export function drawFullPoem(
     if (it.kind === "rule") {
       ctx.save();
       ctx.shadowColor = "transparent";
-      ctx.globalAlpha = 0.5;
+      ctx.globalAlpha = 0.5 * textAlpha;
       ctx.strokeStyle = st.color;
       ctx.lineWidth = 3;
       const len = it.short ? 56 : 120,
@@ -359,11 +369,13 @@ export function drawFullPoem(
       continue;
     }
     ctx.font = `${it.wt} ${it.px}px ${it.kind === "title" ? titleFamily : family}`;
+    if (textAlpha < 1) ctx.globalAlpha = textAlpha;
     ctx.fillText(it.text, it.x ?? ax, y);
   }
+  if (textAlpha < 1) ctx.globalAlpha = 1;
   ctx.shadowColor = "transparent";
   paintVignette(ctx, W, H, st.vignette);
-  paintGrain(ctx, W, H, st.grain, 0);
+  paintGrain(ctx, W, H, st.grain, fxMs);
   if (runMaterial("surface", ctx, fxEnv)) resetTextState(ctx);
   const sg = signatureBox(ctx, comp, H);
 

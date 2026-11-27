@@ -51,7 +51,7 @@ import {
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const GOLDEN = path.join(HERE, "..", "fixtures", "motion-studio-golden.json");
 const GOLDEN_SHA =
-  "0bfacb0897096eb802f8e49feda99fa40b1c5a284f7b5affaf0cb7a34cc2059f";
+  "6cb2e03c30d23d5f4791912e6d5fed8c46fd1389c0e42bbaa8f9cd4924f2f589";
 
 const mkCtx = (k = 0.55) => {
   let px = 40,

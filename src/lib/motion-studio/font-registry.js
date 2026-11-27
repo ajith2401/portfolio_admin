@@ -13,6 +13,9 @@
 
 const OFL = "OFL (Google Fonts)";
 const NEEDS_LICENCE = "needs human licence confirmation";
+// upstream: provenance read from github.com/google/fonts on 2026-11-27 (METADATA.pb + OFL.txt of each family directory):
+// every candidate is SIL OFL 1.1, has the Tamil subset, and no Reserved Font Name clause was found. This is RECORDED
+// evidence for the human reviewer; it does not verify a font (rendering review by a Tamil reader is still required).
 
 export const FONT_REGISTRY = Object.freeze([
   // ---- verified: the original five (stacks are the exact strings render.js has always used)
@@ -82,6 +85,7 @@ export const FONT_REGISTRY = Object.freeze([
     loadable: true,
     license: OFL,
     licenseReview: NEEDS_LICENCE,
+    upstream: { dir: "ofl/kavivanar", licence: "SIL OFL 1.1", reservedName: false, category: "HANDWRITING", source: "github.com/enathu/kavivanar", note: "© 2015 Tharique Azeez" },
     tamilSubset: true,
   },
   {
@@ -94,6 +98,7 @@ export const FONT_REGISTRY = Object.freeze([
     loadable: true,
     license: OFL,
     licenseReview: NEEDS_LICENCE,
+    upstream: { dir: "ofl/muktamalar", licence: "SIL OFL 1.1", reservedName: false, category: "SANS_SERIF", source: "github.com/EkType/Mukta", note: "© 2016 Ek Type" },
     tamilSubset: true,
   },
   {
@@ -106,6 +111,7 @@ export const FONT_REGISTRY = Object.freeze([
     loadable: true,
     license: OFL,
     licenseReview: NEEDS_LICENCE,
+    upstream: { dir: "ofl/catamaran", licence: "SIL OFL 1.1", reservedName: false, category: "SANS_SERIF", source: "github.com/VanillaandCream/Catamaran-Tamil" },
     tamilSubset: true,
   },
   {
@@ -118,6 +124,7 @@ export const FONT_REGISTRY = Object.freeze([
     loadable: true,
     license: OFL,
     licenseReview: NEEDS_LICENCE,
+    upstream: { dir: "ofl/pavanam", licence: "SIL OFL 1.1", reservedName: false, category: "SANS_SERIF", source: "github.com/enathu/pavanam" },
     tamilSubset: true,
   },
   {
@@ -130,6 +137,7 @@ export const FONT_REGISTRY = Object.freeze([
     loadable: true,
     license: OFL,
     licenseReview: NEEDS_LICENCE,
+    upstream: { dir: "ofl/baloothambi2", licence: "SIL OFL 1.1", reservedName: false, category: "DISPLAY", source: "github.com/yanone/Baloo2-Variable" },
     tamilSubset: true,
   },
   {
@@ -142,6 +150,7 @@ export const FONT_REGISTRY = Object.freeze([
     loadable: true,
     license: OFL,
     licenseReview: NEEDS_LICENCE,
+    upstream: { dir: "ofl/meerainimai", licence: "SIL OFL 1.1", reservedName: false, category: "SANS_SERIF", source: "github.com/smc/Meera" },
     tamilSubset: true,
   },
   {
@@ -154,6 +163,7 @@ export const FONT_REGISTRY = Object.freeze([
     loadable: true,
     license: OFL,
     licenseReview: NEEDS_LICENCE,
+    upstream: { dir: "ofl/arima", licence: "SIL OFL 1.1", reservedName: false, category: "DISPLAY", source: "github.com/NDISCOVER/Arima-Font" },
     tamilSubset: true,
   },
   {
@@ -167,6 +177,7 @@ export const FONT_REGISTRY = Object.freeze([
     why: 'Not in the next/font/google catalogue of the installed Next.js (font-data.json); Google Fonts superseded it with "Arima". Loading it would need a runtime Google Fonts request or vendored font files, neither of which this project allows.',
     license: OFL,
     licenseReview: NEEDS_LICENCE,
+    upstream: { dir: "ofl/arima", licence: "SIL OFL 1.1", reservedName: false, category: "DISPLAY", source: "github.com/NDISCOVER/Arima-Font", note: "renamed upstream to Arima; no ofl/arimamadurai directory" },
     tamilSubset: true,
   },
   {
@@ -179,6 +190,7 @@ export const FONT_REGISTRY = Object.freeze([
     loadable: true,
     license: OFL,
     licenseReview: NEEDS_LICENCE,
+    upstream: { dir: "ofl/coiny", licence: "SIL OFL 1.1", reservedName: false, category: "DISPLAY", source: "github.com/marcelommp/Coiny" },
     tamilSubset: true,
   },
   {
@@ -191,6 +203,7 @@ export const FONT_REGISTRY = Object.freeze([
     loadable: true,
     license: OFL,
     licenseReview: NEEDS_LICENCE,
+    upstream: { dir: "ofl/oi", licence: "SIL OFL 1.1", reservedName: false, category: "DISPLAY", source: "github.com/kosbarts/Oi" },
     tamilSubset: true,
   },
 ]);

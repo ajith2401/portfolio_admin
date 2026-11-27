@@ -131,6 +131,9 @@ export default function QuickCreate({
       </div>
       <div>
         <h3 className="font-semibold">2. What to make</h3>
+        <p className="text-xs" style={{ color: "var(--mute)" }}>
+          Whole-Poem Video keeps the entire poem on one screen; the other videos show it scene by scene.
+        </p>
         <div className="pms-routes mt-1" role="group" aria-label="Output">
           {ROUTE_LIST.map((r) => (
             <button
@@ -181,6 +184,8 @@ export default function QuickCreate({
 }
 
 const EXPORTS = {
+  "whole-mp4": (s) => s.doWholeVideo(),
+  "whole-cover": (s) => s.doWholeCover("image/png"),
   "reel-mp4": (s) => s.doVideo(),
   "story-mp4": (s) => s.doVideo(),
   "square-mp4": (s) => s.doVideo(),

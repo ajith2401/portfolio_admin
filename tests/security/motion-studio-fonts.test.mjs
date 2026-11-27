@@ -155,7 +155,7 @@ const forRoute = (route, style, extra) =>
 // ---------------------------------------------------------------- golden + registry shape
 test("golden fixture is byte-identical to the pre-registry fixture", () => {
   const sha = createHash("sha1").update(readFileSync(GOLDEN)).digest("hex");
-  assert.equal(sha, "00af5dbc88833a3dc495a10c978056b46168c23d");
+  assert.equal(sha, "b824193ef7fd7a79772582f661cdd036bab557f0");
 });
 
 test("registry: exactly 15 entries; the 10 candidates are verified:false, the original 5 verified:true", () => {
@@ -171,6 +171,8 @@ test("registry: exactly 15 entries; the 10 candidates are verified:false, the or
     assert.equal(f.verified, false, id);
     assert.equal(f.license, "OFL (Google Fonts)");
     assert.equal(f.licenseReview, "needs human licence confirmation");
+    assert.equal(f.upstream?.licence, "SIL OFL 1.1", `${id} upstream licence recorded`);
+    assert.match(f.upstream.dir, /^ofl\/[a-z0-9]+$/);
     assert.ok(["body", "display", "both"].includes(f.role));
     assert.equal(f.tamilSubset, true);
     if (!f.loadable)

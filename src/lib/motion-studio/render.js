@@ -61,10 +61,13 @@ export function paintBackground(ctx, c, w, h, tMs, totalMs, assets) {
   }
   if (st.geometry) { ctx.strokeStyle = st.color; ctx.globalAlpha = 0.12; ctx.lineWidth = 3; ctx.strokeRect(w * 0.08, h * 0.1, w * 0.84, h * 0.8); ctx.beginPath(); ctx.moveTo(w * 0.08, h * 0.5); ctx.lineTo(w * 0.3, h * 0.5); ctx.stroke(); ctx.globalAlpha = 1; }
 }
-function paintParticles(ctx, c, w, h, tMs) {
-  const kind = c.style.particles; if (kind === "none") return;
-  const n = 36, t = tMs / 1000;
+// k scales speed only (Whole-Poem Video Calm/Normal/Expressive); 0 = Static (nothing drawn). Returns 1 when it drew.
+// The broad soft layers (mist, bokeh, leak, sweep, ripple) stay at very low alpha so they never compete with the poem.
+export function paintParticles(ctx, c, w, h, tMs, k = 1) {
+  const kind = c.style.particles; if (kind === "none" || !(k > 0)) return 0;
+  const n = 36, t = (tMs / 1000) * k;
   ctx.save();
+  if (AMBIENT[kind]) { AMBIENT[kind](ctx, w, h, t); ctx.restore(); return 1; }
   for (let i = 0; i < n; i++) {
     const x = rnd(i) * w, sp = 0.2 + rnd(i + 50) * 0.6;
     if (kind === "rain") { const y = ((rnd(i + 9) * h + t * 900 * sp) % (h + 120)) - 60; ctx.strokeStyle = "rgba(200,220,240,0.35)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 8, y + 46); ctx.stroke(); }
@@ -72,7 +75,22 @@ function paintParticles(ctx, c, w, h, tMs) {
     else { const y = h - (((rnd(i + 5) * h) + t * 40 * sp) % h); ctx.globalAlpha = 0.18 + 0.2 * rnd(i + 2); ctx.fillStyle = kind === "light" ? "#ffe3b0" : "#ddd"; ctx.beginPath(); ctx.arc(x + Math.sin(t * sp + i) * 20, y, 2 + rnd(i + 8) * 4, 0, 6.283); ctx.fill(); }
   }
   ctx.restore();
+  return 1;
 }
+const softDisc = (ctx, x, y, r, rgb, a) => {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, `rgba(${rgb},${a})`); g.addColorStop(1, `rgba(${rgb},0)`);
+  ctx.fillStyle = g; ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+};
+// time-driven, deterministic (seeded by index), periodic where it matters so a video loop does not jump
+const AMBIENT = {
+  mist: (ctx, w, h, t) => { for (let i = 0; i < 7; i++) { const x = ((rnd(i + 21) * 1.4 - 0.2) * w + t * (14 + 10 * rnd(i)) ) % (w * 1.4) - w * 0.2, y = (0.15 + 0.7 * rnd(i + 31)) * h + Math.sin(t * 0.2 + i) * 30; softDisc(ctx, x, y, w * (0.35 + 0.25 * rnd(i + 41)), "235,240,245", 0.07); } },
+  bokeh: (ctx, w, h, t) => { for (let i = 0; i < 14; i++) { const x = rnd(i + 61) * w + Math.sin(t * 0.25 + i) * 40, y = rnd(i + 71) * h + Math.cos(t * 0.2 + i * 1.7) * 50; softDisc(ctx, x, y, 40 + 70 * rnd(i + 81), i % 3 ? "255,236,200" : "220,230,255", 0.05 + 0.05 * Math.abs(Math.sin(t * 0.4 + i))); } },
+  leak: (ctx, w, h, t) => { const a = 0.06 + 0.04 * Math.sin(t * 0.35); softDisc(ctx, w * (0.05 + 0.1 * Math.sin(t * 0.15)), h * (0.08 + 0.06 * Math.cos(t * 0.12)), w * 0.9, "255,170,90", a); softDisc(ctx, w * 0.95, h * (0.92 - 0.05 * Math.sin(t * 0.18)), w * 0.6, "255,120,80", a * 0.7); },
+  sweep: (ctx, w, h, t) => { const p = (t * 0.06) % 1.6 - 0.3, x = p * w * 1.4; const g = ctx.createLinearGradient(x - w * 0.35, 0, x + w * 0.35, h * 0.3); g.addColorStop(0, "rgba(255,255,255,0)"); g.addColorStop(0.5, "rgba(255,250,235,0.07)"); g.addColorStop(1, "rgba(255,255,255,0)"); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h); },
+  ripple: (ctx, w, h, t) => { ctx.lineWidth = 2; for (let i = 0; i < 5; i++) { const ph = ((t * 0.18 + i / 5) % 1), cx = w * (0.3 + 0.4 * rnd(i + 91)), cy = h * (0.82 + 0.1 * rnd(i + 95)); ctx.strokeStyle = `rgba(220,235,250,${0.16 * (1 - ph)})`; ctx.beginPath(); ctx.ellipse(cx, cy, 30 + ph * w * 0.35, 8 + ph * 60, 0, 0, 6.283); ctx.stroke(); } },
+  snow: (ctx, w, h, t) => { ctx.fillStyle = "#fff"; for (let i = 0; i < 48; i++) { const sp = 0.3 + rnd(i + 101) * 0.7, y = ((rnd(i + 111) * h + t * 60 * sp) % (h + 20)) - 10, x = rnd(i + 121) * w + Math.sin(t * sp + i) * 24; ctx.globalAlpha = 0.25 + 0.35 * rnd(i + 131); ctx.beginPath(); ctx.arc(x, y, 1.5 + 3 * rnd(i + 141), 0, 6.283); ctx.fill(); } },
+};
 export function paintVignette(ctx, w, h, v) {
   if (v <= 0) return;
   const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.75);

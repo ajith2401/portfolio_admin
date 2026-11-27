@@ -183,7 +183,7 @@ test("golden: tests/fixtures/motion-studio-golden.json is byte-identical (P9 cha
     .digest("hex");
   assert.equal(
     h,
-    "0bfacb0897096eb802f8e49feda99fa40b1c5a284f7b5affaf0cb7a34cc2059f",
+    "6cb2e03c30d23d5f4791912e6d5fed8c46fd1389c0e42bbaa8f9cd4924f2f589",
   );
 });
 
@@ -1099,7 +1099,7 @@ test("pure code: no Date / Math.random / performance.now in the P9 modules (sour
   }
 });
 test("routes: bundle offers every non-excerpt route; the route registry is unchanged in size", () => {
-  assert.equal(ROUTES.length, 11);
+  assert.equal(ROUTES.length, 13); // 11 + Whole-Poem Video + its cover
   const ui = src("src/app/admin/poem-motion-studio/panels/BundleExport.jsx");
   assert.match(ui, /ROUTES\.filter\(\(r\) => !r\.excerpt\)/);
 });

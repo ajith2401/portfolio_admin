@@ -30,7 +30,9 @@ export function formatForRoute(route) {
 }
 /** The Studio tab where the route's export lives after Create. */
 export const tabForRoute = (route) =>
-  route?.id === "full-poem"
+  route?.group === "whole" || route?.id === "whole-cover"
+    ? "whole"
+    : route?.id === "full-poem"
     ? "full"
     : route?.id === "story-stills"
       ? "story"
@@ -128,7 +130,7 @@ export function planQuickCreate(input = {}) {
 export const routeInput = (
   routeId,
   { fullPoem, preset = "balanced", height = "standard" } = {},
-) => (routeId === "full-poem" ? { poem: fullPoem, preset, height } : {});
+) => (routeId === "full-poem" ? { poem: fullPoem, preset, height } : /^whole-/.test(routeId) ? { poem: fullPoem } : {});
 
 /**
  * The export gate for Quick Create: fonts FIRST (deps.ensureFonts), then the route's own validator, with a measuring ctx.

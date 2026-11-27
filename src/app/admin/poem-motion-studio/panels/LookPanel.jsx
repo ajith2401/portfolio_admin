@@ -2,6 +2,7 @@
 import { templateById } from "@/lib/motion-studio/templates";
 import { selectableFonts, resolveFonts, CANDIDATE_TOGGLE_LABEL } from "@/lib/motion-studio/font-registry";
 import { BG_MOTION, PARTICLES, TEXT_IN } from "@/lib/motion-studio/composition";
+
 import SignaturePanel from "./SignaturePanel";
 import MaterialPanel from "./MaterialPanel";
 import MotionPanel from "./MotionPanel";
@@ -9,6 +10,9 @@ import TemplatePicker from "../TemplatePicker";
 import MoreLooks from "./MoreLooks";
 import { Btn, Field, Range } from "../studio-ui";
 import { useStudio } from "../studio-context";
+import FontCompare from "./FontCompare";
+
+const PARTICLE_LABELS = { none: "None", dust: "Floating dust", rain: "Rain", stars: "Stars", light: "Golden motes", mist: "Drifting mist", bokeh: "Soft bokeh", leak: "Light leak", sweep: "Light sweep", ripple: "Water ripple", snow: "Soft snow" };
 
 export default function LookPanel() {
   const {
@@ -118,6 +122,20 @@ export default function LookPanel() {
                             " Candidate fonts are NOT reviewed for Tamil: every export with one is marked “Font review: unreviewed”."}
                         </p>
                       )}
+                      <div className="sm:col-span-2">
+                        <FontCompare
+                          poemLines={comp.scenes.filter((x) => x.kind !== "title").flatMap((x) => x.lines)}
+                          current={comp.style.font}
+                          previewOn={comp.fontPreview === true}
+                          onUse={(id) =>
+                            update((c) => {
+                              c.style.font = id;
+                              delete c.notices;
+                              return c;
+                            })
+                          }
+                        />
+                      </div>
                       <Range
                         label="Font size"
                         value={comp.style.sizePx}
@@ -244,7 +262,7 @@ export default function LookPanel() {
                           }
                         >
                           {PARTICLES.map((k) => (
-                            <option key={k}>{k}</option>
+                            <option key={k} value={k}>{PARTICLE_LABELS[k] || k}</option>
                           ))}
                         </select>
                       </Field>

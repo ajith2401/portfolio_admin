@@ -22,6 +22,8 @@ import {
   detectCapabilities,
   canvasLease,
   exportMp4,
+  exportWholeMp4,
+  renderWholeCover,
   renderSceneStills,
   renderPosters,
   renderFullPoem,
@@ -54,6 +56,14 @@ import AudioPanel from "./panels/AudioPanel";
 import BackgroundPanel from "./panels/BackgroundPanel";
 import ExportPanel from "./panels/ExportPanel";
 import FullPoemPanel from "./panels/FullPoemPanel";
+import WholePoemPanel from "./panels/WholePoemPanel";
+import {
+  isWhole,
+  wholeDuration,
+  layoutWhole,
+  drawWholeFrame,
+  normalizeWhole,
+} from "@/lib/motion-studio/whole-poem";
 import LookPanel from "./panels/LookPanel";
 import PoemPanel from "./panels/PoemPanel";
 import PosterPanel from "./panels/PosterPanel";
@@ -126,8 +136,9 @@ export default function MotionStudio() {
   const mode = P.prefs.mode === "advanced" ? "advanced" : "quick"; // "quick" = Simple: fewer tabs, same composition
   const setMode = useCallback(
     (m) => P.update({ mode: m === "advanced" ? "advanced" : "simple" }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [P.update],
-  ); // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const [tab, setTab] = useState("scenes");
   const [writings, setWritings] = useState([]);
   const [source, setSource] = useState(null);
@@ -225,11 +236,15 @@ export default function MotionStudio() {
   const bgBitmap = useRef(null),
     assetsRef = useRef({}),
     audioRef = useRef({ blob: null, buffer: null, url: null }),
-    recRef = useRef(null);
+    recRef = useRef(null),
+    wholeRef = useRef(null);
 
   const comp = hist.present;
   const flash = (kind, text) => setMsg({ kind, text });
-  const total = comp ? compDuration(comp) : 0;
+  const whole = isWhole(comp);
+  // the video length: Whole-Poem mode has its own exact duration; Scene-by-Scene is the sum of the scenes
+  const durationOf = (c) => (isWhole(c) ? wholeDuration(c) : compDuration(c));
+  const total = comp ? durationOf(comp) : 0;
   const fmt = comp ? FORMATS[comp.format] : FORMATS.reel;
 
   // ---- history-backed edits (validated; rapid edits sharing a key coalesce into one undo step)
@@ -338,11 +353,18 @@ export default function MotionStudio() {
     (c, time) => {
       if (!c || !comp) return;
       const ctx = c.getContext("2d");
-      drawFrame(ctx, comp, time, {
-        w: c.width,
-        h: c.height,
-        assets: assetsRef.current,
-      });
+      if (wholeRef.current?.fits && isWhole(comp)) {
+        ctx.clearRect(0, 0, c.width, c.height);
+        drawWholeFrame(ctx, comp, wholeRef.current.layout, time, {
+          assets: assetsRef.current,
+          scale: c.width / FULL_W,
+        });
+      } else
+        drawFrame(ctx, comp, time, {
+          w: c.width,
+          h: c.height,
+          assets: assetsRef.current,
+        });
       if (guide) {
         const s = c.width / fmt.w,
           r = safeRect(fmt.w, fmt.h, fmt.safe);
@@ -416,8 +438,9 @@ export default function MotionStudio() {
   };
 
   // ---- loading a poem (look: optional {format, templateId, motion} chosen in Quick Create)
-  const withLook = (scenes, { motion, ...look } = {}) => {
-    const d = defaultComposition({ scenes, ...look });
+  const withLook = (scenes, { motion, whole: w, ...look } = {}) => {
+    const d0 = defaultComposition({ scenes, ...look });
+    const d = w ? { ...d0, whole: normalizeWhole(w) } : d0;
     return motion ? { ...d, motion: { ...d.motion, ...motion } } : d;
   };
   const pick = async (id, look = {}) => {
@@ -428,10 +451,11 @@ export default function MotionStudio() {
     const poem = poemFromWriting(r.data);
     if (!poem.stanzas.length)
       return (
-        flash("error", "This writing has no poem lines to animate."), false
+        flash("error", "This writing has no poem lines to animate."),
+        false
       );
     // over a limit: refuse with the reason; nothing is cut to fit
-    if (!poem.ok) return flash("error", poem.issues[0].message), false;
+    if (!poem.ok) return (flash("error", poem.issues[0].message), false);
     const scenes = generateScenes(poem, { title: r.data.title });
     if (scenes.length > MAX_SCENES)
       return (
@@ -552,6 +576,9 @@ export default function MotionStudio() {
       format: formatForRoute(r),
       templateId,
       ...(Object.keys(motion).length ? { motion } : {}),
+      ...(r?.group === "whole" || r?.id === "whole-cover"
+        ? { whole: { on: true } }
+        : {}),
     };
     const ok =
       choice.kind === "writing"
@@ -562,6 +589,8 @@ export default function MotionStudio() {
     P.update({ lastRoute: routeId });
     setQc({ routeId });
     setTab(tabForRoute(r));
+    // Whole-Poem: its length and export controls ARE the next step, so on phones open the panel sheet (desktop shows it anyway)
+    if (look.whole) setSheetOpen(true);
   };
   const recovery = useRecovery({
     comp,
@@ -1007,8 +1036,8 @@ export default function MotionStudio() {
       const clipMs =
         (comp.audio.trimEndMs || A.buffer.duration * 1000) -
         comp.audio.trimStartMs;
-      const vid = compDuration(c);
-      if (comp.audio.fitVideo === "extend" && clipMs > vid) {
+      const vid = durationOf(c);
+      if (comp.audio.fitVideo === "extend" && clipMs > vid && !isWhole(c)) {
         const sc = c.scenes.slice();
         sc[sc.length - 1] = {
           ...sc[sc.length - 1],
@@ -1016,26 +1045,61 @@ export default function MotionStudio() {
         };
         c = { ...c, scenes: sc };
       }
-      audioBuffer = shapeAudio(A.buffer, comp.audio, compDuration(c));
+      audioBuffer = shapeAudio(A.buffer, comp.audio, durationOf(c));
     }
     return { c, audioBuffer };
   };
-  const doVideo = () =>
+  const doWholeVideo = () =>
     guard(async (signal) => {
-      const fm = comp.format === "poster" ? "reel" : comp.format;
-      const { c, audioBuffer } = videoSetup(fm);
-      const blob = await exportMp4(c, {
+      const { c, audioBuffer } = videoSetup("reel");
+      const r = await exportWholeMp4(c, fullPoem, {
         onProgress: setProgress,
         signal,
         audioBuffer,
-        assets: exportAssets(fm),
+        assets: exportAssets("reel"),
       });
-      download(blob, `${slug(name)}-${fm}.mp4`);
+      download(
+        r.blob,
+        `${slug(name)}-whole-poem-${Math.round(r.durationMs / 1000)}s.mp4`,
+      );
       flash(
         "ok",
-        `Exported ${(blob.size / 1048576).toFixed(1)} MB MP4${audioBuffer ? " with AAC audio" : " (silent)"}. Play it on your phone before posting.`,
+        `Exported ${(r.blob.size / 1048576).toFixed(1)} MB Whole-Poem MP4: ${(r.durationMs / 1000).toFixed(1)} s, ${r.frames} frames, all ${fullPoem.stanzas.flat().length} lines at ${r.size}px${audioBuffer ? ", with AAC audio" : " (silent)"}. Play it on your phone before posting.`,
       );
     });
+  const doWholeCover = (type = "image/png") =>
+    guard(async () => {
+      const r = await renderWholeCover(comp, fullPoem, {
+        type,
+        assets: exportAssets("reel"),
+      });
+      download(
+        r.blob,
+        `${slug(name)}-whole-poem.${type === "image/png" ? "png" : "jpg"}`,
+      );
+      flash(
+        "ok",
+        `Whole-Poem image exported (${r.width}×${r.height}), all ${fullPoem.stanzas.flat().length} lines.`,
+      );
+    });
+  const doVideo = () =>
+    isWhole(comp)
+      ? doWholeVideo()
+      : guard(async (signal) => {
+          const fm = comp.format === "poster" ? "reel" : comp.format;
+          const { c, audioBuffer } = videoSetup(fm);
+          const blob = await exportMp4(c, {
+            onProgress: setProgress,
+            signal,
+            audioBuffer,
+            assets: exportAssets(fm),
+          });
+          download(blob, `${slug(name)}-${fm}.mp4`);
+          flash(
+            "ok",
+            `Exported ${(blob.size / 1048576).toFixed(1)} MB MP4${audioBuffer ? " with AAC audio" : " (silent)"}. Play it on your phone before posting.`,
+          );
+        });
   const doStory = (type) =>
     guard(async (signal) => {
       const blobs = await renderSceneStills(comp, {
@@ -1136,11 +1200,13 @@ export default function MotionStudio() {
   const tabs =
     mode === "quick"
       ? [
+          ...(whole ? [["whole", "Whole poem"]] : []),
           ["look", "Look"],
           ["full", "Full poem"],
           ["export", "Export"],
         ]
       : [
+          ...(whole ? [["whole", "Whole poem"]] : []),
           ["poem", "Poem"],
           ["scenes", "Scenes"],
           ["look", "Look"],
@@ -1183,6 +1249,7 @@ export default function MotionStudio() {
       preset: fullPreset,
       height: fullHeight,
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     comp?.style,
     comp?.branding,
@@ -1191,7 +1258,28 @@ export default function MotionStudio() {
     fullHeight,
     fontTick,
     activeTab,
-  ]); // eslint-disable-line react-hooks/exhaustive-deps
+  ]);
+  // Whole-Poem layout: one 1080×1920 screen, computed only in Whole-Poem mode (wholeRef feeds the preview painter)
+  const wholeFit = useMemo(() => {
+    if (!whole || !fullPoem.stanzas.length) return null;
+    const cx = document.createElement("canvas").getContext("2d");
+    return layoutWhole(cx, comp, fullPoem);
+  }, [whole, comp?.style, comp?.branding, comp?.whole, fullPoem, fontTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    wholeRef.current = wholeFit;
+    paint(t);
+  }, [wholeFit]); // eslint-disable-line react-hooks/exhaustive-deps
+  const setWhole_ = (patch, key) =>
+    update(
+      (c) => ({
+        ...c,
+        whole: normalizeWhole({ ...(c.whole || {}), ...patch }),
+        ...(patch.on && c.format !== "reel" && c.format !== "story"
+          ? { format: "reel" }
+          : {}),
+      }),
+      key,
+    );
   const fullCheck = useMemo(
     () => (fullLayout ? validateFullPoem(fullPoem, fullLayout) : null),
     [fullLayout, fullPoem],
@@ -1448,6 +1536,7 @@ export default function MotionStudio() {
       poster: c.poster,
       export: c.export,
       ...(c.material ? { material: c.material } : {}),
+      ...(c.whole ? { whole: c.whole } : {}),
     }));
   };
   // ---- keyboard shortcuts (never inside text fields; see lib/motion-studio/shortcuts.js)
@@ -1486,6 +1575,12 @@ export default function MotionStudio() {
     bundleInput,
     doQuote,
     doFull,
+    doWholeVideo,
+    doWholeCover,
+    setWhole_,
+    wholeFit,
+    whole,
+    total,
     doPoster,
     doStillsZip,
     doStory,
@@ -1948,6 +2043,34 @@ export default function MotionStudio() {
               </div>
             )}
             <div className="min-w-0 lg:sticky lg:top-4 lg:self-start">
+              <div
+                className="pms-chips mb-2 justify-center"
+                role="group"
+                aria-label="Composition mode"
+              >
+                <Btn
+                  aria-pressed={whole}
+                  onClick={() => {
+                    setPlaying(false);
+                    setT(0);
+                    setWhole_({ on: true });
+                    setTab("whole");
+                  }}
+                >
+                  Whole poem · one screen
+                </Btn>
+                <Btn
+                  aria-pressed={!whole}
+                  onClick={() => {
+                    setPlaying(false);
+                    setT(0);
+                    if (whole) setWhole_({ on: false });
+                    if (tab === "whole") setTab("look");
+                  }}
+                >
+                  Scene by scene
+                </Btn>
+              </div>
               {previewBlock("main")}
               <ReadabilityNotice />
               {qc && (
@@ -2052,6 +2175,7 @@ export default function MotionStudio() {
                 {activeTab === "poem" && poemPanel}
 
                 {activeTab === "full" && <FullPoemPanel />}
+                {activeTab === "whole" && <WholePoemPanel />}
 
                 {activeTab === "poster" && <PosterPanel />}
 

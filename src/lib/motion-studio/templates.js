@@ -131,7 +131,7 @@ export const TEMPLATES = [
     id: "golden-hour",
     name: "Golden Hour",
     mood: "nostalgic, warm",
-    bg: { kind: "gradient", a: "#e9a14a", b: "#6a2f1b" },
+    bg: { kind: "gradient", a: "#a6622a", b: "#6a2f1b" },
     style: {
       font: "anek",
       sizePx: 64,

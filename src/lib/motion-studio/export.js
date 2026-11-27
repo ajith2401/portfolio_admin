@@ -9,6 +9,8 @@ import { zipStore } from "./zip.js";
 import { drawFullPoem, FULL_W } from "./full-poem.js";
 import { checkScenes, checkCover, coverScene, checkPoster, checkFull, FULL_NO_FIT, checkQuote, quoteScene, quoteMin, checkCarousel, sceneMin, fontIssues } from "./route-checks.js";
 import { materialActive } from "./materials.js";
+import { checkWhole } from "./route-checks.js";
+import { drawWholeFrame, wholeDuration, wholeFrames } from "./whole-poem.js";
 import { createLease } from "./canvas-lease.js";
 import { outputSize, presetById } from "./output-size.js";
 
@@ -138,7 +140,12 @@ async function encodeMp4(comp, { preset, ...opts } = {}) {
   const size = sizeFor(comp.format, preset, "video");
   return withCanvas(size.w, size.h, (canvas, ctx) => encodeOn(canvas, ctx, size, comp, opts), true);
 }
-async function encodeOn(canvas, ctx, size, comp, { onProgress, signal, audioBuffer, assets = {}, bitrate, minSize } = {}) {
+async function encodeOn(canvas, ctx, size, comp, { assets = {}, minSize, ...opts } = {}) {
+  const frames = Math.ceil((compDuration(comp) / 1000) * FPS);
+  return encodeFrames(canvas, frames, (i) => drawFrame(ctx, comp, (i / FPS) * 1000, { w: size.w, h: size.h, assets, minSize }), opts);
+}
+/** The encoder loop shared by every video route: draw(i) paints frame i, then it is encoded at i/FPS. */
+async function encodeFrames(canvas, frames, draw, { onProgress, signal, audioBuffer, bitrate } = {}) {
   const mb = await import("mediabunny");
   const output = new mb.Output({ format: new mb.Mp4OutputFormat(), target: new mb.BufferTarget() });
   const video = new mb.CanvasSource(canvas, { codec: "avc", bitrate: bitrate || mb.QUALITY_HIGH });
@@ -146,11 +153,10 @@ async function encodeOn(canvas, ctx, size, comp, { onProgress, signal, audioBuff
   let audio = null;
   if (audioBuffer) { audio = new mb.AudioBufferSource({ codec: "aac", bitrate: mb.QUALITY_MEDIUM }); output.addAudioTrack(audio); }
   await output.start();
-  const frames = Math.ceil((compDuration(comp) / 1000) * FPS);
   try {
     for (let i = 0; i < frames; i++) {
       if (signal?.aborted) throw new DOMException("Export cancelled", "AbortError");
-      drawFrame(ctx, comp, (i / FPS) * 1000, { w: size.w, h: size.h, assets, minSize });
+      draw(i);
       await video.add(i / FPS, 1 / FPS);
       if (i % 6 === 0) { onProgress?.(i / frames); await tick(); } // yield so the editor stays responsive
     }
@@ -297,5 +303,40 @@ export async function renderReelCover(comp, { type = "image/png", assets = {}, p
   return withCanvas(size.w, size.h, async (c, ctx) => {
     drawFrame(ctx, { ...comp, format: "reel" }, 0, { w: size.w, h: size.h, assets, still: true, scene: coverScene(comp) || sc, minSize: r.minSize });
     return toBlob(c, type, 0.94);
+  });
+}
+
+// ---------------------------------------------------------------- Whole-Poem Video (whole-poem.js)
+const wholeText = (poem) => [poem.title, ...poem.stanzas.flat()].join("\n");
+/** Resolve the Whole-Poem layout for export: fonts first, then the checker + auto-fix ladder. Refuses only when the
+ * poem cannot be shown legibly on one screen at all (it then says why and points at Scene-by-Scene). */
+async function wholePlan(comp, poem) {
+  await fontsFor(comp, { extraText: wholeText(poem), title: poem.title });
+  const r = resolveRoute("Whole-Poem Video", comp, (c) => checkWhole(probeCtx(), c, poem));
+  if (!r.v.fits) throw new ExportValidationError("Whole-Poem Video", r.v.messages);
+  (r.v.warnings || []).forEach((m) => warn(`Whole-Poem Video: ${m}`));
+  return r;
+}
+/**
+ * Whole-Poem Video MP4: the complete poem, still, on one 1080×1920 screen for exactly comp.whole.durationMs
+ * (frames = round(seconds × 30)), with the background animating. Returns { blob, frames, durationMs, layout }.
+ */
+export async function exportWholeMp4(comp, poem, { preset, assets = {}, ...opts } = {}) {
+  const r = await wholePlan(comp, poem);
+  const c = r.comp, layout = r.v.layout, ms = wholeDuration(c), frames = wholeFrames(ms, FPS);
+  const size = sizeFor("reel", preset, "video");
+  const k = size.w / FULL_W;
+  const blob = await withCanvas(size.w, size.h, (canvas, ctx) =>
+    encodeFrames(canvas, frames, (i) => drawWholeFrame(ctx, c, layout, (i / FPS) * 1000, { assets, scale: k }), opts), true);
+  return { blob, frames, durationMs: Math.round((frames / FPS) * 1000), layout, size: layout.size, ...fontReviewFor(c) };
+}
+/** The Whole-Poem screen as a still PNG/JPEG (Reel cover / Story image of the same composition, first frame). */
+export async function renderWholeCover(comp, poem, { type = "image/png", assets = {}, preset } = {}) {
+  const r = await wholePlan(comp, poem);
+  const size = sizeFor("reel", preset);
+  const k = size.w / FULL_W;
+  return withCanvas(size.w, size.h, async (c, ctx) => {
+    drawWholeFrame(ctx, r.comp, r.v.layout, 0, { assets, scale: k, still: true });
+    return { blob: await toBlob(c, type, 0.94), width: size.w, height: size.h, layout: r.v.layout, ...fontReviewFor(r.comp) };
   });
 }

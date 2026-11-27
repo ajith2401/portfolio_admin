@@ -139,8 +139,8 @@ test('textures + film grain visibly change the real preview, keep the poem text,
   await page.waitForTimeout(400);
   const plain = await snap();
   const swatches = page.getByRole('group', { name: 'Surface textures' });
-  await expect(swatches.getByRole('button')).toHaveCount(15);
-  for (const name of ['Paper', 'Watercolour wash', 'Canvas']) {
+  await expect(swatches.getByRole('button')).toHaveCount(22); // None + 21 textures (7 added: rice paper … slate)
+  for (const name of ['Paper', 'Watercolour wash', 'Canvas', 'Rice paper', 'Slate']) {
     await swatches.getByRole('button', { name: `Texture: ${name}` }).click();
     await expect(swatches.getByRole('button', { name: `Texture: ${name}` })).toHaveAttribute('aria-pressed', 'true');
     await page.waitForTimeout(400);

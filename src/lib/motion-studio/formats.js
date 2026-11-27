@@ -7,8 +7,8 @@
 //   input), render(comp, input, opts), ui?: { panel, action, label(comp) } }
 // opts.preset on render() is always the OUTPUT resolution preset (output-size.js): it scales the final bitmap only;
 // validators never see it, so layout, wrapping and the minimum text size are always checked at the native canvas.
-import { exportMp4, renderSceneStills, renderPosters, renderFullPoem, renderReelCover, renderQuote, exportQuoteMp4, renderCarousel } from "./export.js";
-import { checkScenes, checkCover, coverScene, checkPoster, posterPlan, checkFull, checkQuote, quoteScene, carouselPlan, checkCarousel } from "./route-checks.js";
+import { exportMp4, renderSceneStills, renderPosters, renderFullPoem, renderReelCover, renderQuote, exportQuoteMp4, renderCarousel, exportWholeMp4, renderWholeCover } from "./export.js";
+import { checkWhole, checkScenes, checkCover, coverScene, checkPoster, posterPlan, checkFull, checkQuote, quoteScene, carouselPlan, checkCarousel } from "./route-checks.js";
 
 const withFormat = (comp, format) => ({ ...comp, format });
 const sceneVideo = (format, label, short) => ({
@@ -22,6 +22,19 @@ const posterSet = (comp) => ({ ...comp, poster: { ...comp.poster, mode: "set" } 
 const posterSingle = (comp) => ({ ...comp, poster: { ...comp.poster, mode: "single" } });
 
 export const ROUTES = Object.freeze([
+  // Whole-Poem Video: the complete poem held still on one 9:16 screen, the background animating (whole-poem.js)
+  {
+    id: "whole-mp4", label: "Whole-Poem Video", short: "Whole poem", format: "reel", kind: "video", group: "whole", exportFn: exportWholeMp4,
+    scenesFor: (comp, input = {}) => (input.poem?.stanzas || []).map((lines, i) => ({ id: `w${i}`, kind: "stanza", lines })),
+    validate: (ctx, comp, input = {}) => checkWhole(ctx, comp, input.poem, { mutate: input.mutate }),
+    render: (comp, input = {}, opts = {}) => exportWholeMp4(comp, input.poem, opts).then((r) => r.blob),
+  },
+  {
+    id: "whole-cover", label: "Whole-Poem cover", format: "reel", kind: "image", exportFn: renderWholeCover,
+    scenesFor: (comp, input = {}) => (input.poem?.stanzas || []).map((lines, i) => ({ id: `w${i}`, kind: "stanza", lines })),
+    validate: (ctx, comp, input = {}) => checkWhole(ctx, comp, input.poem, { mutate: input.mutate }),
+    render: (comp, input = {}, opts = {}) => renderWholeCover(comp, input.poem, opts),
+  },
   sceneVideo("reel", "Reel MP4", "Reel"),
   sceneVideo("story", "Story MP4", "Story"),
   sceneVideo("square", "Square MP4", "Square"),

@@ -225,11 +225,11 @@
  },
  "template/golden-hour/reel": {
   "calls": 2219,
-  "sha256": "ad04be02ecbf59440c0ba5447c3d4b9aedc50f7061129510433e2660ad8a4d80"
+  "sha256": "b5dc184f24b88b1cb183359e465b6258944e9cc6b01fe43c57165819a3f1cd31"
  },
  "template/golden-hour/poster": {
   "calls": 2219,
-  "sha256": "b3e50374783f54d5de3e4a1337eb15034b2710a6b2c37b858c4328e278286ac4"
+  "sha256": "59e39b421ec64252670f79663a6fc606db118c5dd8b087c248c17ffe1200af74"
  },
  "template/modern-minimal/reel": {
   "calls": 1469,

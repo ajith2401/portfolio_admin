@@ -74,7 +74,7 @@ const LEGACY = path.join(
   "motion-studio-legacy-templates.json",
 );
 const GOLDEN_SHA256 =
-  "0bfacb0897096eb802f8e49feda99fa40b1c5a284f7b5affaf0cb7a34cc2059f";
+  "6cb2e03c30d23d5f4791912e6d5fed8c46fd1389c0e42bbaa8f9cd4924f2f589";
 
 // ---------------------------------------------------------------- fixtures
 const mkCtx = (k = 0.55) => {
@@ -113,7 +113,7 @@ const ROUTES_FOR = {
   poster: ["poster", "poster-set", "carousel"],
   square: ["square-mp4"],
 };
-const ANY = ["full-poem", "quote", "animated-quote"];
+const ANY = ["full-poem", "whole-mp4", "whole-cover", "quote", "animated-quote"];
 
 function build(key, templateId, format, { fit = true } = {}) {
   const poem = parsePoemText(CORPUS[key], { title: TITLE });
@@ -160,6 +160,29 @@ const fakeFonts = () => ({
 });
 const fakeMeasure = () => (font, text) =>
   Array.from(String(text)).length * (/"/.test(font) ? 21.7 : 20);
+
+// ---------------------------------------------------------------- contrast audit (WCAG): every template's poem text
+// and signature against both gradient ends / the solid colour, after the template's own overlay. Signature is small
+// text (4.5:1); poem text is >= 56px (large, 3:1) but is held to 4.5:1 too. Classic Golden Hour failed (2.82 / 2.43)
+// until its light gradient end was darkened from #e9a14a to #a6622a (saved projects keep their stored colours).
+test("contrast: every template's text and signature reach 4.5:1 on its background", async () => {
+  const { lum, hexRgb, ratio } = await import("../../src/lib/motion-studio/contrast.js");
+  const mix = (a, b, o) => a.map((v, i) => v * (1 - o) + b[i] * o);
+  const bad = [];
+  for (const t of TEMPLATE_LIBRARY) {
+    const ov = t.fx?.overlay;
+    const cs = [t.bg?.a, t.bg?.b, t.bg?.color]
+      .filter((x) => typeof x === "string" && x[0] === "#")
+      .map((h) => (ov ? mix(hexRgb(h), hexRgb(ov.color), ov.opacity) : hexRgb(h)));
+    if (!cs.length) continue;
+    for (const [k, col] of [["text", t.style.color], ["signature", t.signatureColor]]) {
+      if (!col) continue;
+      const r = Math.min(...cs.map((c) => ratio(lum(...hexRgb(col)), lum(...c))));
+      if (r < 4.5) bad.push(`${t.id} ${k} ${r.toFixed(2)}`);
+    }
+  }
+  assert.deepEqual(bad, []);
+});
 
 // ---------------------------------------------------------------- golden + legacy untouched
 test("golden fixture is byte-identical (sha256) and the six classic templates equal their pre-P8 snapshot", () => {

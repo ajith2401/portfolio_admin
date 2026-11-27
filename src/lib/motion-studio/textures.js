@@ -37,6 +37,13 @@ export const TEXTURES = Object.freeze(
     { id: "halftone", label: "Halftone", family: "Print", max: 0.45 },
     { id: "risograph", label: "Risograph", family: "Print", max: 0.55 },
     { id: "concrete", label: "Concrete", family: "Stone", max: 0.5 },
+    { id: "rice-paper", label: "Rice paper", family: "Paper", max: 0.5 },
+    { id: "newsprint", label: "Newsprint", family: "Print", max: 0.45 },
+    { id: "cotton", label: "Woven cotton", family: "Cloth", max: 0.45 },
+    { id: "denim", label: "Denim twill", family: "Cloth", max: 0.45 },
+    { id: "speckled", label: "Speckled stock", family: "Paper", max: 0.5 },
+    { id: "wood", label: "Wood grain", family: "Stone", max: 0.45 },
+    { id: "slate", label: "Slate", family: "Stone", max: 0.5 },
   ].map((t) => Object.freeze(t)),
 );
 export const TEXTURE_IDS = Object.freeze([
@@ -379,6 +386,77 @@ export function textureField(
       dots(rng, S, f, 300, 0.4, 1.4, 0.8);
       addPixelNoise(rng, f, 0.3);
       break;
+    case "rice-paper": {
+      // washi: long translucent fibres over a soft, cloudy pulp
+      f = fbm(rng, S, 4, 4, { gain: 0.5 });
+      for (let i = 0; i < f.length; i++) f[i] *= 0.4;
+      fibres(rng, S, f, 260, 90, 0.75);
+      fibres(rng, S, f, 900, 14, 0.3);
+      addPixelNoise(rng, f, 0.1);
+      break;
+    }
+    case "newsprint": {
+      // greyish pulp with fine flecks and a faint horizontal roll direction
+      f = new Float32Array(S * S);
+      streaks(rng, S, 64, 4, f, 0.35);
+      noiseField(rng, S, 16, f, 0.3);
+      dots(rng, S, f, 2600, 0.3, 0.8, -0.7);
+      addPixelNoise(rng, f, 0.35);
+      break;
+    }
+    case "cotton": {
+      // plain weave: alternating over/under threads on a 4px pitch, with slub (thickness) variation
+      f = new Float32Array(S * S);
+      const slubX = Array.from({ length: S }, () => 0.7 + rng() * 0.6),
+        slubY = Array.from({ length: S }, () => 0.7 + rng() * 0.6);
+      for (let y = 0; y < S; y++)
+        for (let x = 0; x < S; x++) {
+          const over = (Math.floor(x / 4) + Math.floor(y / 4)) % 2 === 0;
+          f[y * S + x] = over ? 0.6 * Math.sin(((y % 4) / 4) * Math.PI) * slubY[y] : 0.6 * Math.sin(((x % 4) / 4) * Math.PI) * slubX[x];
+        }
+      noiseField(rng, S, 8, f, 0.25);
+      addPixelNoise(rng, f, 0.1);
+      break;
+    }
+    case "denim": {
+      // 3/1 twill: diagonal ribs (period divides the tile, so it stays seamless)
+      f = new Float32Array(S * S);
+      for (let y = 0; y < S; y++)
+        for (let x = 0; x < S; x++) f[y * S + x] = 0.55 * Math.cos((((x + y) % 8) / 8) * Math.PI * 2);
+      streaks(rng, S, 128, 2, f, 0.35);
+      addPixelNoise(rng, f, 0.18);
+      break;
+    }
+    case "speckled":
+      f = fbm(rng, S, 4, 3, { gain: 0.5 });
+      for (let i = 0; i < f.length; i++) f[i] *= 0.3;
+      dots(rng, S, f, 700, 0.5, 1.6, -1);
+      dots(rng, S, f, 160, 0.8, 2.2, 0.8);
+      addPixelNoise(rng, f, 0.12);
+      break;
+    case "wood": {
+      // growth rings: a warped vertical stripe pattern (integer ring count across the tile keeps it seamless)
+      const warp = fbm(rng, S, 2, 3);
+      f = new Float32Array(S * S);
+      for (let y = 0; y < S; y++)
+        for (let x = 0; x < S; x++) {
+          const u = x / S + 0.06 * warp[y * S + x];
+          f[y * S + x] = 0.7 * Math.sin(u * Math.PI * 2 * 12);
+        }
+      streaks(rng, S, 32, 2, f, 0.3);
+      addPixelNoise(rng, f, 0.08);
+      break;
+    }
+    case "slate": {
+      // layered, cleaved stone: stretched noise bands plus a few fine scratches
+      f = new Float32Array(S * S);
+      streaks(rng, S, 4, 1, f, 0.2);
+      streaks(rng, S, 16, 4, f, 0.6);
+      streaks(rng, S, 64, 8, f, 0.3);
+      fibres(rng, S, f, 40, 120, 0.6);
+      addPixelNoise(rng, f, 0.15);
+      break;
+    }
     case "grain":
       f = addPixelNoise(rng, new Float32Array(S * S), 1);
       noiseField(rng, S, S / 2, f, 0.35); // a touch of clumping, like silver grain

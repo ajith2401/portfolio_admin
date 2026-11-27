@@ -10,6 +10,7 @@ import { newResult, note, TOLERANCE } from "./coverage.js";
 import { textRect, signatureBox } from "./signature.js";
 import { drawFrame } from "./render.js";
 import { drawFullPoem } from "./full-poem.js";
+import { layoutWhole, drawWholeFrame, wholeDuration } from "./whole-poem.js";
 import { verifyMaterial } from "./fx/verify.js";
 import { materialActive } from "./materials.js";
 import { fontById, canBody, canTitle, fontLabel, fontReviewOf, CANDIDATE_EXPORT_WARNING } from "./font-registry.js";
@@ -221,6 +222,21 @@ export function checkCarousel(ctx, comp, { mutate = null } = {}) {
 }
 
 /** Full-poem poster: layout + source-aware validation against the SOURCE poem. `fits:false` is a failure, never a clip. */
+/**
+ * Whole-Poem Video: the whole poem on ONE 9:16 screen. Same source-aware completeness check as the Full-Poem Poster
+ * (every line, exact text, order, stanza gaps, bounds, signature) on the layout that is drawn on EVERY frame, plus the
+ * material verifier on a still and on moving frames. fits:false => refused with the reason (offer Scene-by-Scene).
+ */
+export function checkWhole(ctx, comp, poem, { mutate = null } = {}) {
+  const fit = layoutWhole(ctx, comp, poem);
+  if (!fit.fits) return { ok: false, fits: false, messages: [fit.reason], layout: fit.layout, fit };
+  const layout = mutate ? mutate(structuredClone(fit.layout)) || fit.layout : fit.layout;
+  const T = wholeDuration(comp);
+  const draws = [0.5, 0.25, 0.75].map((f) => (c, cm, x) => drawWholeFrame(c, cm, fit.layout, T * f, x));
+  draws.unshift((c, cm, x) => drawWholeFrame(c, cm, fit.layout, 0, { ...x, still: true }));
+  const v = withMaterial({ ...validateFullPoem(poem, layout), fits: true, layout, fit }, ctx, comp, draws);
+  return fit.notes.length ? { ...v, warnings: fit.notes } : v;
+}
 export function checkFull(ctx, comp, poem, { preset = "balanced", height = "standard", mutate = null } = {}) {
   const layout0 = layoutFullPoem(ctx, comp, poem, { preset, height });
   if (!layout0.fits) return { ok: false, fits: false, messages: [FULL_NO_FIT], layout: layout0 };
