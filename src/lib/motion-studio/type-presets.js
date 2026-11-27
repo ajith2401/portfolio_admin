@@ -8,24 +8,14 @@
 // role 'display' = titles/headlines only (font must be title-capable); a template never uses one for poem text.
 // title.font null = the title uses the poem font; otherwise a verified title-capable font id.
 // needsAestheticReview:true = machine-checked only. No human design sign-off has been given.
-import { fontById, canBody, canTitle } from "./font-registry.js";
+import { fontById, canBody, canTitle, fontHasWeight } from "./font-registry.js";
+export { fontHasWeight };
 import { MIN_TEXT_PX } from "./safe-zone.js";
 
 export const TYPE_SIZE_MIN = Math.max(...Object.values(MIN_TEXT_PX)); // the strictest scene floor (poster 46px)
 export const TYPE_SIZE_MAX = 140; // normalizeComposition's clamp
 export const TYPE_WEIGHTS = [400, 500, 600, 700]; // normalizeComposition's whitelist
 const ALIGN = ["left", "center", "right"];
-
-/** True when the registry font actually ships `w` (a variable range string covers 400..700; a list must include it). */
-export function fontHasWeight(id, w) {
-  const f = fontById(id);
-  if (!f) return false;
-  return f.weights.some((x) => {
-    if (typeof x === "number") return x === w;
-    const m = /^(\d+)-(\d+)/.exec(String(x));
-    return !!m && w >= Number(m[1]) && w <= Number(m[2]);
-  });
-}
 
 /** Throws (with every reason) unless the preset only uses verified fonts, real weights, legible sizes and no tracking. */
 export function assertTypePreset(p) {

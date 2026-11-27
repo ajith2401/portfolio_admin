@@ -49,14 +49,14 @@ export default function ProjectPanel() {
                               : "Not saved to Admin. A recovery copy is kept on this device only."}
                   </p>
                   {cloudDialog && !projectId && (
-                    <div role="alertdialog" aria-labelledby="cloud-h" className="mt-3 rounded-lg border p-3">
+                    <div role="alertdialog" aria-labelledby="cloud-h" className="mt-3 rounded-lg border p-3" onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), setCloudDialog(false))}>
                       <p id="cloud-h" className="text-sm font-semibold">Save this project to Admin?</p>
                       <p className="text-sm" style={{ color: "var(--mute)" }}>
                         This saves your poem and visual composition in your Admin creative-project library. It does not create or publish a Portfolio Writing record.
                       </p>
                       <div className="mt-2 flex gap-2">
                         <Btn primary onClick={() => { setCloudDialog(false); save(); }}>Save project to Admin</Btn>
-                        <Btn onClick={() => setCloudDialog(false)}>Not now</Btn>
+                        <Btn onClick={() => setCloudDialog(false)} autoFocus>Not now</Btn>
                       </div>
                     </div>
                   )}
@@ -72,6 +72,10 @@ export default function ProjectPanel() {
                     <div
                       role="alertdialog"
                       aria-labelledby="del-h"
+                      onKeyDown={(e) =>
+                        e.key === "Escape" &&
+                        (e.stopPropagation(), setConfirmDel(false))
+                      }
                       className="mt-3 rounded-lg border p-3"
                       style={{ borderColor: "var(--err-ink)" }}
                     >
@@ -92,7 +96,9 @@ export default function ProjectPanel() {
                         >
                           Yes, delete project
                         </Btn>
-                        <Btn onClick={() => setConfirmDel(false)}>Cancel</Btn>
+                        <Btn onClick={() => setConfirmDel(false)} autoFocus>
+                          Cancel
+                        </Btn>
                       </div>
                     </div>
                   )}

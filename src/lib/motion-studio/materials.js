@@ -5,6 +5,7 @@
 import { effectById, SURFACE_CAP } from "./fx/registry.js";
 import "./fx/effects.js";
 import { TEXTURE_IDS, TEXTURE_NONE, DEFAULT_TEXTURE_AMOUNT, texturePasses } from "./textures.js";
+import { normalizeTextile, textileActive } from "./textiles.js";
 
 export const MATERIAL_NONE = "none";
 export const MATERIALS = Object.freeze(
@@ -159,6 +160,8 @@ export function normalizeMaterial(m) {
       ? { texture: o.texture, textureAmount: Math.round(num(o.textureAmount, 0, 1, DEFAULT_TEXTURE_AMOUNT) * 100) / 100 }
       : {}),
     ...(num(o.grain, 0, 1, 0) > 0 ? { grain: Math.round(num(o.grain, 0, 1, 0) * 100) / 100, grainMove: o.grainMove !== false } : {}),
+    // woven textile (textiles.js): stored only when a real textile is chosen
+    ...(normalizeTextile(o.textile) ? { textile: normalizeTextile(o.textile) } : {}),
   };
 }
 
@@ -180,4 +183,5 @@ export function materialPlan(comp) {
     .filter((e) => e.def);
 }
 /** True when anything at all is drawn for the material: a preset plan, a surface texture or film grain. */
-export const materialActive = (comp) => materialPlan(comp).length > 0 || texturePasses(comp).length > 0;
+export const materialActive = (comp) =>
+  materialPlan(comp).length > 0 || texturePasses(comp).length > 0 || textileActive(comp);

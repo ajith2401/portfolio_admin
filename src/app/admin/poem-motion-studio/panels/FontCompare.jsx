@@ -7,14 +7,22 @@ import { useState } from "react";
 import {
   FONT_REGISTRY,
   CANDIDATE_LABEL,
+  FONT_CATEGORIES,
   canBody,
   canTitle,
+  fontWeights,
 } from "@/lib/motion-studio/font-registry";
 import { FONT_CSS } from "../fonts";
 import { Btn } from "../studio-ui";
 
 export const SPECIMEN =
-  "ஸ்ரீ க்ஷ ஜ ஷ ஸ ஹ — க் ங் ச் ஞ்\nகொ கோ கௌ தொ தோ வெள்ளை நிலா\n“Rain”, poem 2026! ? ; : … (௧௨௩)";
+  "தமிழ் எழுத்து · அன்பின் ஆழம் · வாழ்வின் பயணம்\nஸ்ரீ க்ஷேத்திரம் ஜ ஷ ஸ ஹ — கொ கோ கௌ\n“Rain”, poem 2026! ? ; : … (௧௨௩)";
+const TIER = { core: "Core", approved: "Approved", candidate: CANDIDATE_LABEL };
+const TIER_INK = { core: "var(--ok-ink)", approved: "var(--ok-ink)", candidate: "var(--warn-ink)" };
+const weightText = (id) => {
+  const w = fontWeights(id);
+  return w.length > 1 ? `weights ${w[0]}–${w[w.length - 1]}` : `weight ${w[0] || 400} only`;
+};
 const ROLE = {
   body: "Poem text",
   display: "Titles only",
@@ -24,8 +32,10 @@ const ROLE = {
 export default function FontCompare({
   poemLines = [],
   current,
+  currentTitle,
   previewOn,
   onUse,
+  onUseTitle,
 }) {
   const [own, setOwn] = useState(poemLines.length > 0);
   const [cands, setCands] = useState(false);
@@ -40,7 +50,7 @@ export default function FontCompare({
         className="cursor-pointer font-semibold"
         style={{ minHeight: 44, display: "flex", alignItems: "center" }}
       >
-        Compare fonts side by side
+        Browse fonts by style
       </summary>
       <div className="mt-2 space-y-3">
         <div className="pms-chips" role="group" aria-label="Specimen text">
@@ -80,73 +90,84 @@ export default function FontCompare({
             onChange={(e) => setSize(Number(e.target.value))}
           />
         </label>
-        <ul className="space-y-3" aria-label="Font specimens">
-          {list.map((f) => {
-            const usable = canBody(f.id) && (f.verified || previewOn);
-            return (
-              <li
-                key={f.id}
-                className="rounded-lg border p-3"
-                style={{
-                  borderColor:
-                    f.id === current
-                      ? "var(--accent)"
-                      : "var(--line, rgba(127,127,127,.3))",
-                }}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                  <span>
-                    <strong>{f.label}</strong> · {ROLE[f.role]} ·{" "}
-                    <span
+        {FONT_CATEGORIES.map((cat) => {
+          const fonts = list.filter((f) => f.category === cat.id);
+          if (!fonts.length) return null;
+          return (
+            <section key={cat.id} aria-label={`${cat.label} fonts`}>
+              <h4 className="pms-lbl mt-2">{cat.label}</h4>
+              <ul className="space-y-3" aria-label="Font specimens">
+                {fonts.map((f) => {
+                  const usable = canBody(f.id) && (f.verified || previewOn);
+                  const titleOk = canTitle(f.id) && (f.verified || previewOn);
+                  const selected = f.id === current || f.id === currentTitle;
+                  return (
+                    <li
+                      key={f.id}
+                      aria-current={selected ? "true" : undefined}
+                      className="rounded-lg border p-3"
                       style={{
-                        color: f.verified ? "var(--ok-ink)" : "var(--warn-ink)",
+                        borderColor: selected ? "var(--accent)" : "var(--line, rgba(127,127,127,.3))",
+                        borderWidth: selected ? 2 : 1,
                       }}
                     >
-                      {f.verified ? "Verified" : CANDIDATE_LABEL}
-                    </span>
-                    {f.upstream ? (
-                      <span style={{ color: "var(--mute)" }}>
-                        {" "}
-                        · {f.upstream.licence}
-                      </span>
-                    ) : null}
-                  </span>
-                  {f.id === current ? (
-                    <span className="text-xs">In use</span>
-                  ) : usable ? (
-                    <Btn
-                      onClick={() => onUse(f.id)}
-                      aria-label={`Use ${f.label} for the poem`}
-                    >
-                      Use
-                    </Btn>
-                  ) : !canBody(f.id) && canTitle(f.id) ? (
-                    <span className="text-xs" style={{ color: "var(--mute)" }}>
-                      Title font only
-                    </span>
-                  ) : (
-                    <span className="text-xs" style={{ color: "var(--mute)" }}>
-                      Turn on candidate preview to use
-                    </span>
-                  )}
-                </div>
-                <p
-                  lang="ta"
-                  className="mt-2"
-                  style={{
-                    fontFamily: FONT_CSS[f.id],
-                    fontSize: size,
-                    lineHeight: 1.7,
-                    whiteSpace: "pre-wrap",
-                    overflowWrap: "anywhere",
-                  }}
-                >
-                  {text}
-                </p>
-              </li>
-            );
-          })}
-        </ul>
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                        <span>
+                          <strong>{f.label}</strong> · {ROLE[f.role]} ·{" "}
+                          <span style={{ color: TIER_INK[f.tier] }}>{TIER[f.tier]}</span>
+                          <span style={{ color: "var(--mute)" }}>
+                            {" "}
+                            · {weightText(f.id)}
+                            {f.upstream ? ` · ${f.upstream.licence}` : ""}
+                          </span>
+                        </span>
+                        <span className="flex flex-wrap gap-2">
+                          {f.id === current ? (
+                            <span className="text-xs">Poem font</span>
+                          ) : usable ? (
+                            <Btn onClick={() => onUse(f.id)} aria-label={`Use ${f.label} for the poem`}>
+                              Use
+                            </Btn>
+                          ) : null}
+                          {f.id === currentTitle ? (
+                            <span className="text-xs">Title font</span>
+                          ) : titleOk && onUseTitle ? (
+                            <Btn onClick={() => onUseTitle(f.id)} aria-label={`Use ${f.label} for the title`}>
+                              Title
+                            </Btn>
+                          ) : null}
+                          {!usable && !titleOk && (
+                            <span className="text-xs" style={{ color: "var(--mute)" }}>
+                              Turn on candidate preview to use
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      {f.reviewNote && !f.verified && (
+                        <p className="text-xs" style={{ color: "var(--warn-ink)" }}>
+                          {f.reviewNote}
+                        </p>
+                      )}
+                      <p
+                        lang="ta"
+                        className="mt-2"
+                        style={{
+                          fontFamily: FONT_CSS[f.id],
+                          fontSize: size,
+                          lineHeight: 1.7,
+                          whiteSpace: "pre-wrap",
+                          overflowWrap: "anywhere",
+                        }}
+                      >
+                        {canBody(f.id) ? text : text.split("\n")[0]}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          );
+        })}
         {blocked.length > 0 && (
           <p className="text-xs" style={{ color: "var(--mute)" }}>
             Not available:{" "}

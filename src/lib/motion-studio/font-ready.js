@@ -2,7 +2,7 @@
 // (family + weight, at the real size, with the poem's own text so the Tamil subset is requested) must be loaded AND proven
 // to cover the glyphs. No silent fallback measurement: if a face cannot be loaded in time, the export stops with an error.
 import { FONT_FAMILY } from "./render.js";
-import { fontById, canBody, canTitle, fontReviewOf } from "./font-registry.js";
+import { fontById, canBody, canTitle, fontReviewOf, realWeight, titleWeightOf } from "./font-registry.js";
 import { graphemes } from "./graphemes.js";
 import { signatureBox } from "./signature.js";
 import { FORMATS } from "./safe-zone.js";
@@ -49,7 +49,7 @@ export function registryFamily(id, role = "body") {
  */
 export function requiredFaces(
   comp,
-  { poemText = "", title = "", titleWeight = 700, sizePx } = {},
+  { poemText = "", title = "", titleWeight = titleWeightOf(comp.style), sizePx } = {},
 ) {
   const st = comp.style;
   const px = sizePx || st.sizePx || 40;
@@ -62,7 +62,7 @@ export function requiredFaces(
   const faces = [
     {
       role: "body",
-      font: `${st.weight} ${px}px ${bodyFamily}`,
+      font: `${realWeight(st.font, st.weight)} ${px}px ${bodyFamily}`,
       text: body,
     },
   ];

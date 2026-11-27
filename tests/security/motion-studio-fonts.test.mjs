@@ -12,6 +12,15 @@ import {
   CANDIDATE_FONT_IDS,
   fontById,
   selectableFonts,
+  CORE_FONT_IDS,
+  APPROVED_FONT_IDS,
+  FONT_CATEGORIES,
+  EXCLUDED_FONTS,
+  fontWeights,
+  realWeight,
+  titleWeightOf,
+  longPoemFontWarning,
+  canBody,
   resolveFonts,
   fontReviewOf,
   CANDIDATE_LABEL,
@@ -47,18 +56,8 @@ import { planFit, applyFit } from "../../src/lib/motion-studio/fit-scenes.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const GOLDEN = path.join(HERE, "..", "fixtures", "motion-studio-golden.json");
-const CANDIDATES = [
-  "Kavivanar",
-  "Mukta Malar",
-  "Catamaran",
-  "Pavanam",
-  "Baloo Thambi 2",
-  "Meera Inimai",
-  "Arima",
-  "Arima Madurai",
-  "Coiny",
-  "Oi",
-];
+const CANDIDATES = ["Meera Inimai", "Arima Madurai", "Coiny", "Vaagai"];
+const APPROVED = ["kavivanar", "mukta-malar", "catamaran", "pavanam", "baloo-thambi-2", "arima", "oi", "korkai", "panai", "neythal"];
 // The exact stacks render.js used before the registry existed (copied literally from HEAD ca6606b).
 const LEGACY_FAMILY = {
   "noto-serif": '"Noto Serif Tamil", serif',
@@ -158,37 +157,72 @@ test("golden fixture is byte-identical to the pre-registry fixture", () => {
   assert.equal(sha, "b824193ef7fd7a79772582f661cdd036bab557f0");
 });
 
-test("registry: exactly 15 entries; the 10 candidates are verified:false, the original 5 verified:true", () => {
-  assert.equal(FONT_REGISTRY.length, 15);
-  assert.equal(new Set(FONT_REGISTRY.map((f) => f.id)).size, 15);
-  assert.deepEqual(VERIFIED_FONT_IDS, Object.keys(LEGACY_FAMILY));
-  assert.deepEqual(
-    CANDIDATE_FONT_IDS.map((id) => fontById(id).label),
-    CANDIDATES,
-  );
+test("registry: 19 entries; the 5 core fonts, 10 approved (selectable) and 4 held-back candidates", () => {
+  assert.equal(FONT_REGISTRY.length, 19);
+  assert.equal(new Set(FONT_REGISTRY.map((f) => f.id)).size, 19);
+  assert.deepEqual(CORE_FONT_IDS, Object.keys(LEGACY_FAMILY));
+  assert.deepEqual(APPROVED_FONT_IDS.slice().sort(), APPROVED.slice().sort());
+  assert.deepEqual(VERIFIED_FONT_IDS, [...CORE_FONT_IDS, ...APPROVED_FONT_IDS].sort((a, b) => FONT_REGISTRY.findIndex((f) => f.id === a) - FONT_REGISTRY.findIndex((f) => f.id === b)));
+  assert.deepEqual(CANDIDATE_FONT_IDS.map((id) => fontById(id).label), CANDIDATES);
+  const cats = new Set(FONT_CATEGORIES.map((c) => c.id));
+  assert.equal(cats.size, 7);
+  for (const f of FONT_REGISTRY) {
+    assert.ok(cats.has(f.category), `${f.id} category`);
+    assert.ok(["core", "approved", "candidate"].includes(f.tier), f.id);
+    assert.equal(f.verified, f.tier !== "candidate", f.id);
+    assert.ok(["body", "display", "both"].includes(f.role));
+    assert.equal(f.tamilSubset, true);
+  }
+  for (const id of APPROVED_FONT_IDS) {
+    const f = fontById(id);
+    assert.equal(f.loadable, true, id);
+    assert.equal(f.humanReview, "recommended", `${id}: a native-reader review is recommended, never claimed done`);
+    assert.equal(f.upstream?.licence, "SIL OFL 1.1", `${id} upstream licence recorded`);
+    assert.ok(!/needs human/.test(f.licenseReview || ""), `${id} licence confirmed`);
+  }
   for (const id of CANDIDATE_FONT_IDS) {
     const f = fontById(id);
     assert.equal(f.verified, false, id);
-    assert.equal(f.license, "OFL (Google Fonts)");
-    assert.equal(f.licenseReview, "needs human licence confirmation");
+    assert.ok(f.reviewNote && f.reviewNote.length > 20, `${id} says why it is held back`);
     assert.equal(f.upstream?.licence, "SIL OFL 1.1", `${id} upstream licence recorded`);
-    assert.match(f.upstream.dir, /^ofl\/[a-z0-9]+$/);
-    assert.ok(["body", "display", "both"].includes(f.role));
-    assert.equal(f.tamilSubset, true);
-    if (!f.loadable)
-      assert.ok(
-        f.why && f.why.length > 20,
-        `${id} loadable:false must say why`,
-      );
+    if (!f.loadable) assert.ok(f.why && f.why.length > 20, `${id} loadable:false must say why`);
   }
-  assert.deepEqual(
-    FONT_REGISTRY.filter((f) => !f.loadable).map((f) => f.id),
-    ["arima-madurai"],
-  );
+  // fonts with a Reserved Font Name record it (their files are shipped unmodified)
+  for (const id of ["korkai", "panai", "vaagai"]) assert.equal(fontById(id).upstream.reservedName, fontById(id).label);
+  assert.deepEqual(FONT_REGISTRY.filter((f) => !f.loadable).map((f) => f.id), ["arima-madurai"]);
   assert.deepEqual(
     FONT_REGISTRY.filter((f) => f.role === "display").map((f) => f.id),
-    ["coiny", "oi"],
+    ["coiny", "oi", "panai", "vaagai"],
   );
+  // excluded fonts are recorded with a reason and are NOT in the registry
+  for (const x of EXCLUDED_FONTS.filter((x) => x.name !== "Arima Madurai")) {
+    assert.ok(!FONT_REGISTRY.some((f) => f.label === x.name), x.name);
+    assert.ok(x.why.length > 20);
+  }
+});
+
+test("weights are real: realWeight never asks for a weight a non-core font lacks; core fonts are unchanged", () => {
+  assert.deepEqual(fontWeights("korkai"), [400, 500, 700]);
+  assert.deepEqual(fontWeights("panai"), [200, 300, 400, 500, 600, 700, 800, 900]);
+  assert.equal(realWeight("korkai", 600), 500);
+  assert.equal(realWeight("kavivanar", 700), 400);
+  assert.equal(realWeight("catamaran", 600), 600);
+  assert.equal(realWeight("tiro", 700), 700, "core: legacy behaviour kept");
+  assert.equal(titleWeightOf({ font: "noto-serif" }), 700);
+  assert.equal(titleWeightOf({ font: "noto-serif", titleFont: "oi" }), 400);
+  assert.equal(titleWeightOf({ font: "noto-serif", titleFont: "panai" }), 700);
+  for (const id of APPROVED_FONT_IDS)
+    for (const w of [400, 500, 600, 700]) assert.ok(fontWeights(id).includes(realWeight(id, w)), `${id}@${w}`);
+  const faces = requiredFaces(normalizeComposition({ ...defaultComposition({}), style: { ...defaultComposition({}).style, font: "kavivanar", weight: 700, titleFont: "oi" } }), { poemText: POEM, title: TITLE });
+  assert.match(faces.find((f) => f.role === "body").font, /^400 /);
+  assert.match(faces.find((f) => f.role === "title").font, /^400 /);
+});
+
+test("long poem + heavy display font warns; literary fonts and short poems do not", () => {
+  assert.match(longPoemFontWarning({ font: "baloo-thambi-2", weight: 700 }, 20) || "", /heavy face/);
+  assert.equal(longPoemFontWarning({ font: "baloo-thambi-2", weight: 700 }, 4), null);
+  assert.equal(longPoemFontWarning({ font: "korkai", weight: 700 }, 20), null);
+  assert.equal(longPoemFontWarning({ font: "noto-sans", weight: 400 }, 30), null);
 });
 
 test("FONT_FAMILY is derived from the registry; the 5 legacy stacks are identical strings", () => {
@@ -201,28 +235,22 @@ test("FONT_FAMILY is derived from the registry; the 5 legacy stacks are identica
   assert.equal(FONT_LABELS["noto-serif"], "Noto Serif Tamil");
 });
 
-test("picker: normal mode offers only the 5 verified fonts; preview mode labels candidates and never offers display fonts for body", () => {
+test("picker: normal mode offers core + approved body fonts; preview adds candidates (labelled) and never offers display fonts for body", () => {
   assert.deepEqual(
     selectableFonts().map((f) => f.id),
-    VERIFIED_FONT_IDS,
+    VERIFIED_FONT_IDS.filter(canBody),
   );
+  assert.ok(selectableFonts().every((f) => f.verified && f.category));
   const prev = selectableFonts({ preview: true });
-  assert.ok(!prev.some((f) => ["coiny", "oi", "arima-madurai"].includes(f.id)));
-  assert.equal(prev.length, 5 + 7);
+  assert.ok(!prev.some((f) => ["coiny", "oi", "panai", "vaagai", "arima-madurai"].includes(f.id)));
+  assert.equal(prev.length, VERIFIED_FONT_IDS.filter(canBody).length + 1);
   for (const f of prev.filter((x) => !x.verified))
     assert.ok(f.label.endsWith(`(${CANDIDATE_LABEL})`), f.label);
-  const titles = selectableFonts({ preview: true, role: "title" }).map(
-    (f) => f.id,
-  );
-  assert.ok(
-    titles.includes("coiny") &&
-      titles.includes("oi") &&
-      !titles.includes("arima-madurai"),
-  );
-  assert.match(
-    CANDIDATE_TOGGLE_LABEL,
-    /Preview candidate fonts \(not reviewed\)/,
-  );
+  const normalTitles = selectableFonts({ role: "title" }).map((f) => f.id);
+  assert.ok(normalTitles.includes("oi") && normalTitles.includes("panai") && !normalTitles.includes("coiny") && !normalTitles.includes("vaagai"));
+  const titles = selectableFonts({ preview: true, role: "title" }).map((f) => f.id);
+  assert.ok(titles.includes("coiny") && titles.includes("vaagai") && !titles.includes("arima-madurai"));
+  assert.match(CANDIDATE_TOGGLE_LABEL, /Preview candidate fonts \(not reviewed\)/);
 });
 
 // ---------------------------------------------------------------- normalizeComposition
@@ -251,9 +279,9 @@ test("normalize: with the explicit preview opt-in a loadable candidate is kept; 
   const k = normalizeComposition({
     ...d,
     fontPreview: true,
-    style: { ...d.style, font: "kavivanar" },
+    style: { ...d.style, font: "meera-inimai" },
   });
-  assert.equal(k.style.font, "kavivanar");
+  assert.equal(k.style.font, "meera-inimai");
   assert.equal(k.fontPreview, true);
   assert.ok(!("notices" in k));
   assert.equal(fontReviewOf(k), "unreviewed");
@@ -268,7 +296,7 @@ test("normalize: with the explicit preview opt-in a loadable candidate is kept; 
   const s = normalizeComposition({
     ...d,
     fontPreview: "yes",
-    style: { ...d.style, font: "kavivanar" },
+    style: { ...d.style, font: "meera-inimai" },
   });
   assert.equal(s.style.font, d.style.font);
   assert.ok(s.notices.unverifiedFont);
@@ -321,9 +349,9 @@ test("NEGATIVE CONTROL: a display-only font (Coiny/Oi) for body text is refused 
   assert.match(nt.notices.unverifiedFont, /Title font/);
 });
 
-test("legacy compositions with the 5 original fonts round-trip unchanged (no new keys)", () => {
+test("legacy compositions with the 5 original fonts round-trip unchanged (no new keys); approved fonts need no opt-in", () => {
   for (const t of TEMPLATES)
-    for (const font of VERIFIED_FONT_IDS) {
+    for (const font of VERIFIED_FONT_IDS.filter(canBody)) {
       const d = defaultComposition({ templateId: t.id });
       const n = normalizeComposition({ ...d, style: { ...d.style, font } });
       assert.equal(n.style.font, font);
@@ -340,10 +368,10 @@ test("candidate export: every route validator result carries fontReview:'unrevie
   for (const route of ROUTES) {
     const { comp, poem } = forRoute(
       route,
-      { font: "mukta-malar" },
+      { font: "meera-inimai" },
       { fontPreview: true },
     );
-    assert.equal(comp.style.font, "mukta-malar");
+    assert.equal(comp.style.font, "meera-inimai");
     const v = route.validate(mkCtx(), comp, inputFor(route, poem));
     assert.equal(v.fontReview, "unreviewed", route.id);
     assert.match(v.fontWarning, /NOT been reviewed by a Tamil reader/);
@@ -353,7 +381,7 @@ test("candidate export: every route validator result carries fontReview:'unrevie
   }
   assert.deepEqual(fontReviewFor({ style: { font: "noto-serif" } }), {});
   assert.equal(
-    fontReviewFor({ style: { font: "catamaran" } }).fontReview,
+    fontReviewFor({ style: { font: "meera-inimai" } }).fontReview,
     "unreviewed",
   );
 });
@@ -385,7 +413,7 @@ test("every route's requiredFaces resolves families from the registry (verified 
 });
 
 // ---------------------------------------------------------------- ensureFonts + verification harness
-const candComp = (font = "pavanam") =>
+const candComp = (font = "meera-inimai") =>
   normalizeComposition({
     ...defaultComposition({}),
     fontPreview: true,
@@ -426,7 +454,7 @@ test("NEGATIVE CONTROLS: a candidate that fails to load, matches no face, is not
     [
       {
         fonts: fakeFonts(),
-        measure: fakeMeasure({ sameAsFallback: "Pavanam" }),
+        measure: fakeMeasure({ sameAsFallback: "Meera Inimai" }),
       },
       /same as the fallback/,
     ],
@@ -440,7 +468,7 @@ test("NEGATIVE CONTROLS: a candidate that fails to load, matches no face, is not
 });
 
 test("fontVerification: per-font {ok, reasons}; covers conjuncts and two-part vowel signs; never marks a font verified", async () => {
-  const ok = await fontVerification("catamaran", {
+  const ok = await fontVerification("meera-inimai", {
     fonts: fakeFonts(),
     measure: fakeMeasure(),
   });
@@ -451,10 +479,10 @@ test("fontVerification: per-font {ok, reasons}; covers conjuncts and two-part vo
       ok.checked.some((x) => x.cluster === cl),
       cl,
     );
-  assert.equal(fontById("catamaran").verified, false);
-  const fb = await fontVerification("catamaran", {
+  assert.equal(fontById("meera-inimai").verified, false);
+  const fb = await fontVerification("meera-inimai", {
     fonts: fakeFonts(),
-    measure: fakeMeasure({ sameAsFallback: "Catamaran" }),
+    measure: fakeMeasure({ sameAsFallback: "Meera Inimai" }),
   });
   assert.equal(fb.ok, false);
   assert.ok(fb.reasons.some((r) => /fallback/.test(r)));

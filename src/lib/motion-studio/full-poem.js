@@ -13,7 +13,9 @@ import {
   resetTextState,
 } from "./render.js";
 import { runMaterial } from "./fx/registry.js";
+import { realWeight, titleWeightOf } from "./font-registry.js";
 import { paintTextures } from "./textures.js";
+import { paintTextile, paintTextileScrims, textileActive } from "./textiles.js";
 import { paintElements } from "./elements.js";
 import { materialPlan, effectiveIntensity } from "./materials.js";
 import { signatureBox as sigBox, boxBoundsIssues, overlapsSignature } from "./signature.js";
@@ -104,9 +106,9 @@ function measureAt(ctx, comp, poem, preset, size) {
     const title = poem.title.trim();
     const tpx = Math.round(size * preset.titleScale),
       tlh = tpx * Math.min(1.5, preset.lh);
-    const measure = measureAtFont(tpx, 700, titleFamily);
+    const measure = measureAtFont(tpx, titleWeightOf(st), titleFamily);
     wrapSpans(title, maxW, measure, 0).forEach((r, ri) => {
-      items.push({ kind: "title", text: r.text, start: r.start, end: r.end, wrapRow: ri, px: tpx, wt: 700, x: ax, w: measure(r.text), rowH: tlh, y: y + tlh / 2 });
+      items.push({ kind: "title", text: r.text, start: r.start, end: r.end, wrapRow: ri, px: tpx, wt: titleWeightOf(st), x: ax, w: measure(r.text), rowH: tlh, y: y + tlh / 2 });
       y += tlh;
     });
     y += size * (preset.ornament ? 0.5 : 0.9);
@@ -123,7 +125,7 @@ function measureAt(ctx, comp, poem, preset, size) {
       }
     }
     stanza.forEach((line, li) => {
-      const measure = measureAtFont(size, st.weight);
+      const measure = measureAtFont(size, realWeight(st.font, st.weight));
       const ind = lineIndent(line);
       const ipx = indentPx(line, measure, maxW);
       const x = align === "left" ? ax + ipx : align === "right" ? ax - ipx : ax + ipx / 2;
@@ -134,7 +136,7 @@ function measureAt(ctx, comp, poem, preset, size) {
           start: r.start,
           end: r.end,
           px: size,
-          wt: st.weight,
+          wt: realWeight(st.font, st.weight),
           x,
           w: measure(r.text),
           indentPx: ipx,
@@ -335,12 +337,19 @@ export function drawFullPoem(
     assets,
   );
   const atm = still ? 0 : paintParticles(ctx, comp, W, H, fxMs, anim.motionK);
-  if (atm + paintTextures(ctx, fxEnv) + runMaterial("material", ctx, fxEnv) + runMaterial("atmosphere", ctx, fxEnv) + paintElements(ctx, comp, W, H, fxMs, { still: still || !anim.motionK })) resetTextState(ctx);
+  if (atm + paintTextile(ctx, fxEnv) + paintTextures(ctx, fxEnv) + runMaterial("material", ctx, fxEnv) + runMaterial("atmosphere", ctx, fxEnv) + paintElements(ctx, comp, W, H, fxMs, { still: still || !anim.motionK })) resetTextState(ctx);
   const textAlpha = still ? 1 : Math.max(0, Math.min(1, anim.textAlpha ?? 1));
   const align = st.align,
     side = (PRESETS[layout.preset] || PRESETS.balanced).side;
   const ax =
     align === "left" ? W * side : align === "right" ? W * (1 - side) : W / 2;
+  if (textileActive(comp) && layout.items.length) {
+    // woven textile: local readability scrim under the whole poem block (textiles.js), never a text-colour change
+    const ys = layout.items.map((it) => [layout.offset + it.y - (it.px || 0) * 0.75, layout.offset + it.y + (it.px || 0) * 0.75]);
+    ctx.save();
+    paintTextileScrims(ctx, fxEnv, [{ box: [W * side - 24, Math.min(...ys.map((v) => v[0])), W * (1 - side) + 24, Math.max(...ys.map((v) => v[1]))], color: st.color }]);
+    ctx.restore();
+  }
   ctx.textAlign = align;
   ctx.textBaseline = "middle";
   ctx.fillStyle = st.color;

@@ -1,6 +1,7 @@
 // Seeded PRNG + contrast-safe colours for material effects. Pure: depends only on the composition (and an optional
 // readability scrim), never on pixels, time or randomness, so preview and export draw the same material.
 import { hexRgb, lum, ratio } from "../contrast.js";
+import { textileBases } from "../textiles.js";
 
 /** WCAG target used by contrast.js (requiredScrim). An effect may never push text contrast below it (or below the
  *  template's own contrast when that is already lower). */
@@ -60,7 +61,8 @@ export function fxBases(comp) {
   }
   const ov = st.overlay?.opacity > 0 ? hexRgb(st.overlay.color) : null;
   if (ov) bases = bases.map((c) => mix(c, ov, st.overlay.opacity));
-  return bases.map((rgb) => ({ rgb }));
+  // a woven textile covers the template background: its dark / middle / light cloth over each base (textiles.js)
+  return comp.material?.textile ? textileBases(comp, bases.map((rgb) => ({ rgb }))) : bases.map((rgb) => ({ rgb }));
 }
 /** Contrast floor of a text colour on a base: the target, or the text's own contrast there when already lower. */
 export const floorFor = (textRgb, baseRgb) => Math.min(CONTRAST_TARGET, ratio(lum(...textRgb), lum(...baseRgb)));

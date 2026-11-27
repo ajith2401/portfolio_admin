@@ -17,6 +17,16 @@ import {
   DEFAULT_TEXTURE_AMOUNT,
   paintTextureSwatch,
 } from "@/lib/motion-studio/textures";
+import {
+  TEXTILES,
+  TEXTILE_NONE,
+  TEXTILE_DEFAULTS,
+  textileById,
+  familiesFor,
+  textileLevel,
+  paintTextileSwatch,
+} from "@/lib/motion-studio/textiles";
+import { familyLabel } from "@/lib/motion-studio/templates";
 import { Btn, Range } from "../studio-ui";
 import { useStudio } from "../studio-context";
 
@@ -88,6 +98,210 @@ function TextureSwatch({ comp, id }) {
   );
 }
 
+// Woven textile card swatch: painted only once the card scrolls into view (8 cards, never all at once on a phone).
+function TextileSwatch({ id, seed }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const cv = ref.current;
+    if (!cv || id === TEXTILE_NONE) return;
+    const paint = () => {
+      try {
+        paintTextileSwatch(cv.getContext("2d"), id, cv.width, cv.height, {
+          seed,
+        });
+      } catch {
+        /* decorative */
+      }
+    };
+    if (typeof IntersectionObserver !== "function") return paint();
+    const io = new IntersectionObserver(
+      (es) => {
+        if (es.some((e) => e.isIntersecting)) {
+          io.disconnect();
+          paint();
+        }
+      },
+      { rootMargin: "64px" },
+    );
+    io.observe(cv);
+    return () => io.disconnect();
+  }, [id, seed]);
+  return (
+    <canvas
+      ref={ref}
+      width={112}
+      height={112}
+      style={{ width: 56, height: 56, background: "var(--line, #ccc)" }}
+      className="rounded"
+      aria-hidden="true"
+    />
+  );
+}
+const pct = (v) => `${Math.round(v * 100)}%`;
+const hexLum = (h) => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(h || "");
+  if (!m) return 0;
+  const n = parseInt(m[1], 16);
+  return (
+    (0.2126 * ((n >> 16) & 255) +
+      0.7152 * ((n >> 8) & 255) +
+      0.0722 * (n & 255)) /
+    255
+  );
+};
+const FABRIC_RANGES = [
+  ["strength", "Fabric strength", 0, 1, pct],
+  ["scale", "Weave scale", 0.5, 2, (v) => `${Number(v).toFixed(2)}×`],
+  ["fibre", "Fibre visibility", 0, 1, pct],
+  ["contrast", "Thread contrast", 0, 1, pct],
+  ["grain", "Fabric grain", 0, 1, pct],
+  ["distress", "Distress", 0, 1, pct],
+  ["opacity", "Fabric opacity", 0.2, 1, pct],
+  ["tonal", "Tonal variation", 0, 1, pct],
+  ["move", "Fabric movement", 0, 1, (v) => (v > 0 ? pct(v) : "still")],
+];
+
+function TextileSection({ comp, m, set }) {
+  const t = m.textile || null;
+  const cur = t ? t.id : TEXTILE_NONE;
+  const preset = textileById(cur);
+  const setT = (patch, key) =>
+    set({ textile: { ...(t || {}), ...patch } }, key);
+  const lightClash =
+    preset?.light && !t?.tint && hexLum(comp.style?.color) > 0.6;
+  return (
+    <div className="pms-fabric mt-3" data-testid="textile-section">
+      {/* fabric steppers get full 44px targets (the shared stepper is 36px) */}
+      <style>{`.pms-fabric .pms-step{width:44px;height:44px}`}</style>
+      <span className="pms-lbl">Woven textiles</span>
+      <div
+        className="pms-scroller mt-1"
+        role="group"
+        aria-label="Woven textiles"
+      >
+        {[{ id: TEXTILE_NONE, label: "None" }, ...TEXTILES].map((o) => {
+          const fams =
+            o.id === TEXTILE_NONE ? [] : familiesFor(o.id).map(familyLabel);
+          const level =
+            o.id === TEXTILE_NONE
+              ? ""
+              : textileLevel(o.id, cur === o.id ? t.strength : undefined);
+          return (
+            <Btn
+              key={o.id}
+              aria-pressed={cur === o.id}
+              aria-label={`Textile: ${o.label}`}
+              title={
+                fams.length ? `${o.label} · suits ${fams.join(", ")}` : o.label
+              }
+              style={{ minHeight: 44, minWidth: 88, maxWidth: 112 }}
+              className="flex shrink-0 flex-col items-center gap-1"
+              onClick={() =>
+                set({
+                  textile:
+                    o.id === TEXTILE_NONE
+                      ? null
+                      : { ...TEXTILE_DEFAULTS, id: o.id },
+                })
+              }
+            >
+              <TextileSwatch id={o.id} seed={m.seed ?? 1} />
+              <span
+                className="text-xs"
+                style={{ lineHeight: 1.2, textAlign: "center" }}
+              >
+                {o.label}
+              </span>
+              {fams.length > 0 && (
+                <span
+                  className="text-[10px]"
+                  style={{ color: "var(--mute)", textAlign: "center" }}
+                >
+                  {fams[0]}
+                </span>
+              )}
+              {level && (
+                <span
+                  className="text-[10px]"
+                  data-level={level}
+                  style={{ color: "var(--mute)" }}
+                >
+                  {level}
+                </span>
+              )}
+            </Btn>
+          );
+        })}
+      </div>
+      {t && (
+        <details className="mt-2" data-testid="fabric-controls">
+          <summary
+            className="pms-lbl"
+            style={{
+              minHeight: 44,
+              display: "flex",
+              alignItems: "center",
+              cursor: "pointer",
+            }}
+          >
+            Fabric controls · {preset?.label}
+          </summary>
+          <div className="mt-2 grid gap-3 sm:grid-cols-2">
+            {FABRIC_RANGES.map(([k, label, min, max, fmt]) => (
+              <Range
+                key={k}
+                label={label}
+                value={t[k] ?? TEXTILE_DEFAULTS[k]}
+                min={min}
+                max={max}
+                step={0.05}
+                onChange={(v) => setT({ [k]: v }, `fabric-${k}`)}
+                fmt={fmt}
+              />
+            ))}
+            <div className="pms-lbl">
+              <span>Fabric tint</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  aria-label="Fabric tint"
+                  style={{ width: 44, height: 44 }}
+                  value={t.tint || "#1c4569"}
+                  onChange={(e) =>
+                    setT({ tint: e.target.value }, "fabric-tint")
+                  }
+                />
+                <Btn
+                  style={{ minHeight: 44 }}
+                  disabled={!t.tint}
+                  onClick={() => setT({ tint: undefined })}
+                >
+                  No tint
+                </Btn>
+              </div>
+            </div>
+            <div className="flex items-end">
+              <Btn
+                style={{ minHeight: 44 }}
+                onClick={() =>
+                  set({ textile: { ...TEXTILE_DEFAULTS, id: t.id } })
+                }
+              >
+                Reset fabric
+              </Btn>
+            </div>
+          </div>
+        </details>
+      )}
+      <p className="mt-1 text-xs" style={{ color: "var(--mute)" }}>
+        {lightClash
+          ? "Light fabric under light text: a soft shade is added behind the words to keep them readable. Dark text reads better on this cloth."
+          : "Drawn on the device, the same in preview and export. Text contrast is checked on the cloth under the words."}
+      </p>
+    </div>
+  );
+}
+
 export default function MaterialPanel() {
   const { comp, fontTick, update } = useStudio();
   const m = normalizeMaterial(comp.material || { id: MATERIAL_NONE });
@@ -152,10 +366,11 @@ export default function MaterialPanel() {
           )}
         </div>
         <p className="mt-1 text-xs" style={{ color: "var(--mute)" }}>
-          {TEXTURE_FAMILIES.join(" · ")} — the strength is capped
-          automatically so the poem always stays readable.
+          {TEXTURE_FAMILIES.join(" · ")} — the strength is capped automatically
+          so the poem always stays readable.
         </p>
       </div>
+      <TextileSection comp={comp} m={m} set={set} />
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {m.texture && (
           <Range
@@ -215,8 +430,8 @@ export default function MaterialPanel() {
               checked={m.reduce}
               onChange={(e) => set({ reduce: e.target.checked })}
             />
-            Reduce effects (turns material, texture and grain off, in preview
-            and export)
+            Reduce effects (turns material, texture and grain off; a woven
+            textile stays but stops moving. Preview and export)
           </label>
         )}
       </div>

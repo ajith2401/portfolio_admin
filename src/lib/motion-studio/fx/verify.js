@@ -16,6 +16,7 @@ import { SURFACE_CAP } from "./registry.js";
 import { fxBases, floorFor } from "./palette.js";
 import { parseColor } from "./guard.js";
 import { materialActive, materialById } from "../materials.js";
+import { textileById } from "../textiles.js";
 import { textureById } from "../textures.js";
 
 const ID = () => [1, 0, 0, 1, 0, 0];
@@ -301,7 +302,7 @@ export function verifyMaterial(
 ) {
   if (!materialActive(comp))
     return { ok: true, messages: [], checked: 0, skipped: true, stats: [] };
-  const name = `${label} "${[materialById(comp.material.id)?.label, textureById(comp.material.texture)?.label, comp.material.grain > 0 ? "Film grain" : null].filter(Boolean).join(" + ") || comp.material.id}"`;
+  const name = `${label} "${[materialById(comp.material.id)?.label, textureById(comp.material.texture)?.label, textileById(comp.material.textile?.id)?.label, comp.material.grain > 0 ? "Film grain" : null].filter(Boolean).join(" + ") || comp.material.id}"`;
   const messages = [],
     stats = [],
     plain = withoutMaterial(comp);

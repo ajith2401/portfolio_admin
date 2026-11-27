@@ -44,6 +44,7 @@ export const TEXTURES = Object.freeze(
     { id: "speckled", label: "Speckled stock", family: "Paper", max: 0.5 },
     { id: "wood", label: "Wood grain", family: "Stone", max: 0.45 },
     { id: "slate", label: "Slate", family: "Stone", max: 0.5 },
+    { id: "cotton-rag", label: "Handmade cotton paper", family: "Paper", max: 0.5 },
   ].map((t) => Object.freeze(t)),
 );
 export const TEXTURE_IDS = Object.freeze([
@@ -393,6 +394,18 @@ export function textureField(
       fibres(rng, S, f, 260, 90, 0.75);
       fibres(rng, S, f, 900, 14, 0.3);
       addPixelNoise(rng, f, 0.1);
+      break;
+    }
+    case "cotton-rag": {
+      // felted cotton pulp: soft mottling, short curly linters, faint chain lines from the mould
+      f = fbm(rng, S, 8, 4, { gain: 0.5 });
+      for (let i = 0; i < f.length; i++) f[i] *= 0.45;
+      const chain = new Float32Array(S * S);
+      streaks(rng, S, 16, 1, chain, 1);
+      for (let i = 0; i < f.length; i++) f[i] += 0.12 * chain[i];
+      fibres(rng, S, f, 1800, 9, 0.35);
+      dots(rng, S, f, 70, 0.5, 1.2, -0.6);
+      addPixelNoise(rng, f, 0.12);
       break;
     }
     case "newsprint": {

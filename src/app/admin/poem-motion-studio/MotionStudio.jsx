@@ -11,6 +11,7 @@ import {
   motionPrefsOf,
   MAX_SCENES,
 } from "@/lib/motion-studio/composition";
+import { normalizeMaterial } from "@/lib/motion-studio/materials";
 import {
   drawFrame,
   compDuration,
@@ -48,11 +49,12 @@ import {
 } from "@/lib/motion-studio/audio";
 import { FONT_CSS } from "./fonts";
 import {
-  VERIFIED_FONT_IDS,
+  CORE_FONT_IDS,
   fontReviewOf,
   CANDIDATE_EXPORT_WARNING,
 } from "@/lib/motion-studio/font-registry";
 import AudioPanel from "./panels/AudioPanel";
+import FullscreenDialog from "./panels/FullscreenDialog";
 import BackgroundPanel from "./panels/BackgroundPanel";
 import ExportPanel from "./panels/ExportPanel";
 import FullPoemPanel from "./panels/FullPoemPanel";
@@ -132,13 +134,30 @@ const THEME_CSS = `
 .pms-handle{display:flex;flex-direction:column;align-items:center;gap:4px;min-height:44px;width:100%;justify-content:center;font-size:12px;font-weight:600;color:var(--mute);background:transparent;border:0}
 .pms-grip{display:block;width:40px;height:4px;border-radius:2px;background:var(--line)}
 .pms-tabs{padding-bottom:0}
+.pms-sheet .pms-handle,.pms-sheet .pms-tabs{flex-shrink:0}
 .pms[data-sheet=open]{padding-bottom:calc(55dvh + 16px)}
-.pms[data-sheet=open] canvas[aria-label^=Preview]{height:38dvh!important;width:auto!important;aspect-ratio:9/16}
+.pms[data-sheet=open] canvas[aria-label^=Preview]{height:38dvh!important;width:auto!important;max-width:100%}
 .pms[data-sheet=closed]{padding-bottom:calc(120px + env(safe-area-inset-bottom))}
 }
 @media (min-width:1024px){.pms-tabs{border-bottom:1px solid var(--line)}}
 @media (prefers-reduced-motion:reduce){.pms *{scroll-behavior:auto!important}}
 `;
+// The writings API caps a page at 50, so walk the pages (bounded) to list every poem, not just the newest 50.
+async function fetchAllPoems(maxPages = 20) {
+  const all = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const r = await apiRequest(
+      "GET",
+      `/api/writings?category=poem&limit=50&page=${page}`,
+    );
+    if (!r.ok) return page === 1 ? r : { ok: true, data: { writings: all } };
+    const got = r.data.writings || [];
+    all.push(...got);
+    const pages = r.data.pagination?.pages ?? 1;
+    if (got.length < 50 || page >= pages) break;
+  }
+  return { ok: true, data: { writings: all } };
+}
 export default function MotionStudio() {
   const [theme, setTheme] = useState("system");
   const P = usePrefs();
@@ -181,9 +200,16 @@ export default function MotionStudio() {
   const [progress, setProgress] = useState(null);
   const [sel, setSel] = useState(0);
   const [full, setFull] = useState(false);
+  const closeFull = useCallback(() => setFull(false), []);
+  const [leaveAsk, setLeaveAsk] = useState(false); // confirm before leaving an edited, unsaved poem
   const [confirmDel, setConfirmDel] = useState(false);
   const [bgReady, setBgReady] = useState(0);
   const [stills, setStills] = useState(null);
+  // story frame previews: revoke the previous render's object URLs when it is replaced or the Studio unmounts
+  useEffect(
+    () => () => stills?.urls?.forEach((u) => URL.revokeObjectURL(u)),
+    [stills],
+  );
   const [audioInfo, setAudioInfo] = useState(null);
   const [recState, setRecState] = useState("idle");
   const [route, setRoute] = useState(null);
@@ -288,7 +314,7 @@ export default function MotionStudio() {
   useEffect(() => {
     (async () => {
       const [w, p] = await Promise.all([
-        apiRequest("GET", "/api/writings?category=poem&limit=100"),
+        fetchAllPoems(),
         apiRequest("GET", "/api/motion-projects"),
       ]);
       if (w.ok) setWritings(w.data.writings || []);
@@ -319,7 +345,33 @@ export default function MotionStudio() {
       if (ok) setDraftSaved(Date.now());
     }, 800);
     return () => clearTimeout(h);
-  });
+    // only real edits reschedule the device copy; playback ticks (t) and progress updates must not
+  }, [comp, name, projectId, source]);
+
+  // ---- saved library photo (https Cloudinary / same-origin url): decode it after reopen/draft restore so the
+  // preview and every export use it instead of silently falling back to the gradient. Failure keeps the gradient.
+  const bgUrl = comp?.style.bg.image?.url || "";
+  useEffect(() => {
+    if (!bgUrl || hasBitmap) return;
+    let dead = false;
+    (async () => {
+      try {
+        const r = await fetch(bgUrl, { mode: "cors", credentials: "omit" });
+        if (!r.ok) throw new Error(String(r.status));
+        const bmp = await decodeImageFile(await r.blob());
+        if (dead) return bmp.close?.();
+        bgBitmap.current?.close?.();
+        bgBitmap.current = bmp;
+        setHasBitmap(true);
+        setBgReady((n) => n + 1);
+      } catch {
+        /* keep the gradient; the Background panel still says the library image is in use */
+      }
+    })();
+    return () => {
+      dead = true;
+    };
+  }, [bgUrl, hasBitmap]);
 
   // ---- background asset (baked once per parameter change; decoded bitmap capped at 2048px for mobile memory)
   const bg = comp?.style.bg.image;
@@ -385,6 +437,9 @@ export default function MotionStudio() {
           w: c.width,
           h: c.height,
           assets: assetsRef.current,
+          // paused at the very start: show the resting (fully revealed) first scene, not an empty fade-in frame.
+          // Playback and every export still start from the real t=0 fade.
+          still: time === 0 && !playing,
         });
       if (guide) {
         const s = c.width / fmt.w,
@@ -411,7 +466,7 @@ export default function MotionStudio() {
         ctx.restore();
       }
     },
-    [comp, guide, fmt, selEl, elTick], // eslint-disable-line react-hooks/exhaustive-deps
+    [comp, guide, fmt, selEl, elTick, playing], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const paint = useCallback(
     (time) => {
@@ -426,8 +481,8 @@ export default function MotionStudio() {
     (async () => {
       try {
         await Promise.all(
-          // verified faces always; a candidate only when this composition draws with it (never fetched otherwise)
-          [...VERIFIED_FONT_IDS, comp.style.font, comp.style.titleFont]
+          // the five core faces always; any other font only when this composition draws with it (never fetched otherwise)
+          [...CORE_FONT_IDS, comp.style.font, comp.style.titleFont]
             .filter((id, i, a) => id && FONT_CSS[id] && a.indexOf(id) === i)
             .map((id) =>
               document.fonts.load(`500 40px ${FONT_CSS[id]}`, "தமிழ் Aa"),
@@ -473,8 +528,21 @@ export default function MotionStudio() {
   };
 
   // ---- loading a poem (look: optional {format, templateId, motion} chosen in Quick Create)
-  const withLook = (scenes, { motion, whole: w, elements, ...look } = {}) => {
-    const d0 = defaultComposition({ scenes, ...look });
+  const withLook = (
+    scenes,
+    { motion, whole: w, elements, textile, ...look } = {},
+  ) => {
+    const dl = defaultComposition({ scenes, ...look });
+    // optional woven texture from Quick Create, layered onto whatever material the look already has
+    const d0 = textile
+      ? {
+          ...dl,
+          material: normalizeMaterial({
+            ...(dl.material || { id: "none" }),
+            textile,
+          }),
+        }
+      : dl;
     const d1 = w ? { ...d0, whole: normalizeWhole(w) } : d0;
     const d = elements?.length ? { ...d1, elements } : d1;
     return motion ? { ...d, motion: { ...d.motion, ...motion } } : d;
@@ -487,11 +555,10 @@ export default function MotionStudio() {
     const poem = poemFromWriting(r.data);
     if (!poem.stanzas.length)
       return (
-        flash("error", "This writing has no poem lines to animate."),
-        false
+        flash("error", "This writing has no poem lines to animate."), false
       );
     // over a limit: refuse with the reason; nothing is cut to fit
-    if (!poem.ok) return (flash("error", poem.issues[0].message), false);
+    if (!poem.ok) return flash("error", poem.issues[0].message), false;
     const scenes = generateScenes(poem, { title: r.data.title });
     if (scenes.length > MAX_SCENES)
       return (
@@ -530,6 +597,7 @@ export default function MotionStudio() {
     setSel(0);
     setSourceChanged(false);
     loadedRef.current = false;
+    bgBitmap.current?.close?.(); // free the decoded photo before dropping it
     bgBitmap.current = null;
     setHasBitmap(false);
     flash(
@@ -593,6 +661,7 @@ export default function MotionStudio() {
     setSel(0);
     setSourceChanged(false);
     loadedRef.current = false;
+    bgBitmap.current?.close?.(); // free the decoded photo before dropping it
     bgBitmap.current = null;
     setHasBitmap(false);
     flash(
@@ -602,7 +671,10 @@ export default function MotionStudio() {
     return true;
   };
   // Quick Create: the same creation path, with the chosen output's format and look (and the author's motion feel)
-  const quickCreate = async (choice, { routeId, templateId, decor }) => {
+  const quickCreate = async (
+    choice,
+    { routeId, templateId, decor, textile },
+  ) => {
     const r = routeById(routeId);
     const motion = motionPrefsOf({
       pref: P.prefs.motionPref,
@@ -611,7 +683,10 @@ export default function MotionStudio() {
     const look = {
       format: formatForRoute(r),
       templateId,
-      ...(decor && decor !== "none" ? { elements: decorationElements(decor) } : {}),
+      ...(decor && decor !== "none"
+        ? { elements: decorationElements(decor) }
+        : {}),
+      ...(textile ? { textile } : {}),
       ...(Object.keys(motion).length ? { motion } : {}),
       ...(r?.group === "whole" || r?.id === "whole-cover"
         ? { whole: { on: true } }
@@ -639,6 +714,7 @@ export default function MotionStudio() {
     onRestore: (plan) => {
       if (!start(plan.composition)) return;
       loadedRef.current = false;
+      bgBitmap.current?.close?.(); // free the decoded photo before dropping it
       bgBitmap.current = null;
       setHasBitmap(false);
       draftId.current = null;
@@ -703,6 +779,7 @@ export default function MotionStudio() {
     if (!d) return flash("error", "That recovery copy could not be opened.");
     if (!start(normalizeComposition(d.composition))) return;
     loadedRef.current = false;
+    bgBitmap.current?.close?.(); // free the decoded photo before dropping it
     bgBitmap.current = null;
     setHasBitmap(false);
     draftId.current = d.id;
@@ -785,6 +862,7 @@ export default function MotionStudio() {
     const c = normalizeComposition(r.data.project.composition);
     if (!start(c)) return;
     loadedRef.current = false;
+    bgBitmap.current?.close?.(); // free the decoded photo before dropping it
     bgBitmap.current = null;
     setHasBitmap(false);
     setName(r.data.project.name);
@@ -991,6 +1069,7 @@ export default function MotionStudio() {
   };
   const clearAudio = () => {
     audioRef.current.el?.pause();
+    if (audioRef.current.url) URL.revokeObjectURL(audioRef.current.url);
     audioRef.current = { blob: null, buffer: null, url: null };
     setAudioInfo(null);
     update((c) => {
@@ -1572,7 +1651,11 @@ export default function MotionStudio() {
         style={{
           ...(big
             ? { height: "min(78vh,100%)", aspectRatio: `${fmt.w}/${fmt.h}` }
-            : { width: previewW, height: previewH }),
+            : {
+                width: previewW,
+                height: previewH,
+                aspectRatio: `${fmt.w}/${fmt.h}`,
+              }),
           // only while an element is selected does a touch drag move it instead of scrolling the page
           ...(selEl ? { touchAction: "none" } : {}),
         }}
@@ -1626,10 +1709,21 @@ export default function MotionStudio() {
     ...d,
     motion: { ...d.motion, ...motionPrefsOf(m) },
   });
+  const leavePoem = () => {
+    setLeaveAsk(false);
+    start(null);
+    setProjectId(null);
+    setSource(null);
+    setRoute(null);
+    setPlaying(false);
+    listDrafts().then(setDrafts);
+  };
+  // A template changes the LOOK only. The poem snapshot, full-poem settings, decorative elements and the user's
+  // own photo are content, so they survive the switch (losing them here meant a later save dropped them).
   const pickTemplate = (id) => {
     P.recordRecent(id);
-    return update((c) => ({
-      ...withMotionPrefs(
+    return update((c) => {
+      const n = withMotionPrefs(
         defaultComposition({
           format: c.format,
           templateId: id,
@@ -1638,14 +1732,27 @@ export default function MotionStudio() {
           branding: c.branding,
         }),
         c.motion,
-      ),
-      originalScenes: c.originalScenes,
-      audio: c.audio,
-      poster: c.poster,
-      export: c.export,
-      ...(c.material ? { material: c.material } : {}),
-      ...(c.whole ? { whole: c.whole } : {}),
-    }));
+      );
+      if (c.style?.bg?.image)
+        n.style = {
+          ...n.style,
+          bg: { ...n.style.bg, image: c.style.bg.image },
+        };
+      return {
+        ...n,
+        originalScenes: c.originalScenes,
+        audio: c.audio,
+        poster: c.poster,
+        export: c.export,
+        ...(c.poem ? { poem: c.poem } : {}),
+        ...(c.full ? { full: c.full } : {}),
+        ...(Array.isArray(c.elements) && c.elements.length
+          ? { elements: c.elements }
+          : {}),
+        ...(c.material ? { material: c.material } : {}),
+        ...(c.whole ? { whole: c.whole } : {}),
+      };
+    });
   };
   // ---- keyboard shortcuts (never inside text fields; see lib/motion-studio/shortcuts.js)
   useShortcuts({
@@ -1747,7 +1854,7 @@ export default function MotionStudio() {
 
   return (
     <StudioContext.Provider value={studio}>
-      <main
+      <div
         ref={mainRef}
         className="pms mx-auto min-h-screen max-w-6xl p-4 sm:p-6 xl:max-w-[1600px]"
         data-sheet={comp ? (sheetOpen ? "open" : "closed") : undefined}
@@ -1799,27 +1906,32 @@ export default function MotionStudio() {
         </div>
 
         {msg && (
-          <p
-            role={msg.kind === "error" ? "alert" : "status"}
-            data-kind={msg.kind}
-            className="mt-3 rounded-lg px-3 py-2 text-sm"
-            style={{
-              background:
-                msg.kind === "error"
-                  ? "var(--err-bg)"
-                  : msg.kind === "warn"
-                    ? "var(--warn-bg)"
-                    : "var(--ok-bg)",
-              color:
-                msg.kind === "error"
-                  ? "var(--err-ink)"
-                  : msg.kind === "warn"
-                    ? "var(--warn-ink)"
-                    : "var(--ok-ink)",
-            }}
-          >
-            {msg.text}
-          </p>
+          <div className="mt-3 flex items-start gap-2">
+            <p
+              role={msg.kind === "error" ? "alert" : "status"}
+              data-kind={msg.kind}
+              className="min-w-0 flex-1 rounded-lg px-3 py-2 text-sm"
+              style={{
+                background:
+                  msg.kind === "error"
+                    ? "var(--err-bg)"
+                    : msg.kind === "warn"
+                      ? "var(--warn-bg)"
+                      : "var(--ok-bg)",
+                color:
+                  msg.kind === "error"
+                    ? "var(--err-ink)"
+                    : msg.kind === "warn"
+                      ? "var(--warn-ink)"
+                      : "var(--ok-ink)",
+              }}
+            >
+              {msg.text}
+            </p>
+            <Btn onClick={() => setMsg(null)} aria-label="Dismiss message">
+              ×
+            </Btn>
+          </div>
         )}
         {!comp && (
           <RecoveryBanner
@@ -1864,18 +1976,29 @@ export default function MotionStudio() {
                   ? "From your Portfolio (read-only)"
                   : "Saved project"}
             </span>
-            <Btn
-              onClick={() => {
-                start(null);
-                setProjectId(null);
-                setSource(null);
-                setRoute(null);
-                setPlaying(false);
-                listDrafts().then(setDrafts);
-              }}
-            >
-              Start a different poem
-            </Btn>
+            {leaveAsk ? (
+              <span
+                role="group"
+                aria-label="Leave this poem?"
+                className="flex flex-wrap items-center gap-2"
+              >
+                <span className="text-sm">
+                  Leave this poem? A copy stays under Saved on this device.
+                </span>
+                <Btn onClick={leavePoem}>Yes, start a different poem</Btn>
+                <Btn onClick={() => setLeaveAsk(false)} autoFocus>
+                  Keep editing
+                </Btn>
+              </span>
+            ) : (
+              <Btn
+                onClick={() =>
+                  hist.canUndo && !projectId ? setLeaveAsk(true) : leavePoem()
+                }
+              >
+                Start a different poem
+              </Btn>
+            )}
             <span style={{ color: "var(--mute)" }} aria-live="polite">
               {projectId
                 ? "Saved to your Admin projects"
@@ -2300,21 +2423,12 @@ export default function MotionStudio() {
         )}
 
         {full && comp && (
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Full-screen preview"
-            className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black p-3"
-            style={{
-              paddingTop: "max(12px, env(safe-area-inset-top))",
-              paddingBottom: "max(12px, env(safe-area-inset-bottom))",
-            }}
-          >
+          <FullscreenDialog onClose={closeFull}>
             <div className="flex w-full justify-between">
               <Btn onClick={() => setPlaying((p) => !p)}>
                 {playing ? "Pause" : "Play"}
               </Btn>
-              <Btn onClick={() => setFull(false)} autoFocus>
+              <Btn onClick={closeFull} data-autofocus>
                 Close
               </Btn>
             </div>
@@ -2330,9 +2444,9 @@ export default function MotionStudio() {
               role="img"
               aria-label="Full-screen preview"
             />
-          </div>
+          </FullscreenDialog>
         )}
-      </main>
+      </div>
     </StudioContext.Provider>
   );
 }

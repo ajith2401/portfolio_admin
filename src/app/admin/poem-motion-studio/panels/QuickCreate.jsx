@@ -14,6 +14,8 @@ import {
   routeInput,
   formatForRoute,
 } from "@/lib/motion-studio/quick-create";
+import { TEXTILES, TEXTILE_DEFAULTS, suggestedTextiles } from "@/lib/motion-studio/textiles";
+import { templateById, familyOf } from "@/lib/motion-studio/templates";
 import { Btn } from "../studio-ui";
 import { useStudio } from "../studio-context";
 import TemplateGallery from "./TemplateGallery";
@@ -39,6 +41,14 @@ export default function QuickCreate({
     prefs.recentTemplates[0] || "ink-silence",
   );
   const [decor, setDecor] = useState("none");
+  // woven texture: off by default; the preset follows the chosen look's family until the author picks one
+  const [weaveOn, setWeaveOn] = useState(false);
+  const [weavePick, setWeavePick] = useState(null);
+  const [weaveStrength, setWeaveStrength] = useState(TEXTILE_DEFAULTS.strength);
+  const weaveId =
+    weavePick ||
+    suggestedTextiles(familyOf(templateById(templateId)))[0] ||
+    "dark-indigo-woven";
   const [busy, setBusy] = useState(false);
   const parsed = useMemo(() => parsePoemText(text, { title }), [text, title]);
   const issues = [];
@@ -55,7 +65,12 @@ export default function QuickCreate({
         from === "writing"
           ? { kind: "writing", id: writingId }
           : { kind: "manual", text, title },
-        { routeId, templateId, decor },
+        {
+          routeId,
+          templateId,
+          decor,
+          ...(weaveOn ? { textile: { ...TEXTILE_DEFAULTS, id: weaveId, strength: weaveStrength } } : {}),
+        },
       );
     } finally {
       setBusy(false);
@@ -178,6 +193,50 @@ export default function QuickCreate({
             ))}
           </select>
         </label>
+        <label className="pms-lbl mt-3 flex items-center gap-2" style={{ minHeight: 44 }}>
+          <input
+            type="checkbox"
+            aria-label="Woven texture"
+            style={{ width: 24, height: 24 }}
+            checked={weaveOn}
+            onChange={(e) => setWeaveOn(e.target.checked)}
+          />
+          Woven texture (optional)
+        </label>
+        {weaveOn && (
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="pms-lbl block">
+              Fabric
+              <select
+                aria-label="Woven texture preset"
+                className="pms-field"
+                style={{ minHeight: 44 }}
+                value={weaveId}
+                onChange={(e) => setWeavePick(e.target.value)}
+              >
+                {TEXTILES.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="pms-lbl block">
+              Texture strength: {Math.round(weaveStrength * 100)}%
+              <input
+                type="range"
+                aria-label="Woven texture strength"
+                className="w-full"
+                style={{ minHeight: 44 }}
+                min={0}
+                max={1}
+                step={0.05}
+                value={weaveStrength}
+                onChange={(e) => setWeaveStrength(Number(e.target.value))}
+              />
+            </label>
+          </div>
+        )}
       </div>
       {issues.length > 0 && (
         <ul

@@ -5,6 +5,7 @@ import {
   Noto_Serif_Tamil, Noto_Sans_Tamil, Hind_Madurai, Anek_Tamil, Tiro_Tamil,
   Kavivanar, Mukta_Malar, Catamaran, Pavanam, Baloo_Thambi_2, Meera_Inimai, Arima, Coiny, Oi,
 } from "next/font/google";
+import localFont from "next/font/local";
 import { canvasFamily } from "@/lib/motion-studio/font-ready";
 const serif = Noto_Serif_Tamil({ subsets: ["latin", "tamil"], display: "swap" });
 const sans = Noto_Sans_Tamil({ subsets: ["latin", "tamil"], display: "swap" });
@@ -23,11 +24,25 @@ const meeraInimai = Meera_Inimai({ subsets: ["latin", "tamil"], weight: "400", d
 const arima = Arima({ subsets: ["latin", "tamil"], display: "swap", preload: false });
 const coiny = Coiny({ subsets: ["latin", "tamil"], weight: "400", display: "swap", preload: false });
 const oi = Oi({ subsets: ["latin", "tamil"], weight: "400", display: "swap", preload: false });
+// LOCAL (not on Google Fonts): the ORIGINAL, unmodified OFL files with their OFL.txt beside them (fonts-local/<family>/;
+// copies also served at /fonts/licenses/). Korkai/Panai/Vaagai carry Reserved Font Names, so the files are never
+// subset, converted or renamed. No synthetic fallback face (adjustFontFallback:false), never preloaded.
+const korkai = localFont({
+  src: [
+    { path: "./fonts-local/korkai/Korkai-Regular.ttf", weight: "400", style: "normal" },
+    { path: "./fonts-local/korkai/Korkai-Medium.ttf", weight: "500", style: "normal" },
+    { path: "./fonts-local/korkai/Korkai-Bold.ttf", weight: "700", style: "normal" },
+  ],
+  display: "swap", preload: false, adjustFontFallback: false,
+});
+const panai = localFont({ src: [{ path: "./fonts-local/panai/PanaiVF.ttf", weight: "200 900", style: "normal" }], display: "swap", preload: false, adjustFontFallback: false });
+const vaagai = localFont({ src: [{ path: "./fonts-local/vaagai/Vaagai-Regular.ttf", weight: "400", style: "normal" }], display: "swap", preload: false, adjustFontFallback: false });
+const neythal = localFont({ src: [{ path: "./fonts-local/neythal/neythal-regular.ttf", weight: "400", style: "normal" }], display: "swap", preload: false, adjustFontFallback: false });
 // Only the verified five set the page's class (unchanged); candidates' @font-face rules ship with this module's CSS.
 export const fontClass = [serif, sans, hind, anek, tiro].map((f) => f.className).join(" ");
 // canvasFamily(): drop next/font's local() "<Font> Fallback" face, which errors on Android and makes Chrome reject the
 // whole font string (see font-ready.js). Page CSS (fontClass) is unchanged.
-const SERIF_IDS = new Set(["noto-serif", "tiro"]);
+const SERIF_IDS = new Set(["noto-serif", "tiro", "korkai", "arima", "kavivanar", "vaagai"]);
 export const FONT_CSS = Object.fromEntries(Object.entries({
   "noto-serif": serif.style.fontFamily,
   "noto-sans": sans.style.fontFamily,
@@ -43,4 +58,8 @@ export const FONT_CSS = Object.fromEntries(Object.entries({
   arima: arima.style.fontFamily,
   coiny: coiny.style.fontFamily,
   oi: oi.style.fontFamily,
+  korkai: korkai.style.fontFamily,
+  panai: panai.style.fontFamily,
+  vaagai: vaagai.style.fontFamily,
+  neythal: neythal.style.fontFamily,
 }).map(([k, v]) => [k, canvasFamily(v, SERIF_IDS.has(k) ? "serif" : "sans-serif")]));

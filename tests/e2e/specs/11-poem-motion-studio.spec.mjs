@@ -165,14 +165,14 @@ test('story frames in order (PNG + ZIP) and poster JPEG / multi-card set', async
   if (head === '504b0304') expect(execFileSync('unzip', ['-t', sp]).toString()).toMatch(/No errors detected/); else expect(head).toBe('89504e47'); // a short poem fits one card → plain PNG
 });
 
-test('Tamil: all five fonts load, shape mixed Tamil-English, and render distinct exported frames', async ({ page }) => {
+test('Tamil: every offered font loads, shape mixed Tamil-English, and render distinct exported frames', async ({ page }) => {
   test.setTimeout(120_000);
   await open(page); await advanced(page); await tab(page, 'Scenes');
   await page.getByLabel('Scene 2 line 1', { exact: true }).fill('கொடுமை கூடாது, Hope & அன்பு — ஸ்ரீ க்ஷ கௌ');
   await page.getByRole('button', { name: 'Preview scene 2' }).click();
   await tab(page, 'Look');
   const opts = await page.getByLabel('Font', { exact: true }).locator('option').evaluateAll((o) => o.map((x) => x.value));
-  expect(opts.length).toBe(5);
+  expect(opts.length).toBeGreaterThanOrEqual(5); // core five + the approved tier (font upgrade)
   const sigs = [];
   for (const f of opts) {
     await page.getByLabel('Font', { exact: true }).selectOption(f);
@@ -187,7 +187,7 @@ test('Tamil: all five fonts load, shape mixed Tamil-English, and render distinct
     expect(r.fams).toBeGreaterThan(0);
     sigs.push(r.h);
   }
-  expect(new Set(sigs).size).toBe(5); // five visibly different faces: no silent substitution to one fallback
+  expect(new Set(sigs).size).toBe(opts.length); // every offered face renders differently: no silent substitution to one fallback
 });
 
 test('benchmark: startup, preview fps, export time, responsiveness during export, heap', async ({ page }) => {

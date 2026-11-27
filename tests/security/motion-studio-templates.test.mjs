@@ -574,7 +574,7 @@ test("NEGATIVE CONTROL: a template or type preset naming a candidate / unverifie
       font,
     );
   assert.throws(
-    () => assertTemplate({ ...t, style: { ...t.style, font: "pavanam" } }),
+    () => assertTemplate({ ...t, style: { ...t.style, font: "meera-inimai" } }),
     /not verified/,
   );
   assert.throws(
@@ -586,12 +586,12 @@ test("NEGATIVE CONTROL: a template or type preset naming a candidate / unverifie
     /unknown font/,
   );
   assert.throws(
-    () => assertTemplate({ ...t, style: { ...t.style, titleFont: "oi" } }),
+    () => assertTemplate({ ...t, style: { ...t.style, titleFont: "vaagai" } }),
     /title font/,
   );
   const tp = typePresetById("sans-center");
   assert.throws(
-    () => assertTypePreset({ ...tp, id: "forged", font: "kavivanar" }),
+    () => assertTypePreset({ ...tp, id: "forged", font: "meera-inimai" }),
     /not verified/,
   );
   assert.throws(

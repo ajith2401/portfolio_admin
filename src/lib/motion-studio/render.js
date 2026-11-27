@@ -11,9 +11,10 @@ import { totalDuration } from "./scenes.js";
 import { rowState, activeBehaviour, buildPlan, animFrame, prefParams } from "./animation.js";
 import { runFx, runMaterial } from "./fx/registry.js";
 import { paintTextures } from "./textures.js";
+import { paintTextile, paintTextileScrims, textileActive } from "./textiles.js";
 import { paintElements } from "./elements.js";
 import { materialPlan, effectiveIntensity } from "./materials.js";
-import { registryFamilies } from "./font-registry.js";
+import { registryFamilies, realWeight, titleWeightOf } from "./font-registry.js";
 
 // id -> CSS family stack, derived from the ONE font registry (the five verified stacks are byte-identical to before).
 export const FONT_FAMILY = registryFamilies();
@@ -115,7 +116,7 @@ export function layoutScene(ctx, c, scene, rect, { minSize = defaultMinSize(c.fo
   const maxW = rect.w * (st.widthPct / 100);
   let size = Math.round(st.sizePx * (scene.scale || 1));
   for (let attempt = 0; attempt < 24; attempt++) {
-    ctx.font = `${scene.kind === "title" ? 700 : st.weight} ${size}px ${family}`; // the weight drawFrame will paint with
+    ctx.font = `${scene.kind === "title" ? titleWeightOf(st) : realWeight(st.font, st.weight)} ${size}px ${family}`; // the weight drawFrame will paint with
     const measure = (x) => ctx.measureText(x).width;
     const lh = size * st.lineHeight, rows = [];
     let li = 0;
@@ -159,7 +160,7 @@ export function sceneGeometry(ctx, comp, scene, { minSize = defaultMinSize(comp.
   let y = st.vAlign === "top" ? rect.y : st.vAlign === "bottom" ? rect.y + rect.h - lay.total : rect.y + (rect.h - lay.total) / 2;
   y = Math.max(rect.y, Math.min(rect.y + rect.h - lay.total, y + shift));
   const isTitle = scene.kind === "title";
-  const font = `${isTitle ? 700 : st.weight} ${lay.size}px ${familyFor(st, isTitle ? "title" : "body")}`;
+  const font = `${isTitle ? titleWeightOf(st) : realWeight(st.font, st.weight)} ${lay.size}px ${familyFor(st, isTitle ? "title" : "body")}`;
   const measure = (t) => { ctx.font = font; return ctx.measureText(t).width; };
   return { rows: rowBoxes(lay.rows, align, ax, y), rect, W: fmt.w, H: fmt.h, sig: signatureBox(comp, fmt, ctx), measure, fits: lay.fits };
 }
@@ -175,7 +176,8 @@ export const LAYERS = Object.freeze(["bg", "material", "atmosphere", "elements",
 export const resetTextState = (ctx) => { ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.filter = "none"; ctx.shadowColor = "transparent"; };
 function layerBg(ctx, env) { paintBackground(ctx, env.comp, env.W, env.H, env.still ? 0 : env.tMs, env.total, env.assets); }
 // surface texture + film grain (textures.js) first: the paper the material presets then sit on
-function layerMaterial(ctx, env) { return paintTextures(ctx, env) + runFx("material", ctx, env) + runMaterial("material", ctx, env); }
+// a woven textile (textiles.js), when chosen, is the cloth everything else sits on
+function layerMaterial(ctx, env) { return paintTextile(ctx, env) + paintTextures(ctx, env) + runFx("material", ctx, env) + runMaterial("material", ctx, env); }
 function layerAtmosphere(ctx, env) {
   if (!env.still) paintParticles(ctx, env.comp, env.W, env.H, env.tMs);
   return runFx("atmosphere", ctx, env) + runMaterial("atmosphere", ctx, env);
@@ -194,6 +196,7 @@ function layerText(ctx, env) {
   y = Math.max(rect.y, Math.min(rect.y + rect.h - blockH, y + shift));
   ctx.textBaseline = "middle"; ctx.textAlign = align;
   const ax = align === "left" ? rect.x : align === "right" ? rect.x + rect.w : rect.x + rect.w / 2;
+  if (textileActive(comp)) textileGuard(ctx, env, rowBoxes(rows, align, ax, y), size);
   // library animations (animation.js LIBRARY) draw through animFrame, the same function validateAnimation checks; the four
   // classic behaviours and every still keep the original per-row path below, call for call.
   const b = activeBehaviour(comp);
@@ -201,7 +204,7 @@ function layerText(ctx, env) {
     const geo = { rows: rowBoxes(rows, align, ax, y), rect, measure: (t) => ctx.measureText(t).width };
     const plan = buildPlan(b, sc, geo);
     const f = animFrame(b, sc, plan, at.local, { last: at.last, p: prefParams(comp), intensity: comp.motion?.intensity });
-    const font = `${isTitle ? 700 : st.weight} ${size}px ${familyFor(st, isTitle ? "title" : "body")}`;
+    const font = `${isTitle ? titleWeightOf(st) : realWeight(st.font, st.weight)} ${size}px ${familyFor(st, isTitle ? "title" : "body")}`;
     if (f.scale !== 1 && plan.block) { ctx.save(); ctx.translate(plan.block.cx, plan.block.cy); ctx.scale(f.scale, f.scale); ctx.translate(-plan.block.cx, -plan.block.cy); }
     for (const fr of f.rows) {
       const r = fr.u.row, mid = r.top + r.h / 2;
@@ -232,13 +235,27 @@ function layerText(ctx, env) {
     if (r.gap) continue;
     const s = rowState(comp, sc, r, at.local, { still, last: at.last, index: i });
     ctx.globalAlpha = clamp01(s.alpha);
-    ctx.font = `${isTitle ? 700 : st.weight} ${size}px ${familyFor(st, isTitle ? "title" : "body")}`;
+    ctx.font = `${isTitle ? titleWeightOf(st) : realWeight(st.font, st.weight)} ${size}px ${familyFor(st, isTitle ? "title" : "body")}`;
     if (st.shadow) { ctx.shadowColor = "rgba(0,0,0,0.45)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 3; } else ctx.shadowColor = "transparent";
     ctx.fillStyle = st.color;
     ctx.fillText(r.text, rowAnchor(align, ax, r.indentPx) + s.dx, top + r.h / 2 + s.dy);
     i++;
   }
   ctx.globalAlpha = 1; ctx.shadowColor = "transparent";
+}
+// local readability scrim under the poem block (and the signature) when the cloth there is too close to the text colour
+function textileGuard(ctx, env, boxes, size) {
+  const { comp, fmt } = env, pad = Math.round(size * 0.45), blocks = [];
+  const live = boxes.filter((r) => !r.gap);
+  if (live.length) {
+    const b = [Math.min(...live.map((r) => r.left)) - pad, Math.min(...live.map((r) => r.top)) - pad * 0.4, Math.max(...live.map((r) => r.right)) + pad, Math.max(...live.map((r) => r.bottom)) + pad * 0.4];
+    blocks.push({ box: b, color: comp.style.color });
+  }
+  const sg = comp.branding?.color ? signatureBox(comp, fmt, ctx) : null;
+  if (sg) blocks.push({ box: [sg.left - 16, sg.top - 8, sg.right + 16, sg.bottom + 8], color: comp.branding.color });
+  ctx.save();
+  paintTextileScrims(ctx, env, blocks);
+  ctx.restore();
 }
 function layerSurface(ctx, env) {
   paintVignette(ctx, env.W, env.H, env.comp.style.vignette);

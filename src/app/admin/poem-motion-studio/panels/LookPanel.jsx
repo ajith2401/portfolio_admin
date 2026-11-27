@@ -1,6 +1,7 @@
 "use client";
 import { templateById } from "@/lib/motion-studio/templates";
-import { selectableFonts, resolveFonts, CANDIDATE_TOGGLE_LABEL } from "@/lib/motion-studio/font-registry";
+import { selectableFonts, resolveFonts, CANDIDATE_TOGGLE_LABEL, fontWeights, realWeight, longPoemFontWarning, fontLabel } from "@/lib/motion-studio/font-registry";
+import { FONT_PAIRINGS, applyPairing, currentPairing, pairingTitle } from "@/lib/motion-studio/font-pairings";
 import { BG_MOTION, PARTICLES, TEXT_IN } from "@/lib/motion-studio/composition";
 
 import SignaturePanel from "./SignaturePanel";
@@ -12,6 +13,19 @@ import { Btn, Field, Range } from "../studio-ui";
 import { useStudio } from "../studio-context";
 import FontCompare from "./FontCompare";
 
+const WEIGHT_NAMES = { 400: "Regular", 500: "Medium", 600: "Semibold", 700: "Bold" };
+/** Real weights of a font inside the composition whitelist (never a synthesised bold). */
+const realWeights = (id) => fontWeights(id).filter((w) => w >= 400 && w <= 700);
+/** Font change: keep the weight if the new font has it, otherwise snap to its nearest real weight. */
+const setFont = (c, id) => {
+  c.style.font = id;
+  const ws = realWeights(id);
+  if (ws.length && !ws.includes(c.style.weight)) c.style.weight = realWeight(id, c.style.weight);
+  if (ws.length && !ws.includes(c.style.weight)) c.style.weight = ws[0];
+  delete c.notices;
+  return c;
+};
+
 const PARTICLE_LABELS = { none: "None", dust: "Floating dust", rain: "Rain", stars: "Stars", light: "Golden motes", mist: "Drifting mist", bokeh: "Soft bokeh", leak: "Light leak", sweep: "Light sweep", ripple: "Water ripple", snow: "Soft snow" };
 
 export default function LookPanel() {
@@ -22,6 +36,10 @@ export default function LookPanel() {
     pickTemplate,
     update,
   } = useStudio();
+  const lineCount = comp.scenes.filter((x) => x.kind !== "title").reduce((n, x) => n + x.lines.length, 0);
+  const longWarn = longPoemFontWarning(comp.style, lineCount);
+  const weights = realWeights(comp.style.font);
+  const pairing = currentPairing(comp.style);
   return (
 <>
                   <fieldset>
@@ -48,18 +66,30 @@ export default function LookPanel() {
 
                   {mode === "advanced" && (
                     <div className="grid gap-3 sm:grid-cols-2">
+                      <fieldset className="sm:col-span-2">
+                        <legend className="pms-lbl">Font pairing</legend>
+                        <div className="pms-chips" role="group" aria-label="Font pairings">
+                          {FONT_PAIRINGS.map((p) => (
+                            <Btn
+                              key={p.id}
+                              aria-pressed={pairing === p.id}
+                              title={`${pairingTitle(p)} · ${p.mood}`}
+                              onClick={() => update((c) => applyPairing(c, p.id))}
+                            >
+                              {p.label}
+                            </Btn>
+                          ))}
+                        </div>
+                        <p className="text-xs" style={{ color: "var(--mute)" }}>
+                          A pairing changes only the fonts, weight, line height and alignment, never your poem or background.
+                        </p>
+                      </fieldset>
                       <Field label="Font">
                         <select
                           aria-label="Font"
                           className="pms-field"
                           value={comp.style.font}
-                          onChange={(e) =>
-                            update((c) => {
-                              c.style.font = e.target.value;
-                              delete c.notices;
-                              return c;
-                            })
-                          }
+                          onChange={(e) => update((c) => setFont(c, e.target.value))}
                         >
                           {selectableFonts({ preview: comp.fontPreview === true }).map((f) => (
                             <option key={f.id} value={f.id}>
@@ -90,7 +120,6 @@ export default function LookPanel() {
                         />
                         {CANDIDATE_TOGGLE_LABEL}
                       </label>
-                      {comp.fontPreview === true && (
                         <Field label="Title font">
                           <select
                             aria-label="Title font"
@@ -105,14 +134,35 @@ export default function LookPanel() {
                             }
                           >
                             <option value="">Same as poem font</option>
-                            {selectableFonts({ preview: true, role: "title" }).map((f) => (
+                            {selectableFonts({ preview: comp.fontPreview === true, role: "title" }).map((f) => (
                               <option key={f.id} value={f.id}>
                                 {f.label}
                               </option>
                             ))}
                           </select>
                         </Field>
-                      )}
+                      <Field label="Weight" hint={weights.length <= 1 ? `${fontLabel(comp.style.font)} has one real weight.` : undefined}>
+                        <select
+                          aria-label="Weight"
+                          className="pms-field"
+                          value={comp.style.weight}
+                          onChange={(e) =>
+                            update((c) => {
+                              c.style.weight = Number(e.target.value);
+                              return c;
+                            })
+                          }
+                        >
+                          {weights.map((w) => (
+                            <option key={w} value={w}>
+                              {WEIGHT_NAMES[w]} ({w})
+                            </option>
+                          ))}
+                          {!weights.includes(comp.style.weight) && (
+                            <option value={comp.style.weight}>{comp.style.weight} (saved; drawn at {realWeight(comp.style.font, comp.style.weight)})</option>
+                          )}
+                        </select>
+                      </Field>
                       {(comp.fontPreview === true || comp.notices) && (
                         <p role="status" className="text-sm sm:col-span-2" style={{ color: "var(--err-ink)" }}>
                           {[comp.notices?.unverifiedFont, comp.notices?.displayOnlyFont]
@@ -126,11 +176,13 @@ export default function LookPanel() {
                         <FontCompare
                           poemLines={comp.scenes.filter((x) => x.kind !== "title").flatMap((x) => x.lines)}
                           current={comp.style.font}
+                          currentTitle={comp.style.titleFont}
                           previewOn={comp.fontPreview === true}
-                          onUse={(id) =>
+                          onUse={(id) => update((c) => setFont(c, id))}
+                          onUseTitle={(id) =>
                             update((c) => {
-                              c.style.font = id;
-                              delete c.notices;
+                              if (id === c.style.font) delete c.style.titleFont;
+                              else c.style.titleFont = id;
                               return c;
                             })
                           }
@@ -164,6 +216,38 @@ export default function LookPanel() {
                         }
                         fmt={(v) => v.toFixed(2)}
                       />
+                      <Range
+                        label="Text width"
+                        value={comp.style.widthPct}
+                        min={50}
+                        max={100}
+                        step={1}
+                        onChange={(v) =>
+                          update((c) => {
+                            c.style.widthPct = v;
+                            return c;
+                          }, "width")
+                        }
+                        fmt={(v) => `${v}%`}
+                      />
+                      <label className="flex min-h-11 items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={!!comp.style.shadow}
+                          onChange={(e) =>
+                            update((c) => {
+                              c.style.shadow = e.target.checked;
+                              return c;
+                            })
+                          }
+                        />
+                        Text shadow
+                      </label>
+                      {longWarn && (
+                        <p role="status" className="text-sm sm:col-span-2" style={{ color: "var(--warn-ink)" }}>
+                          {longWarn}
+                        </p>
+                      )}
                       <Field label="Alignment">
                         <select
                           aria-label="Alignment"
