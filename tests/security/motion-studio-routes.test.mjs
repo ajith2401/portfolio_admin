@@ -229,15 +229,20 @@ test("square: 1080x1080 with its own margins, a 44px floor, and a whitelisted fo
   assert.ok(FORMAT_KEYS.includes("square"));
   assert.equal(normalizeComposition({ ...defaultComposition({ format: "square", scenes: [] }) }).format, "square");
 });
-test("square: a scene at exactly the 44px floor passes; 43px is refused with the fit action", () => {
+// Superseded by the font-size spec (2026-11): 44px is the square RECOMMENDATION; 43px (or 14px) is the author's choice.
+test("square: 44px and an author-chosen 43px both pass; text that cannot fit is still refused", () => {
   const base = normalizeComposition({ ...defaultComposition({ format: "square", scenes: [] }) });
   const comp = { ...base, style: { ...base.style, sizePx: 44 } };
   const scene = { id: "s", kind: "stanza", lines: ["அன்பே சிவம்", "  உள்ளம் சொல்லும்"], durationMs: 4000 };
   const at = validateScene(ctx, comp, scene);
   assert.equal(at.ok, true, at.messages.join("; "));
-  const below = validateScene(ctx, { ...comp, style: { ...comp.style, sizePx: 43 } }, scene);
-  assert.equal(below.ok, false);
-  assert.ok(below.messages.some((m) => /below the 44px minimum/.test(m)), below.messages.join("; "));
+  for (const px of [43, 14]) {
+    const below = validateScene(ctx, { ...comp, style: { ...comp.style, sizePx: px } }, scene);
+    assert.equal(below.ok, true, `${px}px: ${below.messages.join("; ")}`);
+  }
+  // negative control: far more text than the card can hold at 44px is refused, not clipped
+  const huge = { ...scene, lines: Array(80).fill("அன்பே சிவம் உள்ளம் சொல்லும்") };
+  assert.equal(validateScene(ctx, comp, huge).ok, false);
 });
 
 // ---------------------------------------------------------------- quote (excerpt)
@@ -270,12 +275,17 @@ test("quote: a selection whose text differs from the source by one character, or
   assert.equal(checkQuote(ctx, comp, poem, [{ stanza: 7, line: 0 }]).ok, false);
   assert.equal(checkQuote(ctx, comp, poem, []).ok, false);
 });
-test("quote: text that only fits below the quote floor is refused, never shrunk", () => {
+// Superseded by the font-size spec (2026-11): the 56px poster quote size is a recommendation; a smaller size the author
+// chose (40px body -> 52px quote) is drawn as chosen. Text that cannot fit at its size is still refused, never clipped.
+test("quote: an author-chosen size below the quote recommendation is honoured; unfittable text is still refused", () => {
   const { comp, poem } = corpusComp("long");
-  const tiny = { ...comp, style: { ...comp.style, sizePx: 40 } }; // 40*1.3 = 52 < 56 poster floor
+  const tiny = { ...comp, style: { ...comp.style, sizePx: 40 } }; // 40*1.3 = 52 < 56 poster recommendation
   const v = checkQuote(ctx, tiny, poem, [{ stanza: 0, line: 1 }], { format: "poster" });
-  assert.equal(v.ok, false);
-  assert.ok(v.messages.some((m) => /below the 56px minimum/.test(m)), v.messages.join("; "));
+  assert.equal(v.ok, true, v.messages.join("; "));
+  const all = poem.stanzas.flatMap((st, s) => st.map((t, l) => ({ stanza: s, line: l, text: t }))).filter((x) => x.text);
+  const big = { ...comp, style: { ...comp.style, sizePx: 140 } };
+  const bad = checkQuote(ctx, big, { ...poem, stanzas: Array(6).fill(poem.stanzas.flat()) }, Array(6).fill(0).flatMap((_, s) => all.map((x, l) => ({ stanza: s, line: l, text: x.text }))), { format: "poster" });
+  assert.equal(bad.ok, false, "negative control: far too much text is refused");
 });
 
 // ---------------------------------------------------------------- carousel
@@ -330,15 +340,17 @@ test("resolveRoute: simplifies the animation only when that helps; an unhelpful 
   assert.ok(w.some((m) => /could not be fixed automatically.*other/.test(m)), "an unfixable problem is still reported, never silent");
 });
 
-test("font size: the author can choose down to 16px; a deliberate small size is the floor (not a failure), never below 16", async () => {
+// Updated by the font-size spec (2026-11): the old 16px floor is gone; only the technical bound (8px) remains.
+test("font size: the author's size is the floor (not a failure); only the technical 8px bound applies", async () => {
   const { sceneMin, SIZE_PX_MIN } = await import("../../src/lib/motion-studio/route-checks.js");
-  assert.equal(SIZE_PX_MIN, 16);
+  assert.equal(SIZE_PX_MIN, 8);
   assert.equal(sceneMin("reel"), MIN_TEXT_PX.reel);
   assert.equal(sceneMin("reel", { style: { sizePx: 64 } }), MIN_TEXT_PX.reel, "a larger size keeps the format floor");
   assert.equal(sceneMin("reel", { style: { sizePx: 22 } }), 22);
-  assert.equal(sceneMin("reel", { style: { sizePx: 9 } }), 16, "negative control: never below 16");
+  assert.equal(sceneMin("reel", { style: { sizePx: 14 } }), 14);
+  assert.equal(sceneMin("reel", { style: { sizePx: 3 } }), 8, "negative control: never below the technical 8px bound");
   const c = normalizeComposition({ ...defaultComposition({ title: "", stanzas: [["அ"]] }), style: { ...defaultComposition({ title: "", stanzas: [["அ"]] }).style, sizePx: 17 } });
   assert.equal(c.style.sizePx, 17);
   const c2 = normalizeComposition({ ...c, style: { ...c.style, sizePx: 3 } });
-  assert.equal(c2.style.sizePx, 16);
+  assert.equal(c2.style.sizePx, 8);
 });

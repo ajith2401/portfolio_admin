@@ -1,8 +1,8 @@
-// Pure planner behind the explicit "Fit scenes to 40px" action. It only ever REGROUPS whole source lines into more
+// Pure planner behind the explicit "Fit scenes" action. It only ever REGROUPS whole source lines into more
 // scenes (line boundaries first); it never edits, drops, reorders or shrinks text. A single line too long for one
 // scene at the minimum size is left to wrap (wrapped rows are fine) and is reported in `unfittable` if even that fails.
 import { validateScene } from "./render.js";
-import { MIN_TEXT_PX } from "./safe-zone.js";
+import { sceneMin } from "./route-checks.js";
 import { restamp } from "./scene-edit.js";
 import { sceneDuration, sceneLines, totalDuration, MIN_SCENE_MS, MAX_SCENE_MS } from "./scenes.js";
 import { MAX_SCENES } from "./composition.js";
@@ -42,7 +42,7 @@ function splitLines(ctx, fitComp, base, lines, minSize) {
 export function planFit(ctx, comp) {
   const before = comp.scenes || [];
   const fmt = comp.format;
-  const minSize = MIN_TEXT_PX[fmt] ?? MIN_TEXT_PX.reel;
+  const minSize = sceneMin(fmt, comp); // the author's own size when it is below the recommended size
   const baseOut = (extra) => ({
     ok: true, scenes: before, addedScenes: 0, sceneCountBefore: before.length, sceneCountAfter: before.length,
     durationBeforeMs: totalDuration(before), durationAfterMs: totalDuration(before), changed: [], keptManualTimings: 0,
@@ -50,26 +50,18 @@ export function planFit(ctx, comp) {
   });
   if (fmt === "poster") return baseOut({ ok: true, reason: "Posters are not split into scenes." });
 
-  // A legacy size below the floor is raised EXPLICITLY (shown in the dialog), never silently.
-  const sizePx = Math.max(comp.style.sizePx, minSize);
+  // The author's size is used as chosen: fitting only regroups whole lines, it never raises the size or a scene scale.
+  const sizePx = comp.style.sizePx;
   const fitComp = { ...comp, style: { ...comp.style, sizePx } };
   const out = [];
   const changedSet = new Set();
   let keptManual = 0;
 
   before.forEach((sc) => {
-    // a scene scale that resolves below the floor is raised to the lowest scale that reaches it
-    let scene = sc, scaleRaised = false;
-    if (Math.round(sizePx * (sc.scale || 1)) < minSize) {
-      const ns = Math.min(1.4, Math.ceil((minSize / sizePx) * 100) / 100);
-      scene = { ...sc };
-      if (ns === 1) delete scene.scale; else scene.scale = ns;
-      scaleRaised = true;
-    }
+    const scene = sc;
     const needsSplit = scene.lines.length > 1 && !fitsAsScene(ctx, fitComp, scene, scene.lines, minSize);
     if (!needsSplit) {
-      if (scaleRaised) changedSet.add(out.length);
-      else if (scene.durationMs !== sceneDuration(scene.lines)) keptManual++;
+      if (scene.durationMs !== sceneDuration(scene.lines)) keptManual++;
       out.push({ ...scene, lines: scene.lines.slice() });
       return;
     }
@@ -79,7 +71,7 @@ export function planFit(ctx, comp) {
       const piece = { id: gi === 0 ? scene.id : `${String(scene.id).slice(0, 30)}-f${gi}`, kind: gi === 0 ? scene.kind : "stanza", lines: g.slice(), durationMs: clampMs((total * g.length) / n) };
       if (scene.stanza != null && scene.part != null) { piece.stanza = scene.stanza; piece.part = scene.part + gi / (groups.length + 1); piece.parts = scene.parts; }
       if (gi === 0) OVERRIDES.forEach((k) => { if (scene[k] != null) piece[k] = scene[k]; });
-      else if (scaleRaised) piece.scale = scene.scale; // keep the raised scale so no piece falls back below the floor
+      else if (scene.scale != null) piece.scale = scene.scale; // every piece keeps the scene's own size
       changedSet.add(out.length);
       out.push(piece);
     });
@@ -109,7 +101,7 @@ export function applyFit(comp, plan) {
 /** Scenes whose resolved size is below the floor or that cannot fit at it. Drives the readability warning. */
 export function readabilityIssues(ctx, comp) {
   if (comp.format === "poster") return [];
-  const minSize = MIN_TEXT_PX[comp.format] ?? MIN_TEXT_PX.reel;
+  const minSize = sceneMin(comp.format, comp);
   const bad = [];
   comp.scenes.forEach((sc, i) => { if (!validateScene(ctx, comp, sc, { minSize, label: `Scene ${i + 1}` }).ok) bad.push(i); });
   return bad;

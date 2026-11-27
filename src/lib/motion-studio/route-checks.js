@@ -4,8 +4,8 @@
 // `mutate` is for negative controls only: it transforms a COPY of each layout before it is checked.
 import { validateScene, validateScenes, posterCards, POSTER_MIN, pageLabelBox, sceneGeometry } from "./render.js";
 import { activeBehaviour, validateAnimation, prefParams } from "./animation.js";
-import { layoutFullPoem, validateFullPoem } from "./full-poem.js";
-import { MIN_TEXT_PX, QUOTE_MIN_PX, FORMATS } from "./safe-zone.js";
+import { layoutFullPoem, validateFullPoem, fullTune } from "./full-poem.js";
+import { MIN_TEXT_PX, QUOTE_MIN_PX, FORMATS, TEXT_PX_MIN } from "./safe-zone.js";
 import { newResult, note, TOLERANCE } from "./coverage.js";
 import { textRect, signatureBox } from "./signature.js";
 import { drawFrame } from "./render.js";
@@ -15,7 +15,7 @@ import { verifyMaterial } from "./fx/verify.js";
 import { materialActive } from "./materials.js";
 import { fontById, canBody, canTitle, fontLabel, fontReviewOf, CANDIDATE_EXPORT_WARNING } from "./font-registry.js";
 
-export const SIZE_PX_MIN = 16; // the smallest body size the author may choose (Look -> Font size)
+export const SIZE_PX_MIN = TEXT_PX_MIN; // the smallest body size the author may choose (technical bound only)
 /**
  * The text floor for a format. With a composition, an author who deliberately chose a SMALLER font size than the
  * format floor gets that size as the floor (their choice, not a failure); never below SIZE_PX_MIN.
@@ -238,7 +238,7 @@ export function checkWhole(ctx, comp, poem, { mutate = null } = {}) {
   return fit.notes.length ? { ...v, warnings: fit.notes } : v;
 }
 export function checkFull(ctx, comp, poem, { preset = "balanced", height = "standard", mutate = null } = {}) {
-  const layout0 = layoutFullPoem(ctx, comp, poem, { preset, height });
+  const layout0 = layoutFullPoem(ctx, comp, poem, { preset, height, tune: fullTune(comp) });
   if (!layout0.fits) return { ok: false, fits: false, messages: [FULL_NO_FIT], layout: layout0 };
   const layout = mutate ? mutate(structuredClone(layout0)) || layout0 : layout0;
   return withMaterial({ ...validateFullPoem(poem, layout), fits: true, layout }, ctx, comp, [(c, cm, x) => drawFullPoem(c, cm, layout0, x)]);

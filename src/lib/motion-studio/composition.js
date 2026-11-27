@@ -2,6 +2,7 @@
 // (only the text lines chosen for each scene) and never any HTML. normalizeComposition() is the single gate used
 // by the API and the client: it whitelists fields, clamps numbers and rejects anything else.
 import { normalizeWriting } from "./writing.js";
+import { textPx } from "./safe-zone.js";
 import { normalizeWhole } from "./whole-poem.js";
 import { normalizeElements } from "./elements.js";
 import { templateById } from "./templates.js";
@@ -235,7 +236,10 @@ export function normalizeComposition(input) {
     style: {
       font: fonts.font,
       ...(fonts.titleFont ? { titleFont: fonts.titleFont } : {}),
-      sizePx: Math.round(num(s.sizePx, 16, 140, t.style.sizePx)), // 16 = SIZE_PX_MIN (route-checks.js)
+      // logical px on the 1080-wide canvas (safe-zone.js); only the technical bounds apply, never a readability floor
+      sizePx: textPx(s.sizePx, t.style.sizePx),
+      // the author set the size themselves: a template change keeps it (MotionStudio pickTemplate)
+      ...(s.sizeSet === true ? { sizeSet: true } : {}),
       weight: oneOf(Number(s.weight), [400, 500, 600, 700], t.style.weight),
       color: hex(s.color, t.style.color),
       align: oneOf(s.align, ALIGN, t.style.align),
@@ -323,6 +327,8 @@ export function normalizeComposition(input) {
     full: {
       preset: oneOf(c.full?.preset, FULL_PRESETS, "balanced"),
       height: oneOf(c.full?.height, ["standard", "extended"], "standard"),
+      // optional author-chosen text size for the Full-Poem poster (null/absent = the layout preset's size)
+      ...(textPx(c.full?.size) != null ? { size: textPx(c.full.size) } : {}),
     },
     export: {
       quality: oneOf(

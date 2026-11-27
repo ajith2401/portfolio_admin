@@ -330,7 +330,7 @@ export function QuickCreateCheck({ routeId, onDone }) {
           <p>Checking fonts and readability for {route.label}…</p>
         ) : allowed ? (
           <p style={{ color: "var(--ok-ink)" }}>
-            All lines fit and are readable for {route.label}.
+            All lines fit at the chosen text size for {route.label}.
           </p>
         ) : (
           <div

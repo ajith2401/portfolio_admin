@@ -1,10 +1,12 @@
 "use client";
 import { FULL_W, PRESETS as FULL_PRESETS } from "@/lib/motion-studio/full-poem";
 import { Btn } from "../studio-ui";
+import FontSizeControl from "./FontSizeControl";
 import { useStudio } from "../studio-context";
 
 export default function FullPoemPanel() {
   const {
+    comp,
     doFull,
     fullCanvasRef,
     fullCheck,
@@ -23,8 +25,8 @@ export default function FullPoemPanel() {
                   <h2 className="text-lg font-semibold">Full-poem vertical poster</h2>
                   <p className="text-sm" style={{ color: "var(--mute)" }}>
                     The whole poem on one image. No line, stanza or punctuation
-                    is dropped, and text is never made smaller than a readable
-                    size.
+                    is dropped. A size you choose is used as chosen; an
+                    automatic size is only reduced to fit, down to 40px.
                   </p>
                   <div role="group" aria-label="Layout" className="flex flex-wrap gap-2">
                     {Object.entries(FULL_PRESETS).map(([k, v]) => (
@@ -33,6 +35,15 @@ export default function FullPoemPanel() {
                       </Btn>
                     ))}
                   </div>
+                  <FontSizeControl
+                    label="Poster text size"
+                    value={comp.full?.size ?? null}
+                    shown={fullLayout?.size ?? null}
+                    automatic="Layout size"
+                    format="poster"
+                    testId="full-size"
+                    onChange={(v) => setFull_({ size: v })}
+                  />
                   <div role="group" aria-label="Canvas height" className="flex flex-wrap gap-2">
                     <Btn aria-pressed={fullHeight === "standard"} onClick={() => setFull_({ height: "standard" })}>
                       Standard 1080×1920
@@ -46,7 +57,7 @@ export default function FullPoemPanel() {
                       <p className="text-sm" aria-live="polite">
                         {fullLayout.width}×{fullLayout.height}px · font size {fullLayout.size}px ·{" "}
                         <strong>
-                          {fullLayout.level === "good" ? "Readable" : fullLayout.level === "small" ? "Small but readable" : "Too small"}
+                          {fullLayout.level === "good" ? "Readable" : fullLayout.level === "small" ? "Compact" : "Small text (your choice)"}
                         </strong>
                         {fullLayout.shrunk ? ` (reduced from ${fullLayout.presetSize}px to fit)` : ""}
                       </p>
@@ -61,7 +72,7 @@ export default function FullPoemPanel() {
                         <div role="alert" className="rounded-lg p-3 text-sm" style={{ background: "var(--warn-bg)", color: "var(--warn-ink)" }}>
                           {fullHeight === "standard" ? (
                             <>
-                              This poem is too long to be readable on a single 9:16 image (it would need text smaller than {fullLayout.size}px).
+                              This poem is too long to fit a single 9:16 image at {fullLayout.size}px.
                               Nothing has been cut. Choose what to do:
                               <div className="mt-2 flex flex-wrap gap-2">
                                 {fullLayout.suggestedFits && (
@@ -74,7 +85,7 @@ export default function FullPoemPanel() {
                               </div>
                             </>
                           ) : (
-                            "This poem is too long for even the tallest single image at a readable size. Use Story frames or the Feed poster card set instead."
+                            `This poem is too long for even the tallest single image at ${fullLayout.size}px. Choose a smaller text size, or use Story frames or the Feed poster card set.`
                           )}
                         </div>
                       )}

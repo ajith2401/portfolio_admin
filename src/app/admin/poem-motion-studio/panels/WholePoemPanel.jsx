@@ -12,13 +12,13 @@ import {
   WHOLE_MIN_MS,
   WHOLE_MAX_MS,
   WHOLE_MOTION_LABELS,
-  WHOLE_SIZE_MIN,
   WHOLE_SIZE_MAX,
   BACKDROPS,
   backdropOf,
   applyBackdrop,
 } from "@/lib/motion-studio/whole-poem";
 import { Btn } from "../studio-ui";
+import FontSizeControl from "./FontSizeControl";
 import { useStudio } from "../studio-context";
 
 const FADES = [
@@ -181,24 +181,17 @@ export default function WholePoemPanel() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="pms-lbl">
-            Text size {w.size ? `${w.size}px` : "(automatic)"}
-          </span>
-          <input
-            type="range"
-            className="w-full"
-            style={{ minHeight: 44 }}
-            aria-label="Whole poem text size"
-            min={WHOLE_SIZE_MIN}
+        <div className="sm:col-span-2">
+          <FontSizeControl
+            label="Whole poem text size"
+            value={w.size ?? null}
+            shown={w.size ?? wholeFit?.size ?? null}
+            automatic="Automatic"
             max={WHOLE_SIZE_MAX}
-            step={2}
-            value={w.size || wholeFit?.size || 46}
-            onChange={(e) =>
-              setWhole_({ size: Number(e.target.value) }, "whole-size")
-            }
+            testId="whole-size"
+            onChange={(v) => setWhole_({ size: v }, "whole-size")}
           />
-        </label>
+        </div>
         <label className="block">
           <span className="pms-lbl">
             Line spacing {w.lh ? `${w.lh}×` : "(automatic)"}
@@ -222,12 +215,6 @@ export default function WholePoemPanel() {
         <Btn onClick={() => setWhole_({ size: null, lh: null })}>
           Automatic size and spacing
         </Btn>
-      )}
-      {w.size && w.size < MIN_READABLE && (
-        <p className="text-xs" style={{ color: "var(--warn-ink)" }}>
-          {w.size}px is below the {MIN_READABLE}px readable size on a phone. It
-          is your choice; check it on a phone.
-        </p>
       )}
 
       <div>

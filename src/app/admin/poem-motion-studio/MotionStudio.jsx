@@ -102,6 +102,7 @@ import {
   layoutFullPoem,
   drawFullPoem,
   validateFullPoem,
+  fullTune,
   FULL_W,
 } from "@/lib/motion-studio/full-poem";
 import {
@@ -1260,7 +1261,7 @@ export default function MotionStudio() {
       flash(
         overflow ? "error" : "ok",
         overflow
-          ? "Some text was too long to fit legibly on one poster card, so it was left at readable size and clipped. Switch to a multi-card set or select fewer stanzas."
+          ? "Some text was too long to fit legibly on one poster card, so it was kept at its text size and clipped. Switch to a multi-card set or select fewer stanzas."
           : `Poster${blobs.length > 1 ? "s" : ""} exported.`,
       );
     });
@@ -1373,11 +1374,13 @@ export default function MotionStudio() {
     return layoutFullPoem(cx, comp, fullPoem, {
       preset: fullPreset,
       height: fullHeight,
+      tune: fullTune(comp),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     comp?.style,
     comp?.branding,
+    comp?.full?.size,
     fullPoem,
     fullPreset,
     fullHeight,
@@ -1749,6 +1752,9 @@ export default function MotionStudio() {
           ...n.style,
           bg: { ...n.style.bg, image: c.style.bg.image },
         };
+      // a size the author set themselves survives a template change (template defaults only fill untouched sizes)
+      if (c.style?.sizeSet === true)
+        n.style = { ...n.style, sizePx: c.style.sizePx, sizeSet: true };
       return {
         ...n,
         originalScenes: c.originalScenes,

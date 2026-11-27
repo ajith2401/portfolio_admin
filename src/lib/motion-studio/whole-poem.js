@@ -11,6 +11,7 @@ import {
   PRESETS,
   wholeWritingPlan,
 } from "./full-poem.js";
+import { textPx, TEXT_PX_MIN } from "./safe-zone.js";
 import { writingOn, writingOf, recommendSeconds } from "./writing.js";
 
 export const WHOLE_DURATIONS_S = Object.freeze([10, 15, 20, 30, 45, 60]);
@@ -18,7 +19,7 @@ export const WHOLE_DEFAULT_MS = 30_000;
 export const WHOLE_MIN_MS = 5_000;
 export const WHOLE_MAX_MS = 120_000; // 3600 frames at 30fps: export time and file size stay practical on a phone
 export const WHOLE_FADE_MS = 1_200;
-export const WHOLE_SIZE_MIN = 28,
+export const WHOLE_SIZE_MIN = TEXT_PX_MIN, // technical bound only: a smaller size is the author's choice
   WHOLE_SIZE_MAX = 96;
 /** The smallest size the automatic fit may go to (with a visible warning). Below it the poem needs Scene-by-Scene. */
 export const WHOLE_HARD_FLOOR = 32;
@@ -161,7 +162,10 @@ export function normalizeWhole(w) {
     size:
       w.size == null
         ? null
-        : Math.round(num(w.size, WHOLE_SIZE_MIN, WHOLE_SIZE_MAX, null)),
+        : (() => {
+            const n = textPx(w.size);
+            return n == null ? null : Math.min(WHOLE_SIZE_MAX, n);
+          })(),
     lh: w.lh == null ? null : Math.round(num(w.lh, 1.2, 2.6, null) * 20) / 20,
   };
 }

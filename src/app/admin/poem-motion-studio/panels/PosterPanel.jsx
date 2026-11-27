@@ -13,9 +13,9 @@ export default function PosterPanel() {
 <section aria-label="Poster" className="space-y-3">
                   <h2 className="text-lg font-semibold">Feed poster (4:5)</h2>
                   <p className="text-sm" style={{ color: "var(--mute)" }}>
-                    Choose the stanzas for the poster. Text is never shrunk
-                    below a readable size; if it won’t fit, you’ll be told and
-                    can make a multi-card set.
+                    Choose the stanzas for the poster. Your text size is
+                    kept; if the text won’t fit, you’ll be told and can make a
+                    multi-card set or choose a smaller size.
                   </p>
                   <fieldset>
                     <legend className="pms-lbl">Stanzas to include</legend>

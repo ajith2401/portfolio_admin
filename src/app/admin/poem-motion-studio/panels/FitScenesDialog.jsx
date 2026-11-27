@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { applyFit, planFit, readabilityIssues } from "@/lib/motion-studio/fit-scenes";
-import { MIN_TEXT_PX, FIT_ACTION_LABEL } from "@/lib/motion-studio/safe-zone";
+import { FIT_ACTION_LABEL } from "@/lib/motion-studio/safe-zone";
 import { Btn } from "../studio-ui";
 import { useStudio } from "../studio-context";
 
@@ -43,7 +43,7 @@ export function FitScenesDialog({ onClose }) {
       <div className="pms-card w-full max-w-md space-y-3" style={{ background: "var(--card, #fff)" }}>
         <h2 className="text-lg font-semibold">{FIT_ACTION_LABEL}</h2>
         <p className="text-sm">
-          Scenes that cannot show their text at {MIN_TEXT_PX[comp.format] ?? 40}px or larger are split at line boundaries. No line is edited, dropped or reordered.
+          Scenes whose text does not fit at your chosen size ({comp.style.sizePx}px) are split at line boundaries. The text size is not changed, and no line is edited, dropped or reordered.
         </p>
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 text-sm" data-testid="fit-preview">
           <dt>Scenes</dt>
@@ -57,7 +57,7 @@ export function FitScenesDialog({ onClose }) {
         {!plan.ok && <p role="alert" className="text-sm" style={{ color: "var(--warn-ink)" }}>{plan.reason}</p>}
         {plan.unfittable.length > 0 && (
           <p role="alert" className="text-sm" style={{ color: "var(--warn-ink)" }}>
-            Scene(s) {plan.unfittable.map((i) => i + 1).join(", ")} still do not fit at {MIN_TEXT_PX[comp.format] ?? 40}px (a single line is too long). Shorten or re-break those lines; export stays blocked until then.
+            Scene(s) {plan.unfittable.map((i) => i + 1).join(", ")} still do not fit at {comp.style.sizePx}px (a single line is too long). Choose a smaller size, or shorten or re-break those lines; export stays blocked until then.
           </p>
         )}
         {nothing && <p className="text-sm">Every scene already fits. Nothing to change.</p>}
@@ -81,7 +81,8 @@ export function FitScenesDialog({ onClose }) {
   );
 }
 
-/** Warning shown while any scene's resolved size is below the floor (or cannot fit at it), with the action button. */
+/** Warning shown while any scene's text cannot fit at the chosen size (out of bounds), with the action button. Small
+ *  sizes are advisory only (FontSizeControl) and never show this. */
 export function ReadabilityNotice() {
   const { comp, fontTick } = useStudio();
   const [open, setOpen] = useState(false);
@@ -89,7 +90,7 @@ export function ReadabilityNotice() {
   if (!bad.length) return null;
   return (
     <div role="alert" className="mt-2 rounded-lg px-3 py-2 text-sm" style={{ background: "var(--warn-bg)", color: "var(--warn-ink)" }} data-testid="readability-warning">
-      Scene{bad.length > 1 ? "s" : ""} {bad.slice(0, 8).map((i) => i + 1).join(", ")}{bad.length > 8 ? "…" : ""} would show text below {MIN_TEXT_PX[comp.format] ?? 40}px, so export is blocked. Nothing has been changed.{" "}
+      Scene{bad.length > 1 ? "s" : ""} {bad.slice(0, 8).map((i) => i + 1).join(", ")}{bad.length > 8 ? "…" : ""} do not fit at the chosen text size ({comp.style.sizePx}px), so export is blocked. Nothing has been changed.{" "}
       <Btn onClick={() => setOpen(true)}>{FIT_ACTION_LABEL}</Btn>
       {open && <FitScenesDialog onClose={() => setOpen(false)} />}
     </div>

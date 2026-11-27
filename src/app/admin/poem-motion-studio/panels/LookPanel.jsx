@@ -1,5 +1,6 @@
 "use client";
 import WritingPanel from "./WritingPanel";
+import FontSizeControl from "./FontSizeControl";
 import { templateById } from "@/lib/motion-studio/templates";
 import { selectableFonts, resolveFonts, CANDIDATE_TOGGLE_LABEL, fontWeights, realWeight, longPoemFontWarning, fontLabel } from "@/lib/motion-studio/font-registry";
 import { FONT_PAIRINGS, applyPairing, currentPairing, pairingTitle } from "@/lib/motion-studio/font-pairings";
@@ -190,19 +191,17 @@ export default function LookPanel() {
                           }
                         />
                       </div>
-                      <Range
+                      <FontSizeControl
                         label="Font size"
                         value={comp.style.sizePx}
-                        min={16}
-                        max={140}
-                        step={1}
+                        format={comp.format}
                         onChange={(v) =>
                           update((c) => {
                             c.style.sizePx = v;
+                            c.style.sizeSet = true;
                             return c;
                           }, "size")
                         }
-                        fmt={(v) => `${v}px`}
                       />
                       <Range
                         label="Line height"

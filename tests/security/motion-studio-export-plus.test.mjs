@@ -616,11 +616,13 @@ test("presets: validators see the same input at every preset (spy), and the resu
     "route-checks never reads a resolution preset",
   );
 });
-test("NEGATIVE CONTROL: text below the native floor is refused at EVERY preset (draft does not lower the floor)", async () => {
+// Updated by the font-size spec (2026-11): a smaller per-scene scale is now the author's choice, so the negative control
+// is text that cannot fit at all — still refused at every preset (a draft preset never relaxes the check).
+test("NEGATIVE CONTROL: text that cannot fit is refused at EVERY preset (draft does not relax the check)", async () => {
   const sc = comp.scenes.find((s) => s.kind !== "title");
   const tiny = {
     ...comp,
-    scenes: comp.scenes.map((s) => (s === sc ? { ...s, scale: 0.6 } : s)),
+    scenes: comp.scenes.map((s) => (s === sc ? { ...s, lines: Array(80).fill(s.lines.find(Boolean) || "அன்பே சிவம்") } : s)),
   };
   const route = routeById("reel-mp4");
   for (const p of RES_PRESETS) {
@@ -633,8 +635,7 @@ test("NEGATIVE CONTROL: text below the native floor is refused at EVERY preset (
     });
     assert.equal(r.zip, null, p.id);
     assert.equal(r.manifest.routes[0].status, "refused", p.id);
-    if (p.id !== "hq")
-      assert.match(r.manifest.routes[0].reason, /below the 40px minimum/, p.id);
+    assert.ok(r.manifest.routes[0].reason, p.id);
   }
 });
 

@@ -3,7 +3,7 @@
 // seeded from index so frames are reproducible.
 import { classifyInto, newResult, note, rowExtent, checkX, TOLERANCE } from "./coverage.js";
 import { wrapSpans, indentPx, lineIndent } from "./graphemes.js";
-import { FORMATS, MIN_TEXT_PX, FIT_ACTION_LABEL } from "./safe-zone.js";
+import { FORMATS, MIN_TEXT_PX, shrinkFloor } from "./safe-zone.js";
 import { signatureBox, textRect, signatureBoundsIssues, overlapsSignature } from "./signature.js";
 // Reel/Story floor comes from MIN_TEXT_PX; poster paths pass POSTER_MIN explicitly and keep their legacy default here.
 export const defaultMinSize = (format) => (format === "poster" ? 28 : MIN_TEXT_PX[format] ?? MIN_TEXT_PX.reel);
@@ -110,12 +110,14 @@ export function paintGrain(ctx, w, h, amt, tMs) {
 
 /**
  * Lay out a scene's lines inside the safe rect. A line equal to "" is a stanza gap (poster cards).
- * Shrinks the font until the block fits but never below `minSize`; `fits:false` means it could not fit legibly.
+ * A size above `minSize` (the format's recommended size) may shrink to fit, down to `minSize`; a size the author chose
+ * at or below it is used exactly as chosen (shrinkFloor). The size is never raised. `fits:false` = it does not fit.
  */
 export function layoutScene(ctx, c, scene, rect, { minSize = defaultMinSize(c.format) } = {}) {
   const st = c.style, family = familyFor(st, scene.kind === "title" ? "title" : "body");
   const maxW = rect.w * (st.widthPct / 100);
   let size = Math.round(st.sizePx * (scene.scale || 1));
+  const floor = shrinkFloor(minSize, size);
   for (let attempt = 0; attempt < 24; attempt++) {
     ctx.font = `${scene.kind === "title" ? titleWeightOf(st) : realWeight(st.font, st.weight)} ${size}px ${family}`; // the weight drawFrame will paint with
     const measure = (x) => ctx.measureText(x).width;
@@ -131,8 +133,8 @@ export function layoutScene(ctx, c, scene, rect, { minSize = defaultMinSize(c.fo
     });
     const total = rows.reduce((n, r) => n + r.h, 0);
     if (total <= rect.h) return { rows, size, lh, total, maxW, fits: true };
-    if (size <= minSize) return { rows, size, lh, total, maxW, fits: false };
-    size = Math.max(minSize, Math.floor(size * 0.94));
+    if (size <= floor) return { rows, size, lh, total, maxW, fits: false };
+    size = Math.max(floor, Math.floor(size * 0.94));
   }
   return { rows: [], size, lh: size * st.lineHeight, total: 0, maxW, fits: false };
 }
@@ -394,9 +396,10 @@ export function validateScene(ctx, comp, scene, { minSize = defaultMinSize(comp.
   // no drawn row may claim a line that is not in the scene
   if (lay.rows.some((x) => !x.gap && !(typeof scene.lines[x.srcLine] === "string" && scene.lines[x.srcLine] !== ""))) note(r, "orderIssues", `${label}: a row draws text that is not a line of this scene`);
   if (!lay.fits) note(r, "outOfBounds", `${label}: the text does not fit the safe area at ${lay.size}px`);
-  // Reel/Story: text that RESOLVES below the floor (a legacy project saved at <40px, or a scene scale <1) is never exported
-  // silently. Nothing is rewritten here; the author is pointed at the explicit fit action.
-  if ((comp.format !== "poster" || enforceMin) && lay.size < minSize) note(r, "outOfBounds", `${label}: text is ${lay.size}px, below the ${minSize}px minimum. Use "${FIT_ACTION_LABEL}" in Scenes to split the scenes (and raise the size) before exporting`);
+  // A size BELOW the recommended size is the author's choice: it is advisory only (sizeAdvice), never a failure. What
+  // must never happen is text resolving below what the author chose (or the technical minimum): that is a defect.
+  const want = shrinkFloor(minSize, Math.round(st.sizePx * (scene.scale || 1)));
+  if ((comp.format !== "poster" || enforceMin) && lay.size < want) note(r, "outOfBounds", `${label}: text is ${lay.size}px, below the ${want}px it should be drawn at`);
   const align = scene.align || st.align;
   const ax = align === "left" ? rect.x : align === "right" ? rect.x + rect.w : rect.x + rect.w / 2;
   const shift = ((scene.offsetY || 0) / 100) * rect.h;

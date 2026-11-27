@@ -1,8 +1,9 @@
 // Full-Poem Vertical Poster: the ENTIRE poem (title, every stanza, every line, original order) on ONE image.
 // Pure layout + a draw routine that reuses the renderer's background/vignette/grain so it matches Reel/Story looks.
-// Rules: whole lines are only ever wrapped (never cut); text is never shrunk below MIN_READABLE; when a poem cannot
+// Rules: whole lines are only ever wrapped (never cut); a larger size is never auto-shrunk below MIN_READABLE (an author-chosen smaller size is used as chosen); when a poem cannot
 // fit legibly in the standard canvas the layout says so and can grow the canvas height instead of dropping content.
 import { wrapSpans, lineIndent, indentPx } from "./graphemes.js";
+import { shrinkFloor } from "./safe-zone.js";
 import { classifyInto, newResult, rowExtent, checkX, TOLERANCE } from "./coverage.js";
 import {
   FONT_FAMILY,
@@ -24,8 +25,10 @@ import { signatureBox as sigBox, boxBoundsIssues, overlapsSignature } from "./si
 export const FULL_W = 1080;
 export const FULL_STD_H = 1920;
 export const FULL_MAX_H = 5400; // 1080×5400 = 5.8 MP; keeps 1× export inside every mobile canvas limit
-export const MIN_READABLE = 40; // px on the 1080-wide canvas ≈ 3.7 % of width; below this we refuse to shrink
+export const MIN_READABLE = 40; // px on the 1080-wide canvas ≈ 3.7 % of width: the auto-shrink stop and the advisory threshold, not a hard minimum
 export const GOOD_READABLE = 46;
+/** The Full-Poem poster's author-chosen size (full.size) as a layout tune; null = the preset's own size. */
+export const fullTune = (comp) => (comp?.full?.size != null ? { size: comp.full.size } : null);
 const MAX_CANVAS_PIXELS = 16_000_000; // iOS Safari canvas ceiling is ~16.7 MP
 
 export const PRESETS = Object.freeze({
@@ -168,6 +171,7 @@ export function layoutFullPoem(
 ) {
   // tune: optional {size, lh, gap, side} from the Whole-Poem Video controls; min: the floor the size search stops at
   const preset = { ...(PRESETS[presetKey] || PRESETS.balanced), ...(tune || {}) };
+  const floor = shrinkFloor(min, preset.size); // an author's smaller size is used as chosen, never raised
   const footer = footerFor(comp);
   const frame = (H, size) => {
     const m = measureAt(ctx, comp, poem, preset, size);
@@ -211,7 +215,7 @@ export function layoutFullPoem(
   // 1) standard canvas: largest size ≤ preset size that fits, never below MIN_READABLE
   let size = preset.size,
     std = null;
-  for (; size >= min; size -= 2) {
+  for (; size >= floor; size -= 2) {
     const f = frame(FULL_STD_H, size);
     if (f.need <= FULL_STD_H) {
       std = size;
@@ -223,10 +227,10 @@ export function layoutFullPoem(
     // Cannot fit legibly in the standard canvas. Nothing is clipped or dropped: the layout reports fits:false (callers must
     // not export it) and says which canvas height and size would work.
     const ext = layoutFullPoem(ctx, comp, poem, { preset: presetKey, height: "extended", tune, min });
-    return { ...chosen(FULL_STD_H, min), fits: false, neededAtMinimum: Math.ceil(frame(FULL_STD_H, min).need), suggestedHeight: ext.height, suggestedSize: ext.size, suggestedFits: ext.fits };
+    return { ...chosen(FULL_STD_H, floor), fits: false, neededAtMinimum: Math.ceil(frame(FULL_STD_H, floor).need), suggestedHeight: ext.height, suggestedSize: ext.size, suggestedFits: ext.fits };
   }
   // 2) extended canvas: keep the preset size, grow height up to FULL_MAX_H; shrink (not below minimum) only if even that is not enough
-  for (let s = preset.size; s >= min; s -= 2) {
+  for (let s = preset.size; s >= floor; s -= 2) {
     const f = frame(FULL_MAX_H, s);
     if (f.need <= FULL_MAX_H) {
       const H = Math.max(FULL_STD_H, Math.ceil(f.need / 10) * 10);
@@ -234,10 +238,10 @@ export function layoutFullPoem(
     }
   }
   return {
-    ...chosen(FULL_MAX_H, min),
+    ...chosen(FULL_MAX_H, floor),
     fits: false,
     extended: true,
-    neededAtMinimum: Math.ceil(frame(FULL_MAX_H, min).need),
+    neededAtMinimum: Math.ceil(frame(FULL_MAX_H, floor).need),
   };
 }
 

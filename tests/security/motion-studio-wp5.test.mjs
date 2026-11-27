@@ -96,27 +96,30 @@ test("planFit: manual durations on untouched scenes preserved, split durations p
   assert.ok(Math.abs(split - 8000) <= 3000 * pieces.length, "roughly proportional");
 });
 
-test("legacy 28px comp loads byte-identical and is flagged, not rewritten", () => {
+// Superseded by the font-size spec (2026-11): a size below the 40px recommendation is the author's choice. It is still
+// loaded byte-identical and never rewritten, but "Fit scenes" now only splits/retimes scenes; it never raises the size.
+test("legacy 28px comp loads byte-identical; Fit scenes keeps the 28px the author chose", () => {
   const raw = dense();
   raw.style = { ...raw.style, sizePx: 28 };
   const once = normalizeComposition(JSON.parse(JSON.stringify(raw)));
   assert.equal(once.style.sizePx, 28);
   assert.equal(JSON.stringify(normalizeComposition(JSON.parse(JSON.stringify(once)))), JSON.stringify(once));
-  assert.ok(readabilityIssues(ctx, once).length > 0);
   const plan = planFit(ctx, once);
-  assert.deepEqual(plan.sizePx, { from: 28, to: 40 }); // explicit and reported, only applied by applyFit
+  assert.deepEqual(plan.sizePx, { from: 28, to: 28 }, "never raised to the 40px recommendation");
   assert.equal(once.style.sizePx, 28);
   const fitted = applyFit(once, plan);
+  assert.equal(fitted.style.sizePx, 28);
   assert.equal(readabilityIssues(ctx, fitted).length, 0);
+  assert.deepEqual(sceneLines(fitted.scenes), sceneLines(once.scenes), "every line kept, in order");
 });
 
-test("export validation refuses a sub-40 Reel with a message naming the fit action", () => {
+// Superseded by the font-size spec (2026-11): a 30px Reel the author chose exports at 30px (readability is advisory).
+test("export validation accepts an author-chosen 30px Reel and draws it at 30px (no hard 40px floor)", () => {
   const comp = { ...mkComp(), format: "reel" };
   comp.style = { ...comp.style, sizePx: 30 };
   const v = validateScenes(ctx, comp, comp.scenes);
-  assert.equal(v.ok, false);
-  assert.match(v.messages.join(" "), /below the 40px minimum/);
-  assert.match(v.messages.join(" "), /Fit scenes to 40px/);
+  assert.equal(v.ok, true, v.messages.join("; "));
+  assert.doesNotMatch(v.messages.join(" "), /below the 40px/);
 });
 
 test("NEGATIVE CONTROL: a planner that drops a line is caught by the line-identity check", () => {
