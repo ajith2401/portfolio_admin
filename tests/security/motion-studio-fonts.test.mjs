@@ -495,3 +495,16 @@ test("resolveFonts is pure and reports every replacement", () => {
       .displayOnlyFont,
   );
 });
+
+test("a transient network error loading a font is retried; a persistent one still stops the export with advice", async () => {
+  const { ensureFonts } = await import("../../src/lib/motion-studio/font-ready.js");
+  const comp = { format: "reel", style: { font: "noto-sans", weight: 600, sizePx: 48 }, scenes: [{ kind: "stanza", lines: ["தமிழ்"] }], branding: { show: false } };
+  let calls = 0;
+  const mk = (failFirst) => ({ load: async () => { calls++; if (calls <= failFirst) throw new Error("A network error occurred."); return [{}]; }, check: () => true });
+  calls = 0;
+  const ok = await ensureFonts(comp, {}, { fonts: mk(2), fontRetryMs: 1 });
+  assert.equal(ok.ok, true);
+  calls = 0;
+  await assert.rejects(ensureFonts(comp, {}, { fonts: mk(99), fontRetryMs: 1 }), (e) => /could not be loaded: A network error occurred\./.test(e.message) && /reload the page/.test(e.message) && /Nothing was exported/.test(e.message));
+  assert.equal(calls, 3);
+});

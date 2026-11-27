@@ -142,17 +142,27 @@ export async function ensureFonts(comp, opts = {}, deps = {}) {
   const report = [];
   for (const f of faces) {
     let loaded;
-    try {
-      loaded = await withTimeout(
-        fonts.load(f.font, f.text),
-        timeoutMs,
-        `The ${f.role} font (${weightOf(f.font)})`,
-      );
-    } catch (e) {
-      if (e instanceof FontReadinessError) throw e;
-      throw new FontReadinessError(
-        `The ${f.role} font (${weightOf(f.font)}) could not be loaded: ${e?.message || e}`,
-      );
+    // A mobile connection can drop a single font request. Retry a NETWORK failure (never a timeout, never a wrong
+    // face) before giving up; a failure still stops the export with a message that says what to do. No fallback font.
+    const attempts = deps.fontRetries ?? 2;
+    for (let n = 0; ; n++) {
+      try {
+        loaded = await withTimeout(
+          fonts.load(f.font, f.text),
+          timeoutMs,
+          `The ${f.role} font (${weightOf(f.font)})`,
+        );
+        break;
+      } catch (e) {
+        if (e instanceof FontReadinessError) throw e;
+        if (n < attempts) {
+          await new Promise((r) => setTimeout(r, deps.fontRetryMs ?? 600 * (n + 1)));
+          continue;
+        }
+        throw new FontReadinessError(
+          `The ${f.role} font (${weightOf(f.font)}) could not be loaded: ${e?.message || e}. Check your connection, reload the page and try again. Nothing was exported.`,
+        );
+      }
     }
     if (!loaded || loaded.length === 0)
       throw new FontReadinessError(
