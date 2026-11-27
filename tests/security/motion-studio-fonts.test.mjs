@@ -562,6 +562,7 @@ test("load() rejecting although every piece is loaded and check() is true procee
     const f = new Set([{ family: '"Noto Serif Tamil"', status: ready ? "loaded" : "error", load: async () => { throw new Error("A network error occurred."); } }]);
     f.load = async () => { throw Object.assign(new Error("A network error occurred."), { name: "NetworkError" }); };
     f.check = () => ready;
+    if (!ready) f.check = () => false;
     return f;
   };
   const ok = await ensureFonts(comp, { poemText: "தமிழ்", title: "" }, { fonts: mk(true), fontRetryMs: 1 }).catch((e) => e);

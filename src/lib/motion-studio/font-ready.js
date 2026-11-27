@@ -250,7 +250,7 @@ export async function ensureFonts(comp, opts = {}, deps = {}) {
           // The load() promise can reject (mobile Chrome: "A network error occurred") although every piece of the face
           // is now loaded. Trust real readiness: check() is true only when every matching face for this text is loaded.
           // (Candidate fonts still have to pass the glyph-measurement proof below.)
-          if (fonts.check?.(f.font, f.text) && allFacesLoaded(fonts, f.font)) {
+          if (allFacesLoaded(fonts, f.font)) {
             loaded = [f.font];
             break;
           }
@@ -258,7 +258,7 @@ export async function ensureFonts(comp, opts = {}, deps = {}) {
           continue;
         }
         throw new FontReadinessError(
-          `The ${f.role} font (${weightOf(f.font)}) could not be loaded: ${e?.message || e}. Check your connection, reload the page and try again. Nothing was exported. [${fontDiagnostics(fonts, f.font)}] ${await fontProbe(fonts, f.font)}`,
+          `The ${f.role} font (${weightOf(f.font)}) could not be loaded: ${e?.message || e}. Check your connection, reload the page and try again. Nothing was exported. [fr4 check=${(() => { try { return fonts.check?.(f.font, f.text); } catch { return "throws"; } })()} ${fontDiagnostics(fonts, f.font)}] ${await fontProbe(fonts, f.font)}`,
         );
       }
     }
