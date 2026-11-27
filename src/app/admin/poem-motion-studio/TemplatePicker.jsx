@@ -40,7 +40,7 @@ const prefersReduced = () =>
   window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 /** The author's first scenes when they exist, otherwise a Tamil + mixed sample, so a preview is never blank. */
-function sampleScenes(comp) {
+export function sampleScenes(comp) {
   const mine = (comp?.scenes || []).filter((s) => s.lines?.length).slice(0, 2);
   return mine.length
     ? mine.map((s) => ({
@@ -52,7 +52,7 @@ function sampleScenes(comp) {
 const previewComp = (id, scenes) =>
   defaultComposition({ format: "reel", templateId: id, scenes, signature: "" });
 
-function Thumb({ id, scenes, width, tick, animate = false, still = true }) {
+export function Thumb({ id, scenes, width, tick, animate = false, still = true }) {
   const ref = useRef(null);
   const height = Math.round((width * 16) / 9);
   const comp = useMemo(() => previewComp(id, scenes), [id, scenes]);

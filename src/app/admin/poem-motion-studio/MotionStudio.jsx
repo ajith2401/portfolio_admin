@@ -3,46 +3,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest, errorMessage } from "@/lib/editor/writing-client";
 import { poemFromWriting } from "@/lib/motion-studio/poem";
 import { generateScenes } from "@/lib/motion-studio/scenes";
-import {
-  TEMPLATES,
-} from "@/lib/motion-studio/templates";
+import { TEMPLATES } from "@/lib/motion-studio/templates";
 import { ensureFonts, canvasMeasure } from "@/lib/motion-studio/font-ready";
-import {
-  defaultComposition,
-  normalizeComposition,
-  motionPrefsOf,
-  MAX_SCENES,
-} from "@/lib/motion-studio/composition";
-import {
-  drawFrame,
-  compDuration,
-  setFontFamilies,
-} from "@/lib/motion-studio/render";
+import { defaultComposition, normalizeComposition, motionPrefsOf, MAX_SCENES } from "@/lib/motion-studio/composition";
+import { drawFrame, compDuration, setFontFamilies } from "@/lib/motion-studio/render";
 import { FORMATS, safeRect } from "@/lib/motion-studio/safe-zone";
-import {
-  detectCapabilities,
-  exportMp4,
-  renderSceneStills,
-  renderPosters,
-  renderFullPoem,
-  renderReelCover,
-  renderQuote,
-  exportQuoteMp4,
-  renderCarousel,
-  zipBlobs,
-} from "@/lib/motion-studio/export";
+import { detectCapabilities, exportMp4, renderSceneStills, renderPosters, renderFullPoem, renderReelCover, renderQuote, exportQuoteMp4, renderCarousel, zipBlobs } from "@/lib/motion-studio/export";
 import * as E from "@/lib/motion-studio/scene-edit";
-import {
-  bakeBackground,
-  readabilityScrim,
-  decodeImageFile,
-} from "@/lib/motion-studio/background";
-import {
-  decodeAudio,
-  shapeAudio,
-  startRecording,
-  recordingSupport,
-} from "@/lib/motion-studio/audio";
+import { bakeBackground, readabilityScrim, decodeImageFile } from "@/lib/motion-studio/background";
+import { decodeAudio, shapeAudio, startRecording, recordingSupport } from "@/lib/motion-studio/audio";
 import { FONT_CSS } from "./fonts";
 import { VERIFIED_FONT_IDS, fontReviewOf, CANDIDATE_EXPORT_WARNING } from "@/lib/motion-studio/font-registry";
 import AudioPanel from "./panels/AudioPanel";
@@ -56,27 +25,21 @@ import ProjectPanel from "./panels/ProjectPanel";
 import ScenesPanel from "./panels/ScenesPanel";
 import { ReadabilityNotice } from "./panels/FitScenesDialog";
 import StoryPanel from "./panels/StoryPanel";
+import QuickCreate, { QuickCreateCheck } from "./panels/QuickCreate";
+import RecoveryBanner from "./panels/RecoveryBanner";
+import ShortcutHelp from "./panels/ShortcutHelp";
+import { UX_CSS } from "./panels/ux-css";
+import useHistory from "./hooks/useHistory";
+import usePrefs from "./hooks/usePrefs";
+import useRecovery from "./hooks/useRecovery";
+import useShortcuts from "./hooks/useShortcuts";
 import { StudioContext } from "./studio-context";
 import { Btn, Field, download, slug } from "./studio-ui";
-import {
-  parsePoemText,
-  poemToText,
-  importPoemFile,
-} from "@/lib/motion-studio/poem-input";
-import {
-  layoutFullPoem,
-  drawFullPoem,
-  validateFullPoem,
-  FULL_W,
-} from "@/lib/motion-studio/full-poem";
-import {
-  saveDraft,
-  loadDraft,
-  listDrafts,
-  deleteDraft,
-  clearDrafts,
-  newDraftId,
-} from "@/lib/motion-studio/drafts";
+import { parsePoemText, poemToText, importPoemFile } from "@/lib/motion-studio/poem-input";
+import { layoutFullPoem, drawFullPoem, validateFullPoem, FULL_W } from "@/lib/motion-studio/full-poem";
+import { saveDraft, loadDraft, listDrafts, deleteDraft, clearDrafts, newDraftId } from "@/lib/motion-studio/drafts";
+import { routeById } from "@/lib/motion-studio/formats";
+import { formatForRoute, tabForRoute } from "@/lib/motion-studio/quick-create";
 
 const THEME_CSS = `
 .pms{--bg:#f6f6f4;--card:#fff;--ink:#14141a;--mute:#4a4a55;--line:#c9c9d1;--accent:#14141a;--accent-ink:#fff;--warn-bg:#fff7e0;--warn-ink:#5c3d00;--err-bg:#fdecec;--err-ink:#7a1010;--ok-bg:#e8f6ee;--ok-ink:#0b4a26;color:var(--ink);background:var(--bg)}
@@ -106,20 +69,26 @@ const THEME_CSS = `
 `;
 export default function MotionStudio() {
   const [theme, setTheme] = useState("system");
-  const [mode, setMode] = useState("quick");
+  const P = usePrefs();
+  const mode = P.prefs.mode === "advanced" ? "advanced" : "quick"; // "quick" = Simple: fewer tabs, same composition
+  const setMode = useCallback((m) => P.update({ mode: m === "advanced" ? "advanced" : "simple" }), [P.update]); // eslint-disable-line react-hooks/exhaustive-deps
   const [tab, setTab] = useState("scenes");
   const [writings, setWritings] = useState([]);
   const [source, setSource] = useState(null);
-  const [, bump] = useState(0);
-  const [hist] = useState(() => E.createHistory(null));
   const [scrimPct, setScrimPct] = useState(0);
   const [hasBitmap, setHasBitmap] = useState(false);
   const [recOk, setRecOk] = useState({ ok: true });
-  const lastKey = useRef({ k: null, at: 0 });
   const [projectId, setProjectId] = useState(null);
   const [name, setName] = useState("");
   const [projects, setProjects] = useState([]);
   const [msg, setMsg] = useState(null);
+  const hist = useHistory({
+    onRefused: (why) => setMsg({ kind: "error", text: why === "open" ? "This composition could not be opened intact (a scene line is too long or a scene has too many lines), so nothing was changed." : "That change was not applied because it would have altered or dropped poem text. Nothing was changed." }),
+  });
+  const [qc, setQc] = useState(null); // the output chosen in Quick Create (its pre-export check is shown)
+  const [help, setHelp] = useState(false);
+  const closeHelp = useCallback(() => setHelp(false), []);
+  const [listed, setListed] = useState(false);
   const [saveState, setSaveState] = useState("idle");
   const [sourceChanged, setSourceChanged] = useState(false);
   const [caps, setCaps] = useState(null);
@@ -184,36 +153,19 @@ export default function MotionStudio() {
   const total = comp ? compDuration(comp) : 0;
   const fmt = comp ? FORMATS[comp.format] : FORMATS.reel;
 
-  // ---- history-backed edits (coalesce rapid edits sharing a key so undo steps are meaningful)
-  const commit = useCallback((next, key) => {
-    const h = hist;
-    if (!h.present) return;
-    const now = Date.now();
-    if (key && lastKey.current.k === key && now - lastKey.current.at < 900)
-      h.replacePresent(next);
-    else h.push(next);
-    lastKey.current = { k: key || null, at: now };
-    bump((n) => n + 1);
-  }, [hist]);
-  const update = (fn, key) =>
-    commit(fn(structuredClone(hist.present)), key);
+  // ---- history-backed edits (validated; rapid edits sharing a key coalesce into one undo step)
+  const commit = hist.commit;
+  const update = (fn, key) => comp && commit(fn(structuredClone(comp)), key);
   const setScenes = (fn, key) =>
     update((c) => ({ ...c, scenes: fn(c.scenes) }), key);
   const start = (c) => {
-    hist.reset(c);
+    if (!hist.reset(c)) return false;
+    if (!c) setQc(null);
     // normalizeComposition replaced a font (unreviewed candidate / display-only): say so, never silently
     if (c?.notices) flash("error", Object.values(c.notices).join(" "));
-    lastKey.current = { k: null, at: 0 };
-    bump((n) => n + 1);
+    return true;
   };
-  const undo = () => {
-    hist.undo();
-    bump((n) => n + 1);
-  };
-  const redo = () => {
-    hist.redo();
-    bump((n) => n + 1);
-  };
+  const { undo, redo } = hist;
 
   useEffect(() => {
     setFontFamilies(FONT_CSS);
@@ -222,17 +174,14 @@ export default function MotionStudio() {
     try {
       const th = localStorage.getItem("pms:theme");
       if (th) setTheme(th);
-      const m = localStorage.getItem("pms:mode");
-      if (m) setMode(m);
       localStorage.removeItem("pms:draft"); // legacy key; recovery now lives in IndexedDB
     } catch {}
   }, []);
   useEffect(() => {
     try {
       localStorage.setItem("pms:theme", theme);
-      localStorage.setItem("pms:mode", mode);
     } catch {}
-  }, [theme, mode]);
+  }, [theme]);
   useEffect(() => {
     (async () => {
       const [w, p] = await Promise.all([
@@ -242,6 +191,7 @@ export default function MotionStudio() {
       if (w.ok) setWritings(w.data.writings || []);
       else flash("error", errorMessage(w.data) || "Could not load poems");
       if (p.ok) setProjects(p.data.projects || []);
+      setListed(true);
     })();
   }, []);
   // device-only recovery copy (IndexedDB). Never sent to the server; shown as "Saved on this device".
@@ -386,16 +336,21 @@ export default function MotionStudio() {
     setT(comp.scenes.slice(0, i).reduce((n, x) => n + x.durationMs, 0) + 800);
   };
 
-  // ---- loading a poem
-  const pick = async (id) => {
-    if (!id) return;
+  // ---- loading a poem (look: optional {format, templateId, motion} chosen in Quick Create)
+  const withLook = (scenes, { motion, ...look } = {}) => {
+    const d = defaultComposition({ scenes, ...look });
+    return motion ? { ...d, motion: { ...d.motion, ...motion } } : d;
+  };
+  const pick = async (id, look = {}) => {
+    if (!id) return false;
     const r = await apiRequest("GET", `/api/writings/${id}`);
     if (!r.ok)
       return flash("error", errorMessage(r.data) || "Could not load poem");
     const poem = poemFromWriting(r.data);
     if (!poem.stanzas.length)
-      return flash("error", "This writing has no poem lines to animate.");
+      return flash("error", "This writing has no poem lines to animate."), false;
     const scenes = generateScenes(poem, { title: r.data.title });
+    if (!start({ ...withLook(scenes, look), originalScenes: structuredClone(scenes) })) return false;
     draftId.current = null;
     setSource({
       id,
@@ -404,10 +359,6 @@ export default function MotionStudio() {
       warnings: poem.warnings,
       version: r.data.version ?? null,
       poem: { stanzas: poem.stanzas },
-    });
-    start({
-      ...defaultComposition({ scenes }),
-      originalScenes: structuredClone(scenes),
     });
     setName(r.data.title || "Untitled");
     setProjectId(null);
@@ -421,6 +372,7 @@ export default function MotionStudio() {
       "ok",
       `Created ${scenes.length} scenes from “${r.data.title}”. The original writing is unchanged.`,
     );
+    return true;
   };
   // The poem record kept with a project: stanzas plus the verbatim source and blank-line structure.
   const poemRecord = (p) => ({ title: p.title, stanzas: p.stanzas, source: p.source, blank: p.blank, trailingBlank: p.trailingBlank });
@@ -431,19 +383,15 @@ export default function MotionStudio() {
     if (scenes.length > MAX_SCENES) { flash("error", `This poem needs ${scenes.length} scenes; the limit is ${MAX_SCENES}. Nothing was cut. Split it into several poems.`); return null; }
     return scenes;
   };
-  const startManual = (text, title) => {
+  const startManual = (text, title, look = {}) => {
     const p = parsePoemText(text, { title });
     if (!p.stanzas.length)
-      return flash("error", "Write or paste at least one line of the poem first.");
+      return flash("error", "Write or paste at least one line of the poem first."), false;
     const scenes = scenesFor(p);
-    if (!scenes) return; // the whole text stays in the box
+    if (!scenes) return false; // the whole text stays in the box
+    if (!start({ ...withLook(scenes, look), originalScenes: structuredClone(scenes), poem: poemRecord(p) })) return false;
     draftId.current = null;
     setSource({ id: null, kind: "manual", title: p.title, warnings: [], poem: poemRecord(p) });
-    start({
-      ...defaultComposition({ scenes }),
-      originalScenes: structuredClone(scenes),
-      poem: poemRecord(p),
-    });
     setName(p.title || "Untitled poem");
     setProjectId(null);
     setT(0);
@@ -456,7 +404,43 @@ export default function MotionStudio() {
       "ok",
       `Created ${scenes.length} scenes from ${p.lineCount} lines. Nothing was saved to your Portfolio or Admin; a recovery copy stays on this device.`,
     );
+    return true;
   };
+  // Quick Create: the same creation path, with the chosen output's format and look (and the author's motion feel)
+  const quickCreate = async (choice, { routeId, templateId }) => {
+    const r = routeById(routeId);
+    const motion = motionPrefsOf({ pref: P.prefs.motionPref, reduceMotion: P.prefs.reduceMotion });
+    const look = { format: formatForRoute(r), templateId, ...(Object.keys(motion).length ? { motion } : {}) };
+    const ok = choice.kind === "writing" ? await pick(choice.id, look) : startManual(choice.text, choice.title, look);
+    if (!ok) return;
+    P.recordRecent(templateId);
+    P.update({ lastRoute: routeId });
+    setQc({ routeId });
+    setTab(tabForRoute(r));
+  };
+  const recovery = useRecovery({
+    comp, name, source, projectId, projects, projectsReady: listed,
+    onRestore: (plan) => {
+      if (!start(plan.composition)) return;
+      loadedRef.current = false;
+      bgBitmap.current = null;
+      setHasBitmap(false);
+      draftId.current = null;
+      setName(plan.name);
+      setProjectId(null);
+      setSource(plan.source);
+      setT(0);
+      setSel(0);
+      flash("ok", plan.message);
+    },
+  });
+  // mirror the author's motion feel / reduce-motion choice so the next Quick Create starts with it (ids/flags only)
+  const motionKey = comp ? `${comp.motion?.pref || ""}|${comp.motion?.reduceMotion === true}` : "";
+  useEffect(() => {
+    if (!comp) return;
+    const m = motionPrefsOf(comp.motion);
+    P.update({ motionPref: m.pref || null, reduceMotion: m.reduceMotion === true });
+  }, [motionKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const pasteFromClipboard = async () => {
     try {
       const t = await navigator.clipboard.readText();
@@ -482,11 +466,11 @@ export default function MotionStudio() {
   const openDraft = async (id) => {
     const d = await loadDraft(id);
     if (!d) return flash("error", "That recovery copy could not be opened.");
+    if (!start(normalizeComposition(d.composition))) return;
     loadedRef.current = false;
     bgBitmap.current = null;
     setHasBitmap(false);
     draftId.current = d.id;
-    start(normalizeComposition(d.composition));
     setName(d.name);
     setProjectId(d.projectId || null);
     setSource(d.source || null);
@@ -559,11 +543,11 @@ export default function MotionStudio() {
     const r = await apiRequest("GET", `/api/motion-projects/${id}`);
     if (!r.ok)
       return flash("error", errorMessage(r.data) || "Could not open project");
+    const c = normalizeComposition(r.data.project.composition);
+    if (!start(c)) return;
     loadedRef.current = false;
     bgBitmap.current = null;
     setHasBitmap(false);
-    const c = normalizeComposition(r.data.project.composition);
-    start(c);
     setName(r.data.project.name);
     setProjectId(id);
     setT(0);
@@ -1044,8 +1028,9 @@ export default function MotionStudio() {
 
   // a template sets its own text animation, but the author's motion feel / reduce-motion choice is kept
   const withMotionPrefs = (d, m) => ({ ...d, motion: { ...d.motion, ...motionPrefsOf(m) } });
-  const pickTemplate = (id) =>
-    update((c) => ({
+  const pickTemplate = (id) => {
+    P.recordRecent(id);
+    return update((c) => ({
       ...withMotionPrefs(defaultComposition({ format: c.format, templateId: id, scenes: c.scenes, signature: c.branding.signature, branding: c.branding }), c.motion),
       originalScenes: c.originalScenes,
       audio: c.audio,
@@ -1053,6 +1038,18 @@ export default function MotionStudio() {
       export: c.export,
       ...(c.material ? { material: c.material } : {}),
     }));
+  };
+  // ---- keyboard shortcuts (never inside text fields; see lib/motion-studio/shortcuts.js)
+  useShortcuts({
+    undo: () => comp && undo(),
+    redo: () => comp && redo(),
+    save: () => {
+      if (!comp) return;
+      if (projectId) save();
+      else flash("ok", "Ctrl/Cmd+S saves a project that is already in Admin. Use Save project to Admin once first.");
+    },
+    help: () => setHelp((h) => !h),
+  });
   const scenesPanel = comp ? <ScenesPanel /> : null;
   const poemPanel = comp ? <PoemPanel /> : null;
 
@@ -1081,6 +1078,7 @@ export default function MotionStudio() {
     fontTick,
     fullCanvasRef,
     fullCheck,
+    fontsReady,
     fullHeight,
     fullLayout,
     fullMissing,
@@ -1131,8 +1129,9 @@ export default function MotionStudio() {
       className="pms mx-auto min-h-screen max-w-6xl p-4 sm:p-6 xl:max-w-[1600px]"
       data-sheet={comp ? (sheetOpen ? "open" : "closed") : undefined}
       data-theme={theme}
+      data-reduce-ui={P.prefs.reduceEffects ? "true" : undefined}
     >
-      <style>{THEME_CSS}</style>
+      <style>{THEME_CSS + UX_CSS}</style>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-semibold">Poem Motion Studio</h1>
@@ -1146,8 +1145,8 @@ export default function MotionStudio() {
           role="group"
           aria-label="Studio settings"
         >
-          <Btn aria-pressed={mode === "quick"} onClick={() => setMode("quick")}>
-            Quick Create
+          <Btn aria-pressed={mode === "quick"} onClick={() => setMode("quick")} title="Simple: the essential tabs. Switching never changes your work.">
+            Simple
           </Btn>
           <Btn
             aria-pressed={mode === "advanced"}
@@ -1155,6 +1154,7 @@ export default function MotionStudio() {
           >
             Advanced Studio
           </Btn>
+          <Btn onClick={() => setHelp(true)} aria-haspopup="dialog">Shortcuts</Btn>
           <select
             aria-label="Theme"
             className="pms-field"
@@ -1181,6 +1181,8 @@ export default function MotionStudio() {
           {msg.text}
         </p>
       )}
+      {!comp && <RecoveryBanner offer={recovery.offer} onRestore={recovery.restore} onDiscard={recovery.discard} onDismiss={recovery.dismiss} />}
+      <ShortcutHelp open={help} onClose={closeHelp} reduceUi={P.prefs.reduceEffects} onReduceUi={(v) => P.update({ reduceEffects: v })} />
       {sourceChanged && (
         <div
           role="alert"
@@ -1246,6 +1248,7 @@ export default function MotionStudio() {
             aria-label="Ways to start"
           >
             {[
+              ["quick", "Quick Create", "Poem, output, look"],
               ["write", "Write a poem", "Type it here"],
               ["paste", "Paste a poem", "From Notes, WhatsApp…"],
               ["import", "Import a file", ".txt or .md"],
@@ -1270,6 +1273,7 @@ export default function MotionStudio() {
             ))}
           </div>
 
+          {route === "quick" && <QuickCreate writings={writings} prefs={P.prefs} onFavourite={P.toggleFavourite} onCreate={quickCreate} />}
           {(route === "write" || route === "paste" || route === "import") && (
             <div className="pms-card mt-3 space-y-2">
               {route === "paste" && (
@@ -1426,6 +1430,7 @@ export default function MotionStudio() {
           <div className="min-w-0 lg:sticky lg:top-4 lg:self-start">
             {previewBlock("main")}
             <ReadabilityNotice />
+            {qc && <QuickCreateCheck routeId={qc.routeId} onDone={() => setQc(null)} />}
             <label className="mt-2 flex min-h-11 items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -1452,7 +1457,7 @@ export default function MotionStudio() {
             </div>
           </div>
 
-          <div className="min-w-0 pms-sheet" data-open={sheetOpen ? "true" : "false"} style={{ "--kb": `${vv.kb}px`, "--vvh": vv.h ? `${vv.h}px` : "100dvh" }}>
+          <div className="min-w-0 pms-sheet" onKeyDown={(e) => e.key === "Escape" && sheetOpen && setSheetOpen(false)} data-open={sheetOpen ? "true" : "false"} style={{ "--kb": `${vv.kb}px`, "--vvh": vv.h ? `${vv.h}px` : "100dvh" }}>
             <button type="button" className="pms-handle" aria-expanded={sheetOpen} aria-controls="pms-panel" onClick={() => setSheetOpen((o) => !o)}>
               <span aria-hidden="true" className="pms-grip" />
               {sheetOpen ? "Hide panel to see the full preview" : "Show editing panel"}
