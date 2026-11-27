@@ -13,6 +13,7 @@ export const UX_CSS = `
 .pms-gcard{position:relative;border:1px solid var(--line);border-radius:12px;padding:6px;background:var(--card);min-width:0}
 .pms-gcard[data-on=true]{outline:3px solid var(--accent);outline-offset:1px}
 .pms-gcard>button.pms-gpick{display:block;width:100%;min-height:44px;text-align:left;background:none;border:0;padding:0;color:inherit;cursor:pointer}
+.pms-review-tag{display:inline-block;margin-top:4px;padding:1px 6px;border-radius:999px;border:1px dashed var(--line);font-size:11px;line-height:1.5;color:var(--mute)}
 .pms-gfav{position:absolute;top:8px;right:8px;min-width:44px;min-height:44px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:18px;line-height:1}
 .pms-chips{display:flex;flex-wrap:wrap;gap:6px}
 .pms-chips .pms-btn[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}

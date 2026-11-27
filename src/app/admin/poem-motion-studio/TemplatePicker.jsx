@@ -5,7 +5,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { drawFrame } from "@/lib/motion-studio/render";
 import { defaultComposition } from "@/lib/motion-studio/composition";
-import { TEMPLATES, FONT_LABELS } from "@/lib/motion-studio/templates";
+import {
+  TEMPLATES,
+  FONT_LABELS,
+  PENDING_REVIEW_LABEL,
+} from "@/lib/motion-studio/templates";
+import { ANIMATIONS } from "@/lib/motion-studio/animation";
 
 const SAMPLE = [
   {
@@ -152,6 +157,11 @@ function PreviewDialog({ tpl, scenes, tick, selected, onUse, onClose }) {
             <p className="text-sm" style={{ color: "var(--mute)" }}>
               {tpl.mood}
             </p>
+            {tpl.needsAestheticReview && (
+              <p className="pms-review-tag">
+                {PENDING_REVIEW_LABEL}: no design sign-off yet
+              </p>
+            )}
           </div>
           <button
             ref={closeRef}
@@ -202,7 +212,10 @@ function PreviewDialog({ tpl, scenes, tick, selected, onUse, onClose }) {
             <div>
               <dt className="font-semibold">Animation</dt>
               <dd>
-                {MOTION_LABEL[tpl.motion.textIn] || tpl.motion.textIn} ·{" "}
+                {MOTION_LABEL[tpl.motion.textIn] ||
+                  ANIMATIONS[tpl.motion.textIn]?.label ||
+                  tpl.motion.textIn}{" "}
+                ·{" "}
                 {BGMOTION_LABEL[tpl.motion.bgMotion] || tpl.motion.bgMotion} ·{" "}
                 {PARTICLE_LABEL[tpl.fx.particles] || tpl.fx.particles}
               </dd>
@@ -242,21 +255,29 @@ function PreviewDialog({ tpl, scenes, tick, selected, onUse, onClose }) {
   );
 }
 
-export default function TemplatePicker({ comp, tick, onPick }) {
+// `templates` defaults to the six classic templates (the "Templates" list); the Look panel renders the P8 families
+// through the same picker with their own list label.
+export default function TemplatePicker({
+  comp,
+  tick,
+  onPick,
+  templates = TEMPLATES,
+  label = "Templates",
+}) {
   const key = (comp?.scenes || []).slice(0, 2).map((x) => `${x.id}:${x.durationMs}:${(x.lines || []).join("|")}`).join("#");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const scenes = useMemo(() => sampleScenes(comp), [key]);
   const [peek, setPeek] = useState(null); // hover or keyboard focus: enlarged still
   const [open, setOpen] = useState(null); // full preview dialog
-  const tpl = open ? TEMPLATES.find((x) => x.id === open) : null;
+  const tpl = open ? templates.find((x) => x.id === open) : null;
   return (
     <div>
       <ul
         className="grid gap-3"
         style={{ gridTemplateColumns: "repeat(auto-fill,minmax(112px,1fr))" }}
-        aria-label="Templates"
+        aria-label={label}
       >
-        {TEMPLATES.map((x) => {
+        {templates.map((x) => {
           const sel = comp.templateId === x.id;
           return (
             <li
@@ -301,6 +322,11 @@ export default function TemplatePicker({ comp, tick, onPick }) {
                   >
                     {x.mood}
                   </span>
+                  {x.needsAestheticReview && (
+                    <span className="pms-review-tag">
+                      {PENDING_REVIEW_LABEL}
+                    </span>
+                  )}
                 </button>
                 <button
                   type="button"

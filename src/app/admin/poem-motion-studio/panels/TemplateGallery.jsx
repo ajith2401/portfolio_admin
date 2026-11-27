@@ -1,8 +1,13 @@
 "use client";
-// Template gallery for Quick Create: search, All / Favourites / Recent filter, favourite toggles (prefs-backed).
+// Template gallery for Quick Create: search (name, mood, family), All / Favourites / Recent filter, favourite toggles
+// (prefs-backed). All / Favourites are grouped by family; Recent keeps its order. P8 looks carry a "Pending design review" tag.
 // Memoised list (pure galleryList, capped at MAX_GALLERY); each card draws the real renderer via TemplatePicker's Thumb.
 import { memo, useMemo, useState } from "react";
-import { TEMPLATES } from "@/lib/motion-studio/templates";
+import {
+  TEMPLATE_LIBRARY,
+  groupByFamily,
+  PENDING_REVIEW_LABEL,
+} from "@/lib/motion-studio/templates";
 import { galleryList } from "@/lib/motion-studio/quick-create";
 import { Thumb, sampleScenes } from "../TemplatePicker";
 
@@ -27,6 +32,9 @@ const Card = memo(function Card({ tpl, on, fav, scenes, onPick, onFav }) {
         <span className="block text-xs" style={{ color: "var(--mute)" }}>
           {tpl.mood}
         </span>
+        {tpl.needsAestheticReview && (
+          <span className="pms-review-tag">{PENDING_REVIEW_LABEL}</span>
+        )}
       </button>
       <button
         type="button"
@@ -56,7 +64,7 @@ export default function TemplateGallery({
   const [filter, setFilter] = useState("all");
   const scenes = useMemo(() => sampleScenes(null), []);
   const list = useMemo(
-    () => galleryList(TEMPLATES, { query, filter, favourites, recent }),
+    () => galleryList(TEMPLATE_LIBRARY, { query, filter, favourites, recent }),
     [query, filter, favourites, recent],
   );
   return (
@@ -96,19 +104,34 @@ export default function TemplateGallery({
               : "No look matches that search."}
         </p>
       ) : (
-        <ul className="pms-gallery" aria-label="Template gallery">
-          {list.map((t) => (
-            <Card
-              key={t.id}
-              tpl={t}
-              on={value === t.id}
-              fav={favourites.includes(t.id)}
-              scenes={scenes}
-              onPick={onChange}
-              onFav={onFavourite}
-            />
-          ))}
-        </ul>
+        (filter === "recent"
+          ? [{ id: "recent", label: "", templates: list }]
+          : groupByFamily(list)
+        ).map((g) => (
+          <section key={g.id} aria-label={g.label || "Recent looks"}>
+            {g.label && (
+              <h3 className="pms-lbl" style={{ marginTop: 4 }}>
+                {g.label}
+              </h3>
+            )}
+            <ul
+              className="pms-gallery"
+              aria-label={g.label ? `Template gallery: ${g.label}` : "Template gallery"}
+            >
+              {g.templates.map((t) => (
+                <Card
+                  key={t.id}
+                  tpl={t}
+                  on={value === t.id}
+                  fav={favourites.includes(t.id)}
+                  scenes={scenes}
+                  onPick={onChange}
+                  onFav={onFavourite}
+                />
+              ))}
+            </ul>
+          </section>
+        ))
       )}
     </div>
   );

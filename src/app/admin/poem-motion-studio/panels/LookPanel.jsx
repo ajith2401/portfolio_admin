@@ -6,6 +6,7 @@ import SignaturePanel from "./SignaturePanel";
 import MaterialPanel from "./MaterialPanel";
 import MotionPanel from "./MotionPanel";
 import TemplatePicker from "../TemplatePicker";
+import MoreLooks from "./MoreLooks";
 import { Btn, Field, Range } from "../studio-ui";
 import { useStudio } from "../studio-context";
 
@@ -37,6 +38,7 @@ export default function LookPanel() {
                     <legend className="pms-lbl">Template</legend>
                     <TemplatePicker comp={comp} tick={fontTick} onPick={pickTemplate} />
                   </fieldset>
+                  <MoreLooks comp={comp} tick={fontTick} onPick={pickTemplate} />
                   <MaterialPanel />
                   <MotionPanel />
 

@@ -2,7 +2,7 @@
 // path (parsePoemText + generateScenes + defaultComposition) and the EXISTING route validators. Nothing here draws,
 // edits text or bypasses a check: gateRoute() always awaits the injected ensureFonts before it runs route.validate().
 import { ROUTES, routeById } from "./formats.js";
-import { TEMPLATES } from "./templates.js";
+import { TEMPLATE_LIBRARY, familyOf, familyLabel } from "./templates.js";
 import { parsePoemText } from "./poem-input.js";
 import { generateScenes } from "./scenes.js";
 import {
@@ -36,10 +36,10 @@ export const tabForRoute = (route) =>
       ? "story"
       : "export";
 
-/** Template gallery: search over name/mood, filter all|favourites|recent; capped list size; recent keeps its order. */
+/** Template gallery: search over name/mood/family, filter all|favourites|recent; capped list size; recent keeps its order. */
 export const MAX_GALLERY = 60;
 export function galleryList(
-  templates = TEMPLATES,
+  templates = TEMPLATE_LIBRARY,
   { query = "", filter = "all", favourites = [], recent = [] } = {},
 ) {
   const q = String(query || "")
@@ -55,7 +55,7 @@ export function galleryList(
       .filter(Boolean);
   if (q)
     list = list.filter((t) =>
-      `${t.name} ${t.mood || ""} ${t.id}`.toLowerCase().includes(q),
+      `${t.name} ${t.mood || ""} ${t.id} ${familyLabel(familyOf(t))}`.toLowerCase().includes(q),
     );
   return list.slice(0, MAX_GALLERY);
 }
@@ -70,7 +70,7 @@ export function planQuickCreate(input = {}) {
   const issues = [];
   const route = routeById(input.routeId);
   if (!route || route.excerpt) issues.push("Choose an output.");
-  const tpl = TEMPLATES.find((t) => t.id === input.templateId);
+  const tpl = TEMPLATE_LIBRARY.find((t) => t.id === input.templateId);
   if (!tpl) issues.push("Choose a template.");
   let poem = null;
   if (input.poem && Array.isArray(input.poem.stanzas)) {
