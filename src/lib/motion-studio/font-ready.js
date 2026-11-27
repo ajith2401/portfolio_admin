@@ -168,6 +168,30 @@ export async function fontProbe(fonts, font, env = typeof window !== "undefined"
   return out.join(" ");
 }
 
+/**
+ * Load the not-yet-loaded @font-face pieces (unicode-range subsets) of a family ONE AT A TIME, each capped at `capMs`.
+ * Some mobile browsers reject a single document.fonts.load() that starts several subset downloads together although each
+ * subset loads fine alone; this serial warm-up is run before a retry. It only loads the page's OWN declared faces: it
+ * never substitutes a font, and a piece that still fails is reported by the caller's normal error. Never throws.
+ */
+export async function warmFaces(fonts, font, capMs = 8000) {
+  try {
+    const fam = familyOf(font).split(",")[0].replace(/["']/g, "").trim();
+    if (!fonts || typeof fonts[Symbol.iterator] !== "function") return 0;
+    let n = 0;
+    for (const f of [...fonts]) {
+      if (String(f.family).replace(/["']/g, "") !== fam || f.status === "loaded") continue;
+      try {
+        await withTimeout(f.load(), capMs, "A font piece");
+        n++;
+      } catch {}
+    }
+    return n;
+  } catch {
+    return 0;
+  }
+}
+
 const familyOf = (font) => font.replace(/^\s*\d+\s+[\d.]+px\s+/, "");
 const weightOf = (font) => font.match(/^\s*(\d+)/)?.[1];
 
@@ -210,6 +234,7 @@ export async function ensureFonts(comp, opts = {}, deps = {}) {
       } catch (e) {
         if (e instanceof FontReadinessError) throw e;
         if (n < attempts) {
+          await warmFaces(fonts, f.font, timeoutMs);
           await new Promise((r) => setTimeout(r, deps.fontRetryMs ?? 600 * (n + 1)));
           continue;
         }

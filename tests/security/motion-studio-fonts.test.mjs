@@ -533,3 +533,24 @@ test("fontProbe tries each unloaded face alone and reports its range, state chan
   assert.match(fontDiagnostics(new Set(), "400 40px X", env), /a\.woff2 200/);
   assert.equal(typeof (await fontProbe(null, "400 40px X", {})), "string");
 });
+
+test("a combined fonts.load() that fails while each subset loads alone recovers after the serial warm-up", async () => {
+  const { ensureFonts, warmFaces } = await import("../../src/lib/motion-studio/font-ready.js");
+  const mk = (r) => ({ family: '"Noto Serif Tamil"', status: "unloaded", unicodeRange: r, load: async function () { this.status = "loaded"; return [this]; } });
+  const set = new Set([mk("U+0000-00FF"), mk("U+0100-02BA"), mk("U+0B80-0BFF")]);
+  assert.equal(await warmFaces(set, '400 40px "Noto Serif Tamil", serif'), 3);
+  // combined load fails until every piece is loaded (the observed mobile behaviour)
+  const fonts = new Set([...set].map((f) => Object.assign(f, { status: "unloaded" })));
+  fonts.load = async (font) => {
+    if ([...fonts].some((f) => f.status !== "loaded")) throw Object.assign(new Error("A network error occurred."), { name: "NetworkError" });
+    return [...fonts];
+  };
+  fonts.check = () => true;
+  const comp = { format: "reel", style: { font: "noto-serif", weight: 400, sizePx: 48 }, scenes: [{ kind: "stanza", lines: ["தமிழ்"] }], branding: { show: false } };
+  let calls = 0;
+  const inner = fonts.load;
+  fonts.load = async (...a) => (calls++, inner(...a));
+  const r = await ensureFonts(comp, { poemText: "தமிழ்", title: "" }, { fonts, fontRetryMs: 1 }).catch((e) => e);
+  assert.ok(calls >= 2, "the combined load must have been attempted and retried, calls=" + calls);
+  assert.ok(!(r instanceof Error), "should recover after the serial warm-up, got: " + (r && r.message));
+});
