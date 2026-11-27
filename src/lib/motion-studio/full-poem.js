@@ -17,6 +17,7 @@ import { realWeight, titleWeightOf } from "./font-registry.js";
 import { paintTextures } from "./textures.js";
 import { paintTextile, paintTextileScrims, textileActive } from "./textiles.js";
 import { paintElements } from "./elements.js";
+import { drawWrittenRows, measureIn, inkColour, rowLeft, planWriting, normalizeWriting } from "./writing.js";
 import { materialPlan, effectiveIntensity } from "./materials.js";
 import { signatureBox as sigBox, boxBoundsIssues, overlapsSignature } from "./signature.js";
 
@@ -307,6 +308,26 @@ export function fullPoemCoverage(poem, layout) {
   return bad.length ? bad : [];
 }
 
+/** The rows Whole-Poem writes, in reading order, with their drawn geometry and font (title first, then stanzas). */
+export function writingRows(comp, layout) {
+  const st = comp.style, align = st.align, side = (PRESETS[layout.preset] || PRESETS.balanced).side;
+  const ax = align === "left" ? FULL_W * side : align === "right" ? FULL_W * (1 - side) : FULL_W / 2;
+  const family = FONT_FAMILY[st.font] || FONT_FAMILY["noto-serif"];
+  const titleFamily = (st.titleFont && FONT_FAMILY[st.titleFont]) || family;
+  return layout.items
+    .filter((it) => it.kind !== "rule")
+    .map((it) => ({
+      text: it.text,
+      left: rowLeft(align, it.x ?? ax, it.w),
+      mid: layout.offset + it.y,
+      font: `${it.wt} ${it.px}px ${it.kind === "title" ? titleFamily : family}`,
+      size: it.px,
+      group: it.kind === "title" ? -1 : it.stanza,
+    }));
+}
+/** How long writing this layout takes with settings w (ms; plan.total includes the final hold). */
+export const wholeWritingPlan = (ctx, comp, layout, w) => planWriting(writingRows(comp, layout), normalizeWriting(w), measureIn(ctx));
+
 /** Paint a layout. `scale` multiplies the output pixel size (1 or 2). */
 export function drawFullPoem(
   ctx,
@@ -338,7 +359,9 @@ export function drawFullPoem(
   );
   const atm = still ? 0 : paintParticles(ctx, comp, W, H, fxMs, anim.motionK);
   if (atm + paintTextile(ctx, fxEnv) + paintTextures(ctx, fxEnv) + runMaterial("material", ctx, fxEnv) + runMaterial("atmosphere", ctx, fxEnv) + paintElements(ctx, comp, W, H, fxMs, { still: still || !anim.motionK })) resetTextState(ctx);
-  const textAlpha = still ? 1 : Math.max(0, Math.min(1, anim.textAlpha ?? 1));
+  const wr = still ? null : anim.writing || null; // Ink Reveal / Typewriter (writing.js); null = the still poem
+  // with writing on, the poem is never faded out: the finished poem stays on screen to the last frame
+  const textAlpha = still || wr ? 1 : Math.max(0, Math.min(1, anim.textAlpha ?? 1));
   const align = st.align,
     side = (PRESETS[layout.preset] || PRESETS.balanced).side;
   const ax =
@@ -360,7 +383,19 @@ export function drawFullPoem(
   }
   const family = FONT_FAMILY[st.font] || FONT_FAMILY["noto-serif"];
   const titleFamily = (st.titleFont && FONT_FAMILY[st.titleFont]) || family;
+  let wplan = null;
+  if (wr) {
+    const wrows = writingRows(comp, layout);
+    ctx.fillStyle = inkColour(wr, st.color);
+    wplan = drawWrittenRows(ctx, wrows, anim.writeMs ?? 0, wr, { size: layout.size, measure: measureIn(ctx) });
+  }
   for (const it of layout.items) {
+    if (wplan && it.kind !== "rule") continue;
+    if (wplan) {
+      // an ornament rule appears when the row after it starts being written
+      const y0 = layout.offset + it.y, next = wplan.rows.find((r) => r.row.mid > y0);
+      if (next && (anim.writeMs ?? 0) < next.start) continue;
+    }
     const y = layout.offset + it.y;
     if (it.kind === "rule") {
       ctx.save();

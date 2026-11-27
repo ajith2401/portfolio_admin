@@ -1,4 +1,5 @@
 "use client";
+import WritingPanel from "./WritingPanel";
 import { templateById } from "@/lib/motion-studio/templates";
 import { selectableFonts, resolveFonts, CANDIDATE_TOGGLE_LABEL, fontWeights, realWeight, longPoemFontWarning, fontLabel } from "@/lib/motion-studio/font-registry";
 import { FONT_PAIRINGS, applyPairing, currentPairing, pairingTitle } from "@/lib/motion-studio/font-pairings";
@@ -62,6 +63,7 @@ export default function LookPanel() {
                   </fieldset>
                   <MoreLooks comp={comp} tick={fontTick} onPick={pickTemplate} />
                   <MaterialPanel />
+                  <WritingPanel />
                   <MotionPanel />
 
                   {mode === "advanced" && (

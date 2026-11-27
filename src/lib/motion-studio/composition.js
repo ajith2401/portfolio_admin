@@ -1,6 +1,7 @@
 // Composition: the serialisable description of a Reel / Story / Poster. Never contains the poem document itself
 // (only the text lines chosen for each scene) and never any HTML. normalizeComposition() is the single gate used
 // by the API and the client: it whitelists fields, clamps numbers and rejects anything else.
+import { normalizeWriting } from "./writing.js";
 import { normalizeWhole } from "./whole-poem.js";
 import { normalizeElements } from "./elements.js";
 import { templateById } from "./templates.js";
@@ -31,6 +32,8 @@ export const TEXT_IN_ALL = [...TEXT_IN, ...LIBRARY_IDS];
 export const motionPrefsOf = (m) => ({
   ...(MOTION_PREFS.includes(m?.pref) ? { pref: m.pref } : {}),
   ...(m?.reduceMotion === true ? { reduceMotion: true } : {}),
+  // writing animation (writing.js): stored only when the author has set it, so legacy projects normalize unchanged
+  ...(m?.writing && typeof m.writing === "object" ? { writing: normalizeWriting(m.writing) } : {}),
 });
 export const BG_MOTION = ["none", "zoom", "drift"];
 export const PARTICLES = ["none", "dust", "rain", "stars", "light", "mist", "bokeh", "leak", "sweep", "ripple", "snow"];
@@ -204,6 +207,7 @@ export function normalizeComposition(input) {
             ? { offsetY: num(sc.offsetY, -30, 30, 0) }
             : {}),
           ...(ALIGN.includes(sc?.align) ? { align: sc.align } : {}),
+          ...(sc?.noWrite === true ? { noWrite: true } : {}),
           ...(Number.isFinite(Number(sc?.scale)) && Number(sc.scale) !== 1
             ? { scale: num(sc.scale, 0.6, 1.4, 1) }
             : {}),

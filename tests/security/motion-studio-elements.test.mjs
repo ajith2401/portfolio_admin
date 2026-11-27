@@ -225,3 +225,25 @@ test("presets and suggestions reference real elements; warnings catch off-frame 
     [],
   );
 });
+
+test("Draw on is offered only for line art; silhouettes get Soft reveal; saved silhouette 'draw' still loads", async () => {
+  const m = await import("../../src/lib/motion-studio/elements.js");
+  const line = m.ELEMENTS.find((e) => m.styleOf(e) === "line");
+  const sil = m.ELEMENTS.find((e) => m.styleOf(e) === "silhouette");
+  assert.ok(line && sil);
+  assert.equal(m.canDrawOn(line), true);
+  assert.equal(m.canDrawOn(sil), false, "filled shapes never get a fake pen stroke");
+  assert.ok(m.ELEMENT_ANIMS.includes("reveal"));
+  const kept = m.normalizeElement({ asset: sil.id, anim: { kind: "draw", durMs: 4000 } });
+  assert.equal(kept.anim.kind, "draw", "an existing saved composition is not silently changed");
+  const rv = m.normalizeElement({ asset: sil.id, anim: { kind: "reveal", durMs: 2000, delayMs: 500 } });
+  assert.equal(rv.anim.kind, "reveal");
+  assert.equal(m.elementStateAt(rv, 0).alpha, 0);
+  const mid = m.elementStateAt(rv, 1500);
+  assert.ok(mid.alpha > 0 && mid.alpha < 1 && mid.dy > 0);
+  const end = m.elementStateAt(rv, 9000);
+  assert.equal(end.alpha, 1);
+  assert.equal(end.dy, 0);
+  assert.deepEqual(m.elementStateAt(rv, 1500), mid, "deterministic");
+  assert.equal(m.elementStateAt(rv, 0, { still: true }).alpha, 1, "stills show the element");
+});

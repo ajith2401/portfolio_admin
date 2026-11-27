@@ -32,6 +32,9 @@ export const ELEMENT_STYLES = [
   ["silhouette", "Silhouette"],
   ["watercolour", "Watercolour"],
 ].filter(([k]) => ELEMENTS.some((e) => styleOf(e) === k));
+/** "Draw on" traces strokes, so it is offered only for line art; silhouettes (filled shapes) get Fade / Soft reveal.
+ * A saved silhouette "draw" still renders as before (its fill is revealed), it is just not offered for new picks. */
+export const canDrawOn = (e) => !!e && e.kind === "vector" && styleOf(e) === "line";
 export function styleOf(e) {
   return e.kind === "raster"
     ? "watercolour"
@@ -56,13 +59,14 @@ export function searchElements({ q = "", category = "", style = "" } = {}) {
 
 // ---------------------------------------------------------------- the composition's `elements` array
 export const MAX_ELEMENTS = 24;
-export const ELEMENT_ANIMS = ["none", "drift", "float", "sway", "fade", "draw"];
+export const ELEMENT_ANIMS = ["none", "drift", "float", "sway", "fade", "reveal", "draw"];
 export const ANIM_LABELS = {
   none: "Still",
   drift: "Drift",
   float: "Float",
   sway: "Sway",
   fade: "Fade in",
+  reveal: "Soft reveal",
   draw: "Draw on",
 };
 export const SIZE_MIN = 0.05,
@@ -172,7 +176,7 @@ export function elementStateAt(el, tMs, { still = false } = {}) {
   if (still || an.kind === "none") return s;
   const t = Math.max(0, tMs - (an.delayMs || 0)),
     sp = an.speed || 1;
-  if (tMs < (an.delayMs || 0) && (an.kind === "fade" || an.kind === "draw"))
+  if (tMs < (an.delayMs || 0) && (an.kind === "fade" || an.kind === "draw" || an.kind === "reveal"))
     return { ...s, alpha: 0, draw: 0 };
   if (an.kind === "drift") {
     s.dx = Math.sin((TAU * t * sp) / 14000) * 0.018;
@@ -180,7 +184,12 @@ export function elementStateAt(el, tMs, { still = false } = {}) {
   } else if (an.kind === "float") s.dy = Math.sin((TAU * t * sp) / 5000) * 0.01;
   else if (an.kind === "sway") s.rot = Math.sin((TAU * t * sp) / 6000) * 3;
   else if (an.kind === "fade") s.alpha = ease(clamp01(t / an.durMs));
-  else if (an.kind === "draw") s.draw = clamp01(t / an.durMs);
+  else if (an.kind === "reveal") {
+    // filled silhouettes: no fake pen stroke, a gentle settle into place while the fill fades in
+    const e = ease(clamp01(t / an.durMs));
+    s.alpha = e;
+    s.dy = (1 - e) * 0.012;
+  }  else if (an.kind === "draw") s.draw = clamp01(t / an.durMs);
   return s;
 }
 

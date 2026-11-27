@@ -24,6 +24,7 @@ import {
   applyBackdrop,
   backdropOf,
   WHOLE_HARD_FLOOR,
+  wholeWritingFit,
 } from "../../src/lib/motion-studio/whole-poem.js";
 import { checkWhole } from "../../src/lib/motion-studio/route-checks.js";
 import { routeById } from "../../src/lib/motion-studio/formats.js";
@@ -217,4 +218,32 @@ test("backdrops map to real renderer options; reduced motion stops the backgroun
   assert.equal(motionK(comp), 1);
   comp.motion.reduceMotion = true;
   assert.equal(motionK(comp), 0);
+});
+
+test("Whole-Poem writing: off by default, completed poem stays fully visible to the last frame, fit is reported not forced", () => {
+  const { comp, poem } = fixture(SHORT, { on: true }, {});
+  assert.equal(comp.motion.writing, undefined, "static stays the default");
+  const ink = { ...comp, motion: { ...comp.motion, writing: { mode: "ink" } } };
+  const fit = layoutWhole(mkCtx(), ink, poem);
+  const wf = wholeWritingFit(mkCtx(), ink, fit.layout);
+  assert.equal(wf.on, true);
+  assert.equal(wf.fits, true, "a short poem writes inside 30 s");
+  assert.equal(wf.totalMs, 30000);
+  assert.equal(wholeFrames(wholeDuration(ink), 30), 900, "writing never changes the frame count");
+  const lines = poem.stanzas.flat();
+  for (const i of [849, 899]) {
+    const c = mkCtx();
+    drawWholeFrame(c, ink, fit.layout, (i / 30) * 1000);
+    const drawn = poemText(c.calls);
+    for (const l of lines) assert.ok(drawn.includes(l), `frame ${i} shows the completed line: ${l}`);
+    assert.ok(c.calls.filter((x) => lines.includes(x.text)).every((x) => x.a === undefined || x.a > 0.99), `frame ${i} fully opaque`);
+  }
+  const c0 = mkCtx();
+  drawWholeFrame(c0, ink, fit.layout, 0);
+  assert.equal(poemText(c0.calls).filter((t) => lines.includes(t)).length, 0, "frame 0: nothing written yet (start delay)");
+  const slow = { ...ink, motion: { ...ink.motion, writing: { mode: "ink", speed: 0.25, finalHoldMs: 10000 } }, whole: { ...ink.whole, durationMs: 10000 } };
+  const bad = wholeWritingFit(mkCtx(), slow, layoutWhole(mkCtx(), slow, poem).layout);
+  assert.equal(bad.fits, false);
+  assert.ok(bad.recommendS * 1000 >= bad.needMs, "recommends a duration that fits");
+  assert.equal(slow.whole.durationMs, 10000, "duration not changed automatically");
 });

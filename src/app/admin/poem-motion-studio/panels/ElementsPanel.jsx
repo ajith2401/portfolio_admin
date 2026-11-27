@@ -12,6 +12,7 @@ import {
   ELEMENT_STYLES,
   ELEMENT_ANIMS,
   ANIM_LABELS,
+  canDrawOn,
   MAX_ELEMENTS,
   POSITION_PRESETS,
   SIZE_MIN,
@@ -396,7 +397,7 @@ export default function ElementsPanel() {
                     }
                   >
                     {ELEMENT_ANIMS.filter(
-                      (k) => k !== "draw" || selAsset.kind === "vector",
+                      (k) => k !== "draw" || canDrawOn(selAsset) || sel.anim.kind === "draw",
                     ).map((k) => (
                       <option key={k} value={k}>
                         {ANIM_LABELS[k]}

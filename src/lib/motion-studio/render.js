@@ -8,11 +8,12 @@ import { signatureBox, textRect, signatureBoundsIssues, overlapsSignature } from
 // Reel/Story floor comes from MIN_TEXT_PX; poster paths pass POSTER_MIN explicitly and keep their legacy default here.
 export const defaultMinSize = (format) => (format === "poster" ? 28 : MIN_TEXT_PX[format] ?? MIN_TEXT_PX.reel);
 import { totalDuration } from "./scenes.js";
-import { rowState, activeBehaviour, buildPlan, animFrame, prefParams } from "./animation.js";
+import { rowState, activeBehaviour, buildPlan, animFrame, prefParams, fadeOutAt, MIN_HOLD_MS, FADE_OUT_MS } from "./animation.js";
 import { runFx, runMaterial } from "./fx/registry.js";
 import { paintTextures } from "./textures.js";
 import { paintTextile, paintTextileScrims, textileActive } from "./textiles.js";
 import { paintElements } from "./elements.js";
+import { writingOf, drawWrittenRows, measureIn, inkColour, planWriting } from "./writing.js";
 import { materialPlan, effectiveIntensity } from "./materials.js";
 import { registryFamilies, realWeight, titleWeightOf } from "./font-registry.js";
 
@@ -165,6 +166,28 @@ export function sceneGeometry(ctx, comp, scene, { minSize = defaultMinSize(comp.
   return { rows: rowBoxes(lay.rows, align, ax, y), rect, W: fmt.w, H: fmt.h, sig: signatureBox(comp, fmt, ctx), measure, fits: lay.fits };
 }
 
+/**
+ * Scene-by-Scene writing check: per scene, the time the writing needs (last ink + hold: the final hold on the last
+ * scene, MIN_HOLD_MS elsewhere) against the time the scene shows its text (its length minus the fade-out). Scenes that
+ * opt out (noWrite) are skipped. Never auto-fitted: the caller shows the estimate and offers to lengthen the scenes.
+ */
+export function sceneWritingFit(ctx, comp, { minSize = defaultMinSize(comp.format) } = {}) {
+  const w = writingOf(comp);
+  if (w.mode === "none") return { on: false, fits: true, scenes: [] };
+  const scenes = comp.scenes.map((sc, i) => {
+    if (sc.noWrite) return { index: i, skip: true, fits: true };
+    const g = sceneGeometry(ctx, comp, sc, { minSize });
+    let group = 0;
+    const rows = [];
+    for (const r of g.rows) { if (r.gap) { group++; continue; } rows.push({ text: r.text, left: r.left, group }); }
+    const last = i === comp.scenes.length - 1;
+    const plan = planWriting(rows, { ...w, finalHoldMs: last ? w.finalHoldMs : MIN_HOLD_MS }, (t) => g.measure(t));
+    const room = sc.durationMs - (last ? 0 : FADE_OUT_MS);
+    return { index: i, needMs: Math.ceil(plan.total + (last ? 0 : FADE_OUT_MS)), fits: plan.total <= room, writeEndMs: plan.writeEnd };
+  });
+  return { on: true, fits: scenes.every((s) => s.fits), scenes };
+}
+
 /** Anchor x of a row after its layout indent: left/right anchors move by the indent, a centred row by half of it. */
 export const rowAnchor = (align, ax, ipx = 0) => (align === "left" ? ax + ipx : align === "right" ? ax - ipx : ax + ipx / 2);
 
@@ -199,6 +222,23 @@ function layerText(ctx, env) {
   if (textileActive(comp)) textileGuard(ctx, env, rowBoxes(rows, align, ax, y), size);
   // library animations (animation.js LIBRARY) draw through animFrame, the same function validateAnimation checks; the four
   // classic behaviours and every still keep the original per-row path below, call for call.
+  const wr = writingOf(comp);
+  if (wr.mode !== "none" && !still && !sc.noWrite) {
+    // Ink Reveal / Typewriter (writing.js): whole shaped rows, masked or cut only at shaping-neutral cluster boundaries
+    const font = `${isTitle ? titleWeightOf(st) : realWeight(st.font, st.weight)} ${size}px ${familyFor(st, isTitle ? "title" : "body")}`;
+    let group = 0;
+    const wrows = [];
+    for (const r of rowBoxes(rows, align, ax, y)) {
+      if (r.gap) { group++; continue; }
+      wrows.push({ text: r.text, left: r.left, mid: r.top + r.h / 2, font, group, size });
+    }
+    ctx.font = font;
+    if (st.shadow) { ctx.shadowColor = "rgba(0,0,0,0.45)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 3; } else ctx.shadowColor = "transparent";
+    ctx.fillStyle = inkColour(wr, st.color);
+    drawWrittenRows(ctx, wrows, at.local, wr, { size, alpha: clamp01(fadeOutAt(sc, at.local, at.last)), measure: measureIn(ctx) });
+    ctx.shadowColor = "transparent";
+    return;
+  }
   const b = activeBehaviour(comp);
   if (b.library && !still) {
     const geo = { rows: rowBoxes(rows, align, ax, y), rect, measure: (t) => ctx.measureText(t).width };

@@ -9,7 +9,9 @@ import {
   FULL_STD_H,
   MIN_READABLE,
   PRESETS,
+  wholeWritingPlan,
 } from "./full-poem.js";
+import { writingOn, writingOf, recommendSeconds } from "./writing.js";
 
 export const WHOLE_DURATIONS_S = Object.freeze([10, 15, 20, 30, 45, 60]);
 export const WHOLE_DEFAULT_MS = 30_000;
@@ -284,6 +286,27 @@ export function drawWholeFrame(
         total,
         motionK: k,
         textAlpha: textAlphaAt(comp, tMs, total),
+        writing: writingOn(comp) ? writingOf(comp) : null,
+        writeMs: tMs,
       };
   drawFullPoem(ctx, comp, layout, { assets, scale, fxTrace, fxReport, anim });
+}
+
+/**
+ * Does the chosen writing animation finish inside the video and still hold the completed poem for the final hold?
+ * Never accelerated, shrunk, cut or split to make it fit: when it does not, the caller shows the estimate and
+ * recommends a longer duration (and blocks the export until the author chooses).
+ */
+export function wholeWritingFit(ctx, comp, layout) {
+  if (!writingOn(comp) || !layout) return { on: false, fits: true };
+  const plan = wholeWritingPlan(ctx, comp, layout, comp.motion.writing);
+  const total = wholeDuration(comp);
+  return {
+    on: true,
+    fits: plan.total <= total,
+    needMs: plan.total,
+    writeEndMs: plan.writeEnd,
+    totalMs: total,
+    recommendS: recommendSeconds(plan, [...WHOLE_DURATIONS_S, 90, 120].filter((x) => x * 1000 <= WHOLE_MAX_MS)),
+  };
 }

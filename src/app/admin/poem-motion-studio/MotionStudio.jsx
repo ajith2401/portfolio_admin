@@ -1,4 +1,5 @@
 "use client";
+import { writingOn } from "@/lib/motion-studio/writing";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest, errorMessage } from "@/lib/editor/writing-client";
 import { poemFromWriting } from "@/lib/motion-studio/poem";
@@ -1679,6 +1680,16 @@ export default function MotionStudio() {
         >
           Restart
         </Btn>
+        {writingOn(comp) && (
+          <Btn
+            onClick={() => {
+              setPlaying(false);
+              setT(total);
+            }}
+          >
+            Show completed poem
+          </Btn>
+        )}
         {!big && <Btn onClick={() => setFull(true)}>Full screen</Btn>}
       </div>
       <label className="pms-lbl mt-2">
@@ -1699,7 +1710,7 @@ export default function MotionStudio() {
         />
       </label>
       <p className="text-center text-xs" style={{ color: "var(--mute)" }}>
-        {(t / 1000).toFixed(1)}s / {(total / 1000).toFixed(1)}s
+        {(t / 1000).toFixed(1)}s / {(total / 1000).toFixed(1)}s · {Math.round((Math.min(t, total) / Math.max(1, total)) * 100)}%
       </p>
     </div>
   );

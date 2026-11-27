@@ -1,7 +1,7 @@
 // Browser-side export. Everything is feature-detected at runtime; nothing assumes a device supports it.
 // Every route: ensureFonts (exact faces, Tamil glyphs proven) -> its validator (route-checks.js) -> draw. The route list
 // itself lives in formats.js (ROUTES); a test fails if a render*/export* function here is not registered there.
-import { drawFrame, compDuration } from "./render.js";
+import { drawFrame, compDuration, sceneWritingFit } from "./render.js";
 import { ensureFonts, canvasMeasure } from "./font-ready.js";
 import { FORMATS } from "./safe-zone.js";
 import { fontReviewOf, CANDIDATE_EXPORT_WARNING } from "./font-registry.js";
@@ -10,7 +10,7 @@ import { drawFullPoem, FULL_W } from "./full-poem.js";
 import { checkScenes, checkCover, coverScene, checkPoster, checkFull, FULL_NO_FIT, checkQuote, quoteScene, quoteMin, checkCarousel, sceneMin, fontIssues } from "./route-checks.js";
 import { materialActive } from "./materials.js";
 import { checkWhole } from "./route-checks.js";
-import { drawWholeFrame, wholeDuration, wholeFrames } from "./whole-poem.js";
+import { drawWholeFrame, wholeDuration, wholeFrames, wholeWritingFit } from "./whole-poem.js";
 import { createLease } from "./canvas-lease.js";
 import { outputSize, presetById } from "./output-size.js";
 
@@ -141,6 +141,12 @@ async function encodeMp4(comp, { preset, ...opts } = {}) {
   return withCanvas(size.w, size.h, (canvas, ctx) => encodeOn(canvas, ctx, size, comp, opts), true);
 }
 async function encodeOn(canvas, ctx, size, comp, { assets = {}, minSize, ...opts } = {}) {
+  // a writing animation that cannot finish (and hold the completed text) inside a scene is refused, never sped up
+  const wf = sceneWritingFit(probeCtx(), comp, { minSize });
+  if (!wf.fits) {
+    const bad = wf.scenes.filter((x) => !x.fits).map((x) => `scene ${x.index + 1} needs ${(x.needMs / 1000).toFixed(1)} s`);
+    throw new Error(`The writing animation does not finish in time (${bad.join(", ")}). Lengthen those scenes (Text animation: "Lengthen scenes to fit"), write faster, or turn writing off. Nothing was sped up or cut.`);
+  }
   const frames = Math.ceil((compDuration(comp) / 1000) * FPS);
   return encodeFrames(canvas, frames, (i) => drawFrame(ctx, comp, (i / FPS) * 1000, { w: size.w, h: size.h, assets, minSize }), opts);
 }
@@ -324,6 +330,9 @@ async function wholePlan(comp, poem) {
 export async function exportWholeMp4(comp, poem, { preset, assets = {}, ...opts } = {}) {
   const r = await wholePlan(comp, poem);
   const c = r.comp, layout = r.v.layout, ms = wholeDuration(c), frames = wholeFrames(ms, FPS);
+  const wf = wholeWritingFit(probeCtx(), c, layout);
+  if (!wf.fits)
+    throw new Error(`The writing animation needs about ${Math.ceil(wf.needMs / 1000)} s, but the video is ${Math.round(ms / 1000)} s. Choose ${wf.recommendS} s (recommended), write faster, or turn writing off. Nothing was sped up, shrunk or cut.`);
   const size = sizeFor("reel", preset, "video");
   const k = size.w / FULL_W;
   const blob = await withCanvas(size.w, size.h, (canvas, ctx) =>

@@ -177,6 +177,28 @@ export default function ScenesPanel() {
                             </div>
                           ))}
                         </div>
+                        {comp?.motion?.writing?.mode && comp.motion.writing.mode !== "none" && (
+                          <label className="mt-2 flex items-center gap-2 text-sm" style={{ minHeight: 44 }}>
+                            <input
+                              type="checkbox"
+                              checked={!!s.noWrite}
+                              onChange={(e) =>
+                                setScenes(
+                                  (x) =>
+                                    x.map((sc, j) => {
+                                      if (j !== i) return sc;
+                                      const n = { ...sc };
+                                      if (e.target.checked) n.noWrite = true;
+                                      else delete n.noWrite;
+                                      return n;
+                                    }),
+                                  `nowrite-${i}`,
+                                )
+                              }
+                            />
+                            Scene {i + 1}: no writing (uses the normal text animation)
+                          </label>
+                        )}
                         <div className="mt-2 grid gap-2 sm:grid-cols-2">
                           <Range
                             label={`Scene ${i + 1} seconds`}
