@@ -192,6 +192,18 @@ export async function warmFaces(fonts, font, capMs = 8000) {
   }
 }
 
+/** true only when the family has at least one declared face and EVERY declared face of it reports status "loaded". */
+function allFacesLoaded(fonts, font) {
+  try {
+    if (!fonts || typeof fonts[Symbol.iterator] !== "function") return false;
+    const fam = familyOf(font).split(",")[0].replace(/["']/g, "").trim();
+    const mine = [...fonts].filter((x) => String(x.family).replace(/["']/g, "") === fam);
+    return mine.length > 0 && mine.every((x) => x.status === "loaded");
+  } catch {
+    return false;
+  }
+}
+
 const familyOf = (font) => font.replace(/^\s*\d+\s+[\d.]+px\s+/, "");
 const weightOf = (font) => font.match(/^\s*(\d+)/)?.[1];
 
@@ -235,6 +247,13 @@ export async function ensureFonts(comp, opts = {}, deps = {}) {
         if (e instanceof FontReadinessError) throw e;
         if (n < attempts) {
           await warmFaces(fonts, f.font, timeoutMs);
+          // The load() promise can reject (mobile Chrome: "A network error occurred") although every piece of the face
+          // is now loaded. Trust real readiness: check() is true only when every matching face for this text is loaded.
+          // (Candidate fonts still have to pass the glyph-measurement proof below.)
+          if (fonts.check?.(f.font, f.text) && allFacesLoaded(fonts, f.font)) {
+            loaded = [f.font];
+            break;
+          }
           await new Promise((r) => setTimeout(r, deps.fontRetryMs ?? 600 * (n + 1)));
           continue;
         }

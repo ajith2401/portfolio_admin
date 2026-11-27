@@ -551,6 +551,21 @@ test("a combined fonts.load() that fails while each subset loads alone recovers 
   const inner = fonts.load;
   fonts.load = async (...a) => (calls++, inner(...a));
   const r = await ensureFonts(comp, { poemText: "தமிழ்", title: "" }, { fonts, fontRetryMs: 1 }).catch((e) => e);
-  assert.ok(calls >= 2, "the combined load must have been attempted and retried, calls=" + calls);
+  assert.ok(calls >= 1, "the combined load must have been attempted, calls=" + calls);
   assert.ok(!(r instanceof Error), "should recover after the serial warm-up, got: " + (r && r.message));
+});
+
+test("load() rejecting although every piece is loaded and check() is true proceeds; check() false still stops", async () => {
+  const { ensureFonts } = await import("../../src/lib/motion-studio/font-ready.js");
+  const comp = { format: "reel", style: { font: "noto-serif", weight: 500, sizePx: 48 }, scenes: [{ kind: "stanza", lines: ["தமிழ்"] }], branding: { show: false } };
+  const mk = (ready) => {
+    const f = new Set([{ family: '"Noto Serif Tamil"', status: ready ? "loaded" : "error", load: async () => { throw new Error("A network error occurred."); } }]);
+    f.load = async () => { throw Object.assign(new Error("A network error occurred."), { name: "NetworkError" }); };
+    f.check = () => ready;
+    return f;
+  };
+  const ok = await ensureFonts(comp, { poemText: "தமிழ்", title: "" }, { fonts: mk(true), fontRetryMs: 1 }).catch((e) => e);
+  assert.ok(!(ok instanceof Error), "ready faces must proceed: " + (ok && ok.message));
+  const bad = await ensureFonts(comp, { poemText: "தமிழ்", title: "" }, { fonts: mk(false), fontRetryMs: 1 }).catch((e) => e);
+  assert.ok(bad instanceof Error && /could not be loaded/.test(bad.message), "unready faces must still stop the export");
 });
