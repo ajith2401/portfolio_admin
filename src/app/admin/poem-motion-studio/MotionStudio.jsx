@@ -5,16 +5,51 @@ import { poemFromWriting } from "@/lib/motion-studio/poem";
 import { generateScenes } from "@/lib/motion-studio/scenes";
 import { TEMPLATES } from "@/lib/motion-studio/templates";
 import { ensureFonts, canvasMeasure } from "@/lib/motion-studio/font-ready";
-import { defaultComposition, normalizeComposition, motionPrefsOf, MAX_SCENES } from "@/lib/motion-studio/composition";
-import { drawFrame, compDuration, setFontFamilies } from "@/lib/motion-studio/render";
+import {
+  defaultComposition,
+  normalizeComposition,
+  motionPrefsOf,
+  MAX_SCENES,
+} from "@/lib/motion-studio/composition";
+import {
+  drawFrame,
+  compDuration,
+  setFontFamilies,
+} from "@/lib/motion-studio/render";
 import { FORMATS, safeRect } from "@/lib/motion-studio/safe-zone";
 import { runBundle } from "@/lib/motion-studio/bundle";
-import { detectCapabilities, canvasLease, exportMp4, renderSceneStills, renderPosters, renderFullPoem, renderReelCover, renderQuote, exportQuoteMp4, renderCarousel, zipBlobs, takeExportWarnings } from "@/lib/motion-studio/export";
+import {
+  detectCapabilities,
+  canvasLease,
+  exportMp4,
+  renderSceneStills,
+  renderPosters,
+  renderFullPoem,
+  renderReelCover,
+  renderQuote,
+  exportQuoteMp4,
+  renderCarousel,
+  zipBlobs,
+  takeExportWarnings,
+} from "@/lib/motion-studio/export";
 import * as E from "@/lib/motion-studio/scene-edit";
-import { bakeBackground, readabilityScrim, decodeImageFile } from "@/lib/motion-studio/background";
-import { decodeAudio, shapeAudio, startRecording, recordingSupport } from "@/lib/motion-studio/audio";
+import {
+  bakeBackground,
+  readabilityScrim,
+  decodeImageFile,
+} from "@/lib/motion-studio/background";
+import {
+  decodeAudio,
+  shapeAudio,
+  startRecording,
+  recordingSupport,
+} from "@/lib/motion-studio/audio";
 import { FONT_CSS } from "./fonts";
-import { VERIFIED_FONT_IDS, fontReviewOf, CANDIDATE_EXPORT_WARNING } from "@/lib/motion-studio/font-registry";
+import {
+  VERIFIED_FONT_IDS,
+  fontReviewOf,
+  CANDIDATE_EXPORT_WARNING,
+} from "@/lib/motion-studio/font-registry";
 import AudioPanel from "./panels/AudioPanel";
 import BackgroundPanel from "./panels/BackgroundPanel";
 import ExportPanel from "./panels/ExportPanel";
@@ -36,9 +71,25 @@ import useRecovery from "./hooks/useRecovery";
 import useShortcuts from "./hooks/useShortcuts";
 import { StudioContext } from "./studio-context";
 import { Btn, Field, download, slug } from "./studio-ui";
-import { parsePoemText, poemToText, importPoemFile } from "@/lib/motion-studio/poem-input";
-import { layoutFullPoem, drawFullPoem, validateFullPoem, FULL_W } from "@/lib/motion-studio/full-poem";
-import { saveDraft, loadDraft, listDrafts, deleteDraft, clearDrafts, newDraftId } from "@/lib/motion-studio/drafts";
+import {
+  parsePoemText,
+  poemToText,
+  importPoemFile,
+} from "@/lib/motion-studio/poem-input";
+import {
+  layoutFullPoem,
+  drawFullPoem,
+  validateFullPoem,
+  FULL_W,
+} from "@/lib/motion-studio/full-poem";
+import {
+  saveDraft,
+  loadDraft,
+  listDrafts,
+  deleteDraft,
+  clearDrafts,
+  newDraftId,
+} from "@/lib/motion-studio/drafts";
 import { routeById } from "@/lib/motion-studio/formats";
 import { formatForRoute, tabForRoute } from "@/lib/motion-studio/quick-create";
 
@@ -73,7 +124,10 @@ export default function MotionStudio() {
   const [theme, setTheme] = useState("system");
   const P = usePrefs();
   const mode = P.prefs.mode === "advanced" ? "advanced" : "quick"; // "quick" = Simple: fewer tabs, same composition
-  const setMode = useCallback((m) => P.update({ mode: m === "advanced" ? "advanced" : "simple" }), [P.update]); // eslint-disable-line react-hooks/exhaustive-deps
+  const setMode = useCallback(
+    (m) => P.update({ mode: m === "advanced" ? "advanced" : "simple" }),
+    [P.update],
+  ); // eslint-disable-line react-hooks/exhaustive-deps
   const [tab, setTab] = useState("scenes");
   const [writings, setWritings] = useState([]);
   const [source, setSource] = useState(null);
@@ -85,7 +139,14 @@ export default function MotionStudio() {
   const [projects, setProjects] = useState([]);
   const [msg, setMsg] = useState(null);
   const hist = useHistory({
-    onRefused: (why) => setMsg({ kind: "error", text: why === "open" ? "This composition could not be opened intact (a scene line is too long or a scene has too many lines), so nothing was changed." : "That change was not applied because it would have altered or dropped poem text. Nothing was changed." }),
+    onRefused: (why) =>
+      setMsg({
+        kind: "error",
+        text:
+          why === "open"
+            ? "This composition could not be opened intact (a scene line is too long or a scene has too many lines), so nothing was changed."
+            : "That change was not applied because it would have altered or dropped poem text. Nothing was changed.",
+      }),
   });
   const [qc, setQc] = useState(null); // the output chosen in Quick Create (its pre-export check is shown)
   const [help, setHelp] = useState(false);
@@ -113,8 +174,14 @@ export default function MotionStudio() {
   const [poemText, setPoemText] = useState("");
   const [poemTitle, setPoemTitle] = useState("");
   const [fontTick, setFontTick] = useState(0);
-  const parsedEdit = useMemo(() => parsePoemText(poemText, { title: poemTitle }), [poemText, poemTitle]);
-  const parsedBox = useMemo(() => parsePoemText(textBox, { title: titleBox }), [textBox, titleBox]);
+  const parsedEdit = useMemo(
+    () => parsePoemText(poemText, { title: poemTitle }),
+    [poemText, poemTitle],
+  );
+  const parsedBox = useMemo(
+    () => parsePoemText(textBox, { title: titleBox }),
+    [textBox, titleBox],
+  );
   const mainRef = useRef(null);
   const [wide, setWide] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -132,11 +199,21 @@ export default function MotionStudio() {
   useEffect(() => {
     const v = window.visualViewport;
     if (!v) return;
-    const f = () => setVv({ kb: Math.max(0, Math.round(window.innerHeight - v.height - v.offsetTop)), h: Math.round(v.height) });
+    const f = () =>
+      setVv({
+        kb: Math.max(
+          0,
+          Math.round(window.innerHeight - v.height - v.offsetTop),
+        ),
+        h: Math.round(v.height),
+      });
     f();
     v.addEventListener("resize", f);
     v.addEventListener("scroll", f);
-    return () => { v.removeEventListener("resize", f); v.removeEventListener("scroll", f); };
+    return () => {
+      v.removeEventListener("resize", f);
+      v.removeEventListener("scroll", f);
+    };
   }, []);
   const [draftSaved, setDraftSaved] = useState(null);
   const draftId = useRef(null);
@@ -350,12 +427,27 @@ export default function MotionStudio() {
       return flash("error", errorMessage(r.data) || "Could not load poem");
     const poem = poemFromWriting(r.data);
     if (!poem.stanzas.length)
-      return flash("error", "This writing has no poem lines to animate."), false;
+      return (
+        flash("error", "This writing has no poem lines to animate."), false
+      );
     // over a limit: refuse with the reason; nothing is cut to fit
     if (!poem.ok) return flash("error", poem.issues[0].message), false;
     const scenes = generateScenes(poem, { title: r.data.title });
-    if (scenes.length > MAX_SCENES) return flash("error", `This poem needs ${scenes.length} scenes; the limit is ${MAX_SCENES}. Nothing was cut.`), false;
-    if (!start({ ...withLook(scenes, look), originalScenes: structuredClone(scenes) })) return false;
+    if (scenes.length > MAX_SCENES)
+      return (
+        flash(
+          "error",
+          `This poem needs ${scenes.length} scenes; the limit is ${MAX_SCENES}. Nothing was cut.`,
+        ),
+        false
+      );
+    if (
+      !start({
+        ...withLook(scenes, look),
+        originalScenes: structuredClone(scenes),
+      })
+    )
+      return false;
     draftId.current = null;
     setSource({
       id,
@@ -365,7 +457,12 @@ export default function MotionStudio() {
       legacy: poem.legacy,
       version: r.data.version ?? null,
       // verbatim text + blank-line structure, so the editable poem box shows the poem exactly as written
-      poem: { stanzas: poem.stanzas, source: poem.source, blank: poem.blank, trailingBlank: poem.trailingBlank },
+      poem: {
+        stanzas: poem.stanzas,
+        source: poem.source,
+        blank: poem.blank,
+        trailingBlank: poem.trailingBlank,
+      },
     });
     setName(r.data.title || "Untitled");
     setProjectId(null);
@@ -382,23 +479,54 @@ export default function MotionStudio() {
     return true;
   };
   // The poem record kept with a project: stanzas plus the verbatim source and blank-line structure.
-  const poemRecord = (p) => ({ title: p.title, stanzas: p.stanzas, source: p.source, blank: p.blank, trailingBlank: p.trailingBlank });
+  const poemRecord = (p) => ({
+    title: p.title,
+    stanzas: p.stanzas,
+    source: p.source,
+    blank: p.blank,
+    trailingBlank: p.trailingBlank,
+  });
   // Returns scenes, or null after showing an inline error. Nothing is ever cut to fit.
   const scenesFor = (p) => {
-    if (!p.ok) { flash("error", p.issues[0].message); return null; }
+    if (!p.ok) {
+      flash("error", p.issues[0].message);
+      return null;
+    }
     const scenes = generateScenes({ stanzas: p.stanzas }, { title: p.title });
-    if (scenes.length > MAX_SCENES) { flash("error", `This poem needs ${scenes.length} scenes; the limit is ${MAX_SCENES}. Nothing was cut. Split it into several poems.`); return null; }
+    if (scenes.length > MAX_SCENES) {
+      flash(
+        "error",
+        `This poem needs ${scenes.length} scenes; the limit is ${MAX_SCENES}. Nothing was cut. Split it into several poems.`,
+      );
+      return null;
+    }
     return scenes;
   };
   const startManual = (text, title, look = {}) => {
     const p = parsePoemText(text, { title });
     if (!p.stanzas.length)
-      return flash("error", "Write or paste at least one line of the poem first."), false;
+      return (
+        flash("error", "Write or paste at least one line of the poem first."),
+        false
+      );
     const scenes = scenesFor(p);
     if (!scenes) return false; // the whole text stays in the box
-    if (!start({ ...withLook(scenes, look), originalScenes: structuredClone(scenes), poem: poemRecord(p) })) return false;
+    if (
+      !start({
+        ...withLook(scenes, look),
+        originalScenes: structuredClone(scenes),
+        poem: poemRecord(p),
+      })
+    )
+      return false;
     draftId.current = null;
-    setSource({ id: null, kind: "manual", title: p.title, warnings: [], poem: poemRecord(p) });
+    setSource({
+      id: null,
+      kind: "manual",
+      title: p.title,
+      warnings: [],
+      poem: poemRecord(p),
+    });
     setName(p.title || "Untitled poem");
     setProjectId(null);
     setT(0);
@@ -416,9 +544,19 @@ export default function MotionStudio() {
   // Quick Create: the same creation path, with the chosen output's format and look (and the author's motion feel)
   const quickCreate = async (choice, { routeId, templateId }) => {
     const r = routeById(routeId);
-    const motion = motionPrefsOf({ pref: P.prefs.motionPref, reduceMotion: P.prefs.reduceMotion });
-    const look = { format: formatForRoute(r), templateId, ...(Object.keys(motion).length ? { motion } : {}) };
-    const ok = choice.kind === "writing" ? await pick(choice.id, look) : startManual(choice.text, choice.title, look);
+    const motion = motionPrefsOf({
+      pref: P.prefs.motionPref,
+      reduceMotion: P.prefs.reduceMotion,
+    });
+    const look = {
+      format: formatForRoute(r),
+      templateId,
+      ...(Object.keys(motion).length ? { motion } : {}),
+    };
+    const ok =
+      choice.kind === "writing"
+        ? await pick(choice.id, look)
+        : startManual(choice.text, choice.title, look);
     if (!ok) return;
     P.recordRecent(templateId);
     P.update({ lastRoute: routeId });
@@ -426,7 +564,12 @@ export default function MotionStudio() {
     setTab(tabForRoute(r));
   };
   const recovery = useRecovery({
-    comp, name, source, projectId, projects, projectsReady: listed,
+    comp,
+    name,
+    source,
+    projectId,
+    projects,
+    projectsReady: listed,
     onRestore: (plan) => {
       if (!start(plan.composition)) return;
       loadedRef.current = false;
@@ -442,20 +585,31 @@ export default function MotionStudio() {
     },
   });
   // mirror the author's motion feel / reduce-motion choice so the next Quick Create starts with it (ids/flags only)
-  const motionKey = comp ? `${comp.motion?.pref || ""}|${comp.motion?.reduceMotion === true}` : "";
+  const motionKey = comp
+    ? `${comp.motion?.pref || ""}|${comp.motion?.reduceMotion === true}`
+    : "";
   useEffect(() => {
     if (!comp) return;
     const m = motionPrefsOf(comp.motion);
-    P.update({ motionPref: m.pref || null, reduceMotion: m.reduceMotion === true });
+    P.update({
+      motionPref: m.pref || null,
+      reduceMotion: m.reduceMotion === true,
+    });
   }, [motionKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const pasteFromClipboard = async () => {
     try {
       const t = await navigator.clipboard.readText();
       if (!t.trim()) return flash("error", "The clipboard is empty.");
       setTextBox(t);
-      flash("ok", "Pasted. Check the stanza breaks, then choose Create scenes.");
+      flash(
+        "ok",
+        "Pasted. Check the stanza breaks, then choose Create scenes.",
+      );
     } catch {
-      flash("error", "This browser blocked clipboard access. Tap into the box and use Paste from the keyboard or context menu instead.");
+      flash(
+        "error",
+        "This browser blocked clipboard access. Tap into the box and use Paste from the keyboard or context menu instead.",
+      );
     }
   };
   const onImport = async (file) => {
@@ -464,8 +618,16 @@ export default function MotionStudio() {
       setTextBox(poemToText(p)); // the full imported text, never a truncated copy
       setTitleBox(p.title);
       setRoute("import");
-      if (!p.ok) flash("error", `Imported “${file.name}” in full, but it cannot be turned into scenes yet: ${p.issues[0].message}`);
-      else flash("ok", `Imported “${file.name}” as text only. Review it, then choose Create scenes.`);
+      if (!p.ok)
+        flash(
+          "error",
+          `Imported “${file.name}” in full, but it cannot be turned into scenes yet: ${p.issues[0].message}`,
+        );
+      else
+        flash(
+          "ok",
+          `Imported “${file.name}” as text only. Review it, then choose Create scenes.`,
+        );
     } catch (e) {
       flash("error", e?.message || "Could not import that file.");
     }
@@ -487,7 +649,8 @@ export default function MotionStudio() {
   };
   const applyPoemEdit = () => {
     const p = parsePoemText(poemText, { title: poemTitle });
-    if (!p.stanzas.length) return flash("error", "The poem is empty, so nothing was changed.");
+    if (!p.stanzas.length)
+      return flash("error", "The poem is empty, so nothing was changed.");
     const scenes = scenesFor(p);
     if (!scenes) return; // your edited text stays in the box; the current scenes are unchanged
     setSource((x) => ({ ...x, title: p.title, poem: poemRecord(p) }));
@@ -497,7 +660,10 @@ export default function MotionStudio() {
       originalScenes: structuredClone(scenes),
       poem: poemRecord(p),
     }));
-    flash("ok", `Rebuilt ${scenes.length} scenes from your edited text. Use Undo to go back.`);
+    flash(
+      "ok",
+      `Rebuilt ${scenes.length} scenes from your edited text. Use Undo to go back.`,
+    );
   };
   useEffect(() => {
     if (source?.poem) {
@@ -569,7 +735,13 @@ export default function MotionStudio() {
             warnings: [],
           }
         : c.poem
-          ? { id: null, kind: "manual", title: c.poem.title, warnings: [], poem: c.poem }
+          ? {
+              id: null,
+              kind: "manual",
+              title: c.poem.title,
+              warnings: [],
+              poem: c.poem,
+            }
           : null,
     );
     setSourceChanged(!!r.data.sourceChanged);
@@ -605,7 +777,11 @@ export default function MotionStudio() {
     const r = await apiRequest("GET", `/api/writings/${source.id}`);
     if (!r.ok) return flash("error", "Could not reload the poem");
     const fresh = poemFromWriting(r.data);
-    if (!fresh.ok) return flash("error", `${fresh.issues[0].message} Your scenes were not changed.`);
+    if (!fresh.ok)
+      return flash(
+        "error",
+        `${fresh.issues[0].message} Your scenes were not changed.`,
+      );
     const scenes = generateScenes(fresh, {
       title: r.data.title,
     });
@@ -644,7 +820,8 @@ export default function MotionStudio() {
     if (!file) return;
     try {
       bgBitmap.current?.close?.();
-      bgBitmap.current = await decodeImageFile(file); setHasBitmap(true);
+      bgBitmap.current = await decodeImageFile(file);
+      setHasBitmap(true);
       update((c) => {
         c.style.bg.image = {
           url: "",
@@ -768,7 +945,10 @@ export default function MotionStudio() {
   const fontsReady = () =>
     ensureFonts(
       comp,
-      { poemText: [fullPoem.title, ...fullPoem.stanzas.flat()].join("\n"), title: fullPoem.title },
+      {
+        poemText: [fullPoem.title, ...fullPoem.stanzas.flat()].join("\n"),
+        title: fullPoem.title,
+      },
       { measure: canvasMeasure() },
     );
   const exportAssets = (fm) => {
@@ -791,7 +971,9 @@ export default function MotionStudio() {
     takeExportWarnings();
     try {
       // fonts are best-effort here: a face that will not load is reported, never a reason to stop the export
-      await fontsReady().catch((e) => { if (e?.name === "AbortError") throw e; });
+      await fontsReady().catch((e) => {
+        if (e?.name === "AbortError") throw e;
+      });
       await fn(abortRef.current.signal);
       // nothing blocks an export: anything the route had to adjust (or could not) is shown, never silent
       const adjusted = takeExportWarnings();
@@ -820,22 +1002,22 @@ export default function MotionStudio() {
   const videoSetup = (fm) => {
     let c = { ...comp, format: fm },
       audioBuffer = null;
-      const A = audioRef.current;
-      if (A.buffer && comp.audio.source !== "none") {
-        const clipMs =
-          (comp.audio.trimEndMs || A.buffer.duration * 1000) -
-          comp.audio.trimStartMs;
-        const vid = compDuration(c);
-        if (comp.audio.fitVideo === "extend" && clipMs > vid) {
-          const sc = c.scenes.slice();
-          sc[sc.length - 1] = {
-            ...sc[sc.length - 1],
-            durationMs: sc[sc.length - 1].durationMs + (clipMs - vid),
-          };
-          c = { ...c, scenes: sc };
-        }
-        audioBuffer = shapeAudio(A.buffer, comp.audio, compDuration(c));
+    const A = audioRef.current;
+    if (A.buffer && comp.audio.source !== "none") {
+      const clipMs =
+        (comp.audio.trimEndMs || A.buffer.duration * 1000) -
+        comp.audio.trimStartMs;
+      const vid = compDuration(c);
+      if (comp.audio.fitVideo === "extend" && clipMs > vid) {
+        const sc = c.scenes.slice();
+        sc[sc.length - 1] = {
+          ...sc[sc.length - 1],
+          durationMs: sc[sc.length - 1].durationMs + (clipMs - vid),
+        };
+        c = { ...c, scenes: sc };
       }
+      audioBuffer = shapeAudio(A.buffer, comp.audio, compDuration(c));
+    }
     return { c, audioBuffer };
   };
   const doVideo = () =>
@@ -897,19 +1079,44 @@ export default function MotionStudio() {
     });
   const doCarousel = (type) =>
     guard(async () => {
-      const { blobs } = await renderCarousel(comp, { type, assets: exportAssets("poster") });
+      const { blobs } = await renderCarousel(comp, {
+        type,
+        assets: exportAssets("poster"),
+      });
       const ext = type === "image/png" ? "png" : "jpg";
-      download(await zipBlobs(blobs, `${slug(name)}-carousel`, ext), `${slug(name)}-carousel.zip`);
-      flash("ok", `Feed carousel exported: ${blobs.length} numbered cards (cover, poem, end).`);
+      download(
+        await zipBlobs(blobs, `${slug(name)}-carousel`, ext),
+        `${slug(name)}-carousel.zip`,
+      );
+      flash(
+        "ok",
+        `Feed carousel exported: ${blobs.length} numbered cards (cover, poem, end).`,
+      );
     });
   // Quote = EXCERPT only: the file name and the message say so; it is never reported as the complete poem.
   const doQuote = (selection, format, kind) =>
     guard(async (signal) => {
-      const r = kind === "video"
-        ? await exportQuoteMp4(comp, fullPoem, selection, { format, signal, onProgress: setProgress, assets: exportAssets(format) })
-        : await renderQuote(comp, fullPoem, selection, { format, type: "image/png", assets: exportAssets(format) });
-      download(r.blob, `${slug(name)}-quote-excerpt-${r.format}.${kind === "video" ? "mp4" : "png"}`);
-      flash("ok", `Quote exported as an EXCERPT: ${r.coverage.selected} of ${r.coverage.total} lines (not the complete poem).`);
+      const r =
+        kind === "video"
+          ? await exportQuoteMp4(comp, fullPoem, selection, {
+              format,
+              signal,
+              onProgress: setProgress,
+              assets: exportAssets(format),
+            })
+          : await renderQuote(comp, fullPoem, selection, {
+              format,
+              type: "image/png",
+              assets: exportAssets(format),
+            });
+      download(
+        r.blob,
+        `${slug(name)}-quote-excerpt-${r.format}.${kind === "video" ? "mp4" : "png"}`,
+      );
+      flash(
+        "ok",
+        `Quote exported as an EXCERPT: ${r.coverage.selected} of ${r.coverage.total} lines (not the complete poem).`,
+      );
     });
   const doStillsZip = async () => {
     download(
@@ -946,15 +1153,25 @@ export default function MotionStudio() {
           ["export", "Export"],
         ];
   const three = wide && mode === "advanced"; // desktop 3-pane: poem + scenes live in the left pane
-  const tabsShown = three ? tabs.filter(([k]) => k !== "poem" && k !== "scenes") : tabs;
+  const tabsShown = three
+    ? tabs.filter(([k]) => k !== "poem" && k !== "scenes")
+    : tabs;
   const activeTab = tabsShown.some(([k]) => k === tab) ? tab : tabsShown[0][0];
 
   const fullPoem = useMemo(() => {
     if (!comp) return { title: "", stanzas: [] };
-    if (source?.poem) return { title: source.title || "", stanzas: source.poem.stanzas, blank: source.poem.blank, source: source.poem.source };
+    if (source?.poem)
+      return {
+        title: source.title || "",
+        stanzas: source.poem.stanzas,
+        blank: source.poem.blank,
+        source: source.poem.source,
+      };
     return {
       title: comp.scenes.find((x) => x.kind === "title")?.lines?.[0] || "",
-      stanzas: comp.scenes.filter((x) => x.kind !== "title").map((x) => x.lines),
+      stanzas: comp.scenes
+        .filter((x) => x.kind !== "title")
+        .map((x) => x.lines),
     };
   }, [comp, source]);
   const fullPreset = comp?.full?.preset || "balanced";
@@ -962,55 +1179,97 @@ export default function MotionStudio() {
   const fullLayout = useMemo(() => {
     if (!comp || activeTab !== "full" || !fullPoem.stanzas.length) return null;
     const cx = document.createElement("canvas").getContext("2d");
-    return layoutFullPoem(cx, comp, fullPoem, { preset: fullPreset, height: fullHeight });
-  }, [comp?.style, comp?.branding, fullPoem, fullPreset, fullHeight, fontTick, activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+    return layoutFullPoem(cx, comp, fullPoem, {
+      preset: fullPreset,
+      height: fullHeight,
+    });
+  }, [
+    comp?.style,
+    comp?.branding,
+    fullPoem,
+    fullPreset,
+    fullHeight,
+    fontTick,
+    activeTab,
+  ]); // eslint-disable-line react-hooks/exhaustive-deps
   const fullCheck = useMemo(
     () => (fullLayout ? validateFullPoem(fullPoem, fullLayout) : null),
     [fullLayout, fullPoem],
   );
   const fullAssets = (H) =>
-    bg && bgBitmap.current ? { bg: bakeBackground(bgBitmap.current, bg, FULL_W, H) } : {};
+    bg && bgBitmap.current
+      ? { bg: bakeBackground(bgBitmap.current, bg, FULL_W, H) }
+      : {};
   useEffect(() => {
     const c = fullCanvasRef.current;
     if (!c || !fullLayout || activeTab !== "full") return;
     const k = 0.34;
     c.width = Math.round(FULL_W * k);
     c.height = Math.round(fullLayout.height * k);
-    drawFullPoem(c.getContext("2d"), comp, fullLayout, { assets: fullAssets(fullLayout.height), scale: k });
+    drawFullPoem(c.getContext("2d"), comp, fullLayout, {
+      assets: fullAssets(fullLayout.height),
+      scale: k,
+    });
   }, [fullLayout, bgReady, hasBitmap]); // eslint-disable-line react-hooks/exhaustive-deps
-  const setFull_ = (patch) => update((c) => ({ ...c, full: { ...c.full, ...patch } }));
+  const setFull_ = (patch) =>
+    update((c) => ({ ...c, full: { ...c.full, ...patch } }));
   const fullMissing = fullCheck ? fullCheck.messages : [];
   const doFull = (type, scale) =>
     guard(async () => {
       const r = await renderFullPoem(comp, fullPoem, {
-        preset: fullPreset, height: fullHeight, type, scale,
+        preset: fullPreset,
+        height: fullHeight,
+        type,
+        scale,
         assets: (H) => fullAssets(H),
       });
       const ext = type === "image/png" ? "png" : "jpg";
       download(r.blob, `${slug(name)}-full-poem.${ext}`);
-      flash("ok", `Exported ${r.width}×${r.height} ${ext.toUpperCase()} with all ${fullPoem.stanzas.flat().length} lines on one image.`);
+      flash(
+        "ok",
+        `Exported ${r.width}×${r.height} ${ext.toUpperCase()} with all ${fullPoem.stanzas.flat().length} lines on one image.`,
+      );
     });
   const doCover = (type) =>
     guard(async () => {
-      const b = await renderReelCover(comp, { type, assets: exportAssets("reel") });
-      download(b, `${slug(name)}-cover.${type === "image/png" ? "png" : "jpg"}`);
+      const b = await renderReelCover(comp, {
+        type,
+        assets: exportAssets("reel"),
+      });
+      download(
+        b,
+        `${slug(name)}-cover.${type === "image/png" ? "png" : "jpg"}`,
+      );
       flash("ok", "Reel cover exported (1080×1920).");
     });
   // ---- Export all (bundle): every route is validated from scratch on EVERY run (Retry never reuses a result), one
   // route at a time, canvases released between routes. A refused route stops the bundle unless the author confirmed
   // "continue without failed routes"; the manifest always lists it.
   const bundleInput = (route) =>
-    route.id === "full-poem" ? { poem: fullPoem, preset: fullPreset, height: fullHeight } : { poem: fullPoem };
-  const runBundleExport = async ({ routeIds, preset, continueOnFailure = false }) => {
+    route.id === "full-poem"
+      ? { poem: fullPoem, preset: fullPreset, height: fullHeight }
+      : { poem: fullPoem };
+  const runBundleExport = async ({
+    routeIds,
+    preset,
+    continueOnFailure = false,
+  }) => {
     setPlaying(false);
     const ac = new AbortController();
     abortRef.current = ac;
     setProgress(0);
     setMsg(null);
     const fullH = new Map();
-    const probeMeasure = () => Object.assign(document.createElement("canvas"), { width: 16, height: 16 }).getContext("2d");
+    const probeMeasure = () =>
+      Object.assign(document.createElement("canvas"), {
+        width: 16,
+        height: 16,
+      }).getContext("2d");
     try {
-      const items = routeIds.map(routeById).filter(Boolean).map((route) => ({ route, input: bundleInput(route) }));
+      const items = routeIds
+        .map(routeById)
+        .filter(Boolean)
+        .map((route) => ({ route, input: bundleInput(route) }));
       takeExportWarnings();
       const r = await runBundle({
         items,
@@ -1027,13 +1286,26 @@ export default function MotionStudio() {
         live: () => canvasLease.live(),
         takeWarnings: () => takeExportWarnings(),
         preflight: async (route, input) => {
-          if (route.kind === "video" && !caps?.mp4) return { ok: false, messages: [caps?.reason || "This device cannot encode MP4 video."] };
+          if (route.kind === "video" && !caps?.mp4)
+            return {
+              ok: false,
+              messages: [
+                caps?.reason || "This device cannot encode MP4 video.",
+              ],
+            };
           const c = route.kind === "video" ? videoSetup(route.format).c : comp;
           const notes = [];
           try {
             await ensureFonts(
               c,
-              { poemText: [fullPoem.title, ...fullPoem.stanzas.flat(), comp.poster?.endText || ""].join("\n"), title: fullPoem.title },
+              {
+                poemText: [
+                  fullPoem.title,
+                  ...fullPoem.stanzas.flat(),
+                  comp.poster?.endText || "",
+                ].join("\n"),
+                title: fullPoem.title,
+              },
               { measure: canvasMeasure() },
             );
           } catch (e) {
@@ -1041,26 +1313,56 @@ export default function MotionStudio() {
             notes.push(`Font check: ${e?.message || e}`);
           }
           const v = route.validate(probeMeasure(), c, input);
-          if (route.id === "full-poem" && v.layout?.height) fullH.set(route.id, v.layout.height);
+          if (route.id === "full-poem" && v.layout?.height)
+            fullH.set(route.id, v.layout.height);
           // nothing blocks: a failed check goes through (the renderer auto-fixes and reports); a single poster that
           // would clip is the one refusal kept, because exporting it would cut the poem
           if (v.plan?.overflow) return v;
-          return { ...v, ok: true, warnings: [...notes, ...(v.ok ? [] : v.messages || [])] };
+          return {
+            ...v,
+            ok: true,
+            warnings: [...notes, ...(v.ok ? [] : v.messages || [])],
+          };
         },
         render: (route, input, { preset: p, signal, onProgress }) => {
           if (route.kind === "video") {
             const { c, audioBuffer } = videoSetup(route.format);
-            return route.render(c, input, { preset: p, signal, onProgress, audioBuffer, assets: exportAssets(route.format) });
+            return route.render(c, input, {
+              preset: p,
+              signal,
+              onProgress,
+              audioBuffer,
+              assets: exportAssets(route.format),
+            });
           }
-          if (route.id === "full-poem") return route.render(comp, input, { preset: p, type: "image/png", assets: (H) => fullAssets(H) });
-          return route.render(comp, input, { preset: p, type: "image/png", signal, onProgress, assets: exportAssets(route.format) });
+          if (route.id === "full-poem")
+            return route.render(comp, input, {
+              preset: p,
+              type: "image/png",
+              assets: (H) => fullAssets(H),
+            });
+          return route.render(comp, input, {
+            preset: p,
+            type: "image/png",
+            signal,
+            onProgress,
+            assets: exportAssets(route.format),
+          });
         },
       });
-      if (r.zip) download(new Blob([r.zip], { type: "application/zip" }), `${slug(name)}-bundle.zip`);
-      if (r.zip && fontReviewOf(comp)) flash("error", `Font review: unreviewed. ${CANDIDATE_EXPORT_WARNING}`);
+      if (r.zip)
+        download(
+          new Blob([r.zip], { type: "application/zip" }),
+          `${slug(name)}-bundle.zip`,
+        );
+      if (r.zip && fontReviewOf(comp))
+        flash("error", `Font review: unreviewed. ${CANDIDATE_EXPORT_WARNING}`);
       const adj = (r.manifest?.routes || []).filter((x) => x.warnings?.length);
       if (r.zip && adj.length && !fontReviewOf(comp))
-        flash("warn", `Bundle exported — please check ${adj.map((x) => x.label).join(", ")}: some settings were adjusted so every line fits and stays readable (listed in README.txt).`);
+        flash(
+          "warn",
+          `Bundle exported — please check ${adj.map((x) => x.label).join(", ")}: some settings were adjusted so every line fits and stays readable (listed in README.txt).`,
+        );
       return r;
     } catch (e) {
       canvasLease.releaseAll();
@@ -1124,11 +1426,23 @@ export default function MotionStudio() {
   );
 
   // a template sets its own text animation, but the author's motion feel / reduce-motion choice is kept
-  const withMotionPrefs = (d, m) => ({ ...d, motion: { ...d.motion, ...motionPrefsOf(m) } });
+  const withMotionPrefs = (d, m) => ({
+    ...d,
+    motion: { ...d.motion, ...motionPrefsOf(m) },
+  });
   const pickTemplate = (id) => {
     P.recordRecent(id);
     return update((c) => ({
-      ...withMotionPrefs(defaultComposition({ format: c.format, templateId: id, scenes: c.scenes, signature: c.branding.signature, branding: c.branding }), c.motion),
+      ...withMotionPrefs(
+        defaultComposition({
+          format: c.format,
+          templateId: id,
+          scenes: c.scenes,
+          signature: c.branding.signature,
+          branding: c.branding,
+        }),
+        c.motion,
+      ),
       originalScenes: c.originalScenes,
       audio: c.audio,
       poster: c.poster,
@@ -1143,7 +1457,11 @@ export default function MotionStudio() {
     save: () => {
       if (!comp) return;
       if (projectId) save();
-      else flash("ok", "Ctrl/Cmd+S saves a project that is already in Admin. Use Save project to Admin once first.");
+      else
+        flash(
+          "ok",
+          "Ctrl/Cmd+S saves a project that is already in Admin. Use Save project to Admin once first.",
+        );
     },
     help: () => setHelp((h) => !h),
   });
@@ -1223,444 +1541,562 @@ export default function MotionStudio() {
 
   return (
     <StudioContext.Provider value={studio}>
-    <main
-      ref={mainRef}
-      className="pms mx-auto min-h-screen max-w-6xl p-4 sm:p-6 xl:max-w-[1600px]"
-      data-sheet={comp ? (sheetOpen ? "open" : "closed") : undefined}
-      data-theme={theme}
-      data-reduce-ui={P.prefs.reduceEffects ? "true" : undefined}
-    >
-      <style>{THEME_CSS + UX_CSS}</style>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-semibold">Poem Motion Studio</h1>
-          <p className="mt-1 text-sm" style={{ color: "var(--mute)" }}>
-            Turn a Tamil poem into a Reel, Story or Poster. Your original
-            writing is never modified.
-          </p>
-        </div>
-        <div
-          className="flex flex-wrap gap-2"
-          role="group"
-          aria-label="Studio settings"
-        >
-          <Btn aria-pressed={mode === "quick"} onClick={() => setMode("quick")} title="Simple: the essential tabs. Switching never changes your work.">
-            Simple
-          </Btn>
-          <Btn
-            aria-pressed={mode === "advanced"}
-            onClick={() => setMode("advanced")}
+      <main
+        ref={mainRef}
+        className="pms mx-auto min-h-screen max-w-6xl p-4 sm:p-6 xl:max-w-[1600px]"
+        data-sheet={comp ? (sheetOpen ? "open" : "closed") : undefined}
+        data-theme={theme}
+        data-reduce-ui={P.prefs.reduceEffects ? "true" : undefined}
+      >
+        <style>{THEME_CSS + UX_CSS}</style>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h1 className="text-2xl font-semibold">Poem Motion Studio</h1>
+            <p className="mt-1 text-sm" style={{ color: "var(--mute)" }}>
+              Turn a Tamil poem into a Reel, Story or Poster. Your original
+              writing is never modified.
+            </p>
+          </div>
+          <div
+            className="flex flex-wrap gap-2"
+            role="group"
+            aria-label="Studio settings"
           >
-            Advanced Studio
-          </Btn>
-          <Btn onClick={() => setHelp(true)} aria-haspopup="dialog">Shortcuts</Btn>
-          <select
-            aria-label="Theme"
-            className="pms-field"
-            style={{ width: 120 }}
-            value={theme}
-            onChange={(e) => setTheme(e.target.value)}
-          >
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </div>
-      </div>
-
-      {msg && (
-        <p
-          role={msg.kind === "error" ? "alert" : "status"}
-          data-kind={msg.kind}
-          className="mt-3 rounded-lg px-3 py-2 text-sm"
-          style={{
-            background: msg.kind === "error" ? "var(--err-bg)" : msg.kind === "warn" ? "var(--warn-bg)" : "var(--ok-bg)",
-            color: msg.kind === "error" ? "var(--err-ink)" : msg.kind === "warn" ? "var(--warn-ink)" : "var(--ok-ink)",
-          }}
-        >
-          {msg.text}
-        </p>
-      )}
-      {!comp && <RecoveryBanner offer={recovery.offer} onRestore={recovery.restore} onDiscard={recovery.discard} onDismiss={recovery.dismiss} />}
-      <ShortcutHelp open={help} onClose={closeHelp} reduceUi={P.prefs.reduceEffects} onReduceUi={(v) => P.update({ reduceEffects: v })} />
-      {sourceChanged && (
-        <div
-          role="alert"
-          className="mt-3 rounded-lg p-3 text-sm"
-          style={{ background: "var(--warn-bg)", color: "var(--warn-ink)" }}
-        >
-          The source poem changed after this project was made. Your scenes are
-          untouched.
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Btn onClick={rebuild}>
-              Rebuild from the current poem (keeps a copy of this version)
+            <Btn
+              aria-pressed={mode === "quick"}
+              onClick={() => setMode("quick")}
+              title="Simple: the essential tabs. Switching never changes your work."
+            >
+              Simple
             </Btn>
-            <Btn onClick={ackSource}>Keep my scenes</Btn>
+            <Btn
+              aria-pressed={mode === "advanced"}
+              onClick={() => setMode("advanced")}
+            >
+              Advanced Studio
+            </Btn>
+            <Btn onClick={() => setHelp(true)} aria-haspopup="dialog">
+              Shortcuts
+            </Btn>
+            <select
+              aria-label="Theme"
+              className="pms-field"
+              style={{ width: 120 }}
+              value={theme}
+              onChange={(e) => setTheme(e.target.value)}
+            >
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
           </div>
         </div>
-      )}
 
-      {comp ? (
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
-          <span lang="ta" className="min-w-0 break-words font-semibold">
-            {source?.title || name}
-          </span>
-          <span style={{ color: "var(--mute)" }}>
-            {source?.kind === "manual"
-              ? "Your own poem"
-              : source?.kind === "writing"
-                ? "From your Portfolio (read-only)"
-                : "Saved project"}
-          </span>
-          <Btn
-            onClick={() => {
-              start(null);
-              setProjectId(null);
-              setSource(null);
-              setRoute(null);
-              setPlaying(false);
-              listDrafts().then(setDrafts);
+        {msg && (
+          <p
+            role={msg.kind === "error" ? "alert" : "status"}
+            data-kind={msg.kind}
+            className="mt-3 rounded-lg px-3 py-2 text-sm"
+            style={{
+              background:
+                msg.kind === "error"
+                  ? "var(--err-bg)"
+                  : msg.kind === "warn"
+                    ? "var(--warn-bg)"
+                    : "var(--ok-bg)",
+              color:
+                msg.kind === "error"
+                  ? "var(--err-ink)"
+                  : msg.kind === "warn"
+                    ? "var(--warn-ink)"
+                    : "var(--ok-ink)",
             }}
           >
-            Start a different poem
-          </Btn>
-          <span style={{ color: "var(--mute)" }} aria-live="polite">
-            {projectId
-              ? "Saved to your Admin projects"
-              : draftSaved
-                ? "Saved on this device only"
-                : "Not saved yet"}
-          </span>
-        </div>
-      ) : (
-        <section aria-labelledby="start-h" className="mt-4 min-w-0">
-          <h2 id="start-h" className="text-xl font-semibold">
-            How would you like to start your poem?
-          </h2>
-          <p className="mt-1 text-sm" style={{ color: "var(--mute)" }}>
-            You don’t need a Portfolio writing. Nothing is saved to the
-            server unless you choose Save project to Admin.
+            {msg.text}
           </p>
+        )}
+        {!comp && (
+          <RecoveryBanner
+            offer={recovery.offer}
+            onRestore={recovery.restore}
+            onDiscard={recovery.discard}
+            onDismiss={recovery.dismiss}
+          />
+        )}
+        <ShortcutHelp
+          open={help}
+          onClose={closeHelp}
+          reduceUi={P.prefs.reduceEffects}
+          onReduceUi={(v) => P.update({ reduceEffects: v })}
+        />
+        {sourceChanged && (
           <div
-            className="mt-3 grid gap-2"
-            style={{ gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,150px),1fr))" }}
-            role="group"
-            aria-label="Ways to start"
+            role="alert"
+            className="mt-3 rounded-lg p-3 text-sm"
+            style={{ background: "var(--warn-bg)", color: "var(--warn-ink)" }}
           >
-            {[
-              ["quick", "Quick Create", "Poem, output, look"],
-              ["write", "Write a poem", "Type it here"],
-              ["paste", "Paste a poem", "From Notes, WhatsApp…"],
-              ["import", "Import a file", ".txt or .md"],
-              ["existing", "Portfolio poem", "Read-only copy"],
-              ["continue", "Continue", "Saved on device or Admin"],
-            ].map(([k, l, d]) => (
-              <button
-                key={k}
-                type="button"
-                className="pms-btn text-left"
-                style={{
-                  minHeight: 64,
-                  display: "block",
-                  ...(route === k ? { background: "var(--accent)", color: "var(--accent-ink)" } : {}),
-                }}
-                aria-pressed={route === k}
-                onClick={() => setRoute(k)}
-              >
-                <span className="block font-semibold">{l}</span>
-                <span className="block text-xs opacity-80">{d}</span>
-              </button>
-            ))}
-          </div>
-
-          {route === "quick" && <QuickCreate writings={writings} prefs={P.prefs} onFavourite={P.toggleFavourite} onCreate={quickCreate} />}
-          {(route === "write" || route === "paste" || route === "import") && (
-            <div className="pms-card mt-3 space-y-2">
-              {route === "paste" && (
-                <Btn onClick={pasteFromClipboard}>Paste from clipboard</Btn>
-              )}
-              {route === "import" && (
-                <Field label="Choose a .txt or .md file">
-                  <input
-                    type="file"
-                    accept=".txt,.md,.markdown,text/plain,text/markdown"
-                    className="pms-field"
-                    onChange={(e) => onImport(e.target.files?.[0])}
-                  />
-                </Field>
-              )}
-              <Field label="Title (optional)">
-                <input
-                  className="pms-field"
-                  lang="ta"
-                  value={titleBox}
-                  maxLength={300}
-                  onChange={(e) => setTitleBox(e.target.value)}
-                />
-              </Field>
-              <Field label={route === "paste" ? "Poem text (paste here)" : "Poem text"}>
-                <textarea
-                  aria-label="Poem text"
-                  className="pms-field"
-                  lang="ta"
-                  rows={12}
-                  value={textBox}
-                  placeholder={"ஒரு வரி\nஅடுத்த வரி\n\n(blank line = new stanza)"}
-                  style={{ fontSize: 16, lineHeight: 1.7, minHeight: "40vh", whiteSpace: "pre-wrap", resize: "vertical" }}
-                  onChange={(e) => setTextBox(e.target.value)}
-                />
-              </Field>
-              <p className="text-xs" style={{ color: "var(--mute)" }}>
-                A blank line starts a new stanza. Line breaks, indentation and
-                spaces are kept exactly as you wrote them.
-              </p>
-              {!parsedBox.ok && (
-                <div id="pms-input-error" role="alert" className="rounded-lg p-3 text-sm" style={{ background: "var(--warn-bg)", color: "var(--warn-ink)" }}>
-                  <strong>Your full text is kept here, but scenes cannot be made yet.</strong>
-                  <ul className="mt-1 list-disc pl-5">
-                    {parsedBox.issues.slice(0, 5).map((i, k) => <li key={k}>{i.message}</li>)}
-                  </ul>
-                </div>
-              )}
-              <Btn primary disabled={!parsedBox.ok} onClick={() => startManual(textBox, titleBox)}>
-                Create scenes
+            The source poem changed after this project was made. Your scenes are
+            untouched.
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Btn onClick={rebuild}>
+                Rebuild from the current poem (keeps a copy of this version)
               </Btn>
-            </div>
-          )}
-
-          {route === "existing" && (
-            <div className="pms-card mt-3">
-              <Field label="Start from a Portfolio poem (read-only)">
-                <select
-                  id="pms-src"
-                  aria-label="Start from a poem"
-                  className="pms-field"
-                  value=""
-                  onChange={(e) => pick(e.target.value)}
-                >
-                  <option value="">Choose a poem…</option>
-                  {writings.map((w) => (
-                    <option key={w._id} value={w._id}>
-                      {w.title}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-          )}
-
-          {route === "continue" && (
-            <div className="pms-card mt-3 space-y-3">
-              <div>
-                <h3 className="font-semibold">Saved on this device</h3>
-                {drafts.length === 0 ? (
-                  <p className="text-sm" style={{ color: "var(--mute)" }}>
-                    No recovery copies on this device.
-                  </p>
-                ) : (
-                  <ul className="mt-1 space-y-1">
-                    {drafts.map((d) => (
-                      <li key={d.id} className="flex flex-wrap items-center gap-2 text-sm">
-                        <span lang="ta" className="min-w-0 break-words">
-                          {d.name} · {d.lines} lines · {new Date(d.updatedAt).toLocaleString()}
-                        </span>
-                        <Btn onClick={() => openDraft(d.id)}>Open</Btn>
-                        <Btn
-                          aria-label={`Delete recovery copy ${d.name}`}
-                          onClick={async () => {
-                            await deleteDraft(d.id);
-                            setDrafts(await listDrafts());
-                          }}
-                        >
-                          Delete
-                        </Btn>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {drafts.length > 0 && (
-                  <Btn
-                    onClick={async () => {
-                      await clearDrafts();
-                      setDrafts([]);
-                    }}
-                  >
-                    Clear all device copies
-                  </Btn>
-                )}
-                <p className="mt-1 text-xs" style={{ color: "var(--mute)" }}>
-                  These stay in this browser only and are never synced.
-                </p>
-              </div>
-              <Field label="Open a project saved in Admin">
-                <select
-                  id="pms-proj"
-                  aria-label="Open a saved project"
-                  className="pms-field"
-                  value={projectId || ""}
-                  onChange={(e) => e.target.value && openProject(e.target.value)}
-                >
-                  <option value="">Saved projects ({projects.length})…</option>
-                  {projects.map((p) => (
-                    <option key={p._id} value={p._id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-          )}
-        </section>
-      )}
-      {source?.warnings?.length > 0 && (
-        <div role="status" data-testid="source-notices" className="mt-2 text-sm" style={{ color: "var(--warn-ink)" }}>
-          <p>
-            {source.legacy === false
-              ? "Some of this writing is not poem text:"
-              : "This is a legacy Markdown poem; it was converted for the preview with these notes:"}
-          </p>
-          <ul className="ml-5 list-disc">
-            {source.warnings.slice(0, 8).map((w, k) => <li key={k}>{String(w)}</li>)}
-          </ul>
-          {source.warnings.length > 8 && <p>…and {source.warnings.length - 8} more.</p>}
-        </div>
-      )}
-
-      {!comp ? null : (
-        <div className={`mt-5 grid gap-6 ${three ? "grid-cols-[280px_minmax(270px,1fr)_360px]" : "grid-cols-[minmax(0,1fr)] lg:grid-cols-[300px_minmax(0,1fr)]"}`}>
-          {three && (
-            <div className="min-w-0 space-y-4" aria-label="Source poem and scenes" role="region">
-              {poemPanel}
-              {scenesPanel}
-            </div>
-          )}
-          <div className="min-w-0 lg:sticky lg:top-4 lg:self-start">
-            {previewBlock("main")}
-            <ReadabilityNotice />
-            {qc && <QuickCreateCheck routeId={qc.routeId} onDone={() => setQc(null)} />}
-            <label className="mt-2 flex min-h-11 items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={guide}
-                onChange={(e) => setGuide(e.target.checked)}
-              />{" "}
-              Show Instagram safe zone
-            </label>
-            <div className="mt-2 flex justify-center gap-2">
-              <Btn
-                onClick={undo}
-                disabled={!hist.canUndo}
-                aria-label="Undo"
-              >
-                Undo
-              </Btn>
-              <Btn
-                onClick={redo}
-                disabled={!hist.canRedo}
-                aria-label="Redo"
-              >
-                Redo
-              </Btn>
+              <Btn onClick={ackSource}>Keep my scenes</Btn>
             </div>
           </div>
+        )}
 
-          <div className="min-w-0 pms-sheet" onKeyDown={(e) => e.key === "Escape" && sheetOpen && setSheetOpen(false)} data-open={sheetOpen ? "true" : "false"} style={{ "--kb": `${vv.kb}px`, "--vvh": vv.h ? `${vv.h}px` : "100dvh" }}>
-            <button type="button" className="pms-handle" aria-expanded={sheetOpen} aria-controls="pms-panel" onClick={() => setSheetOpen((o) => !o)}>
-              <span aria-hidden="true" className="pms-grip" />
-              {sheetOpen ? "Hide panel to see the full preview" : "Show editing panel"}
-            </button>
-            <div
-              className="pms-tabs"
-              role="tablist"
-              aria-label="Studio sections"
-              style={{ display: "flex", gap: 4, overflowX: "auto", padding: 4 }}
+        {comp ? (
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+            <span lang="ta" className="min-w-0 break-words font-semibold">
+              {source?.title || name}
+            </span>
+            <span style={{ color: "var(--mute)" }}>
+              {source?.kind === "manual"
+                ? "Your own poem"
+                : source?.kind === "writing"
+                  ? "From your Portfolio (read-only)"
+                  : "Saved project"}
+            </span>
+            <Btn
+              onClick={() => {
+                start(null);
+                setProjectId(null);
+                setSource(null);
+                setRoute(null);
+                setPlaying(false);
+                listDrafts().then(setDrafts);
+              }}
             >
-              {tabsShown.map(([k, l]) => (
+              Start a different poem
+            </Btn>
+            <span style={{ color: "var(--mute)" }} aria-live="polite">
+              {projectId
+                ? "Saved to your Admin projects"
+                : draftSaved
+                  ? "Saved on this device only"
+                  : "Not saved yet"}
+            </span>
+          </div>
+        ) : (
+          <section aria-labelledby="start-h" className="mt-4 min-w-0">
+            <h2 id="start-h" className="text-xl font-semibold">
+              How would you like to start your poem?
+            </h2>
+            <p className="mt-1 text-sm" style={{ color: "var(--mute)" }}>
+              You don’t need a Portfolio writing. Nothing is saved to the server
+              unless you choose Save project to Admin.
+            </p>
+            <div
+              className="mt-3 grid gap-2"
+              style={{
+                gridTemplateColumns:
+                  "repeat(auto-fit,minmax(min(100%,150px),1fr))",
+              }}
+              role="group"
+              aria-label="Ways to start"
+            >
+              {[
+                ["quick", "Quick Create", "Poem, output, look"],
+                ["write", "Write a poem", "Type it here"],
+                ["paste", "Paste a poem", "From Notes, WhatsApp…"],
+                ["import", "Import a file", ".txt or .md"],
+                ["existing", "Portfolio poem", "Read-only copy"],
+                ["continue", "Continue", "Saved on device or Admin"],
+              ].map(([k, l, d]) => (
                 <button
                   key={k}
-                  id={`tab-${k}`}
-                  role="tab"
-                  aria-selected={activeTab === k}
-                  aria-controls="pms-panel"
-                  className="pms-btn"
-                  style={
-                    activeTab === k
+                  type="button"
+                  className="pms-btn text-left"
+                  style={{
+                    minHeight: 64,
+                    display: "block",
+                    ...(route === k
                       ? {
                           background: "var(--accent)",
                           color: "var(--accent-ink)",
                         }
-                      : { border: 0 }
-                  }
-                  onClick={() => { setTab(k); setSheetOpen(activeTab === k && sheetOpen ? false : true); }}
+                      : {}),
+                  }}
+                  aria-pressed={route === k}
+                  onClick={() => setRoute(k)}
                 >
-                  {l}
+                  <span className="block font-semibold">{l}</span>
+                  <span className="block text-xs opacity-80">{d}</span>
                 </button>
               ))}
             </div>
+
+            {route === "quick" && (
+              <QuickCreate
+                writings={writings}
+                prefs={P.prefs}
+                onFavourite={P.toggleFavourite}
+                onCreate={quickCreate}
+              />
+            )}
+            {(route === "write" || route === "paste" || route === "import") && (
+              <div className="pms-card mt-3 space-y-2">
+                {route === "paste" && (
+                  <Btn onClick={pasteFromClipboard}>Paste from clipboard</Btn>
+                )}
+                {route === "import" && (
+                  <Field label="Choose a .txt or .md file">
+                    <input
+                      type="file"
+                      accept=".txt,.md,.markdown,text/plain,text/markdown"
+                      className="pms-field"
+                      onChange={(e) => onImport(e.target.files?.[0])}
+                    />
+                  </Field>
+                )}
+                <Field label="Title (optional)">
+                  <input
+                    className="pms-field"
+                    lang="ta"
+                    value={titleBox}
+                    maxLength={300}
+                    onChange={(e) => setTitleBox(e.target.value)}
+                  />
+                </Field>
+                <Field
+                  label={
+                    route === "paste" ? "Poem text (paste here)" : "Poem text"
+                  }
+                >
+                  <textarea
+                    aria-label="Poem text"
+                    className="pms-field"
+                    lang="ta"
+                    rows={12}
+                    value={textBox}
+                    placeholder={
+                      "ஒரு வரி\nஅடுத்த வரி\n\n(blank line = new stanza)"
+                    }
+                    style={{
+                      fontSize: 16,
+                      lineHeight: 1.7,
+                      minHeight: "40vh",
+                      whiteSpace: "pre-wrap",
+                      resize: "vertical",
+                    }}
+                    onChange={(e) => setTextBox(e.target.value)}
+                  />
+                </Field>
+                <p className="text-xs" style={{ color: "var(--mute)" }}>
+                  A blank line starts a new stanza. Line breaks, indentation and
+                  spaces are kept exactly as you wrote them.
+                </p>
+                {!parsedBox.ok && (
+                  <div
+                    id="pms-input-error"
+                    role="alert"
+                    className="rounded-lg p-3 text-sm"
+                    style={{
+                      background: "var(--warn-bg)",
+                      color: "var(--warn-ink)",
+                    }}
+                  >
+                    <strong>
+                      Your full text is kept here, but scenes cannot be made
+                      yet.
+                    </strong>
+                    <ul className="mt-1 list-disc pl-5">
+                      {parsedBox.issues.slice(0, 5).map((i, k) => (
+                        <li key={k}>{i.message}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <Btn
+                  primary
+                  disabled={!parsedBox.ok}
+                  onClick={() => startManual(textBox, titleBox)}
+                >
+                  Create scenes
+                </Btn>
+              </div>
+            )}
+
+            {route === "existing" && (
+              <div className="pms-card mt-3">
+                <Field label="Start from a Portfolio poem (read-only)">
+                  <select
+                    id="pms-src"
+                    aria-label="Start from a poem"
+                    className="pms-field"
+                    value=""
+                    onChange={(e) => pick(e.target.value)}
+                  >
+                    <option value="">Choose a poem…</option>
+                    {writings.map((w) => (
+                      <option key={w._id} value={w._id}>
+                        {w.title}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+            )}
+
+            {route === "continue" && (
+              <div className="pms-card mt-3 space-y-3">
+                <div>
+                  <h3 className="font-semibold">Saved on this device</h3>
+                  {drafts.length === 0 ? (
+                    <p className="text-sm" style={{ color: "var(--mute)" }}>
+                      No recovery copies on this device.
+                    </p>
+                  ) : (
+                    <ul className="mt-1 space-y-1">
+                      {drafts.map((d) => (
+                        <li
+                          key={d.id}
+                          className="flex flex-wrap items-center gap-2 text-sm"
+                        >
+                          <span lang="ta" className="min-w-0 break-words">
+                            {d.name} · {d.lines} lines ·{" "}
+                            {new Date(d.updatedAt).toLocaleString()}
+                          </span>
+                          <Btn onClick={() => openDraft(d.id)}>Open</Btn>
+                          <Btn
+                            aria-label={`Delete recovery copy ${d.name}`}
+                            onClick={async () => {
+                              await deleteDraft(d.id);
+                              setDrafts(await listDrafts());
+                            }}
+                          >
+                            Delete
+                          </Btn>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {drafts.length > 0 && (
+                    <Btn
+                      onClick={async () => {
+                        await clearDrafts();
+                        setDrafts([]);
+                      }}
+                    >
+                      Clear all device copies
+                    </Btn>
+                  )}
+                  <p className="mt-1 text-xs" style={{ color: "var(--mute)" }}>
+                    These stay in this browser only and are never synced.
+                  </p>
+                </div>
+                <Field label="Open a project saved in Admin">
+                  <select
+                    id="pms-proj"
+                    aria-label="Open a saved project"
+                    className="pms-field"
+                    value={projectId || ""}
+                    onChange={(e) =>
+                      e.target.value && openProject(e.target.value)
+                    }
+                  >
+                    <option value="">
+                      Saved projects ({projects.length})…
+                    </option>
+                    {projects.map((p) => (
+                      <option key={p._id} value={p._id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+            )}
+          </section>
+        )}
+        {source?.warnings?.length > 0 && (
+          <div
+            role="status"
+            data-testid="source-notices"
+            className="mt-2 text-sm"
+            style={{ color: "var(--warn-ink)" }}
+          >
+            <p>
+              {source.legacy === false
+                ? "Some of this writing is not poem text:"
+                : "This is a legacy Markdown poem; it was converted for the preview with these notes:"}
+            </p>
+            <ul className="ml-5 list-disc">
+              {source.warnings.slice(0, 8).map((w, k) => (
+                <li key={k}>{String(w)}</li>
+              ))}
+            </ul>
+            {source.warnings.length > 8 && (
+              <p>…and {source.warnings.length - 8} more.</p>
+            )}
+          </div>
+        )}
+
+        {!comp ? null : (
+          <div
+            className={`mt-5 grid gap-6 ${three ? "grid-cols-[280px_minmax(270px,1fr)_360px]" : "grid-cols-[minmax(0,1fr)] lg:grid-cols-[300px_minmax(0,1fr)]"}`}
+          >
+            {three && (
+              <div
+                className="min-w-0 space-y-4"
+                aria-label="Source poem and scenes"
+                role="region"
+              >
+                {poemPanel}
+                {scenesPanel}
+              </div>
+            )}
+            <div className="min-w-0 lg:sticky lg:top-4 lg:self-start">
+              {previewBlock("main")}
+              <ReadabilityNotice />
+              {qc && (
+                <QuickCreateCheck
+                  routeId={qc.routeId}
+                  onDone={() => setQc(null)}
+                />
+              )}
+              <label className="mt-2 flex min-h-11 items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={guide}
+                  onChange={(e) => setGuide(e.target.checked)}
+                />{" "}
+                Show Instagram safe zone
+              </label>
+              <div className="mt-2 flex justify-center gap-2">
+                <Btn onClick={undo} disabled={!hist.canUndo} aria-label="Undo">
+                  Undo
+                </Btn>
+                <Btn onClick={redo} disabled={!hist.canRedo} aria-label="Redo">
+                  Redo
+                </Btn>
+              </div>
+            </div>
+
             <div
-              id="pms-panel"
-              role="tabpanel"
-              aria-labelledby={`tab-${activeTab}`}
-              className="mt-4 space-y-4"
+              className="min-w-0 pms-sheet"
+              onKeyDown={(e) =>
+                e.key === "Escape" && sheetOpen && setSheetOpen(false)
+              }
+              data-open={sheetOpen ? "true" : "false"}
+              style={{
+                "--kb": `${vv.kb}px`,
+                "--vvh": vv.h ? `${vv.h}px` : "100dvh",
+              }}
             >
-              {activeTab === "look" && <LookPanel />}
+              <button
+                type="button"
+                className="pms-handle"
+                aria-expanded={sheetOpen}
+                aria-controls="pms-panel"
+                onClick={() => setSheetOpen((o) => !o)}
+              >
+                <span aria-hidden="true" className="pms-grip" />
+                {sheetOpen
+                  ? "Hide panel to see the full preview"
+                  : "Show editing panel"}
+              </button>
+              <div
+                className="pms-tabs"
+                role="tablist"
+                aria-label="Studio sections"
+                style={{
+                  display: "flex",
+                  gap: 4,
+                  overflowX: "auto",
+                  padding: 4,
+                }}
+              >
+                {tabsShown.map(([k, l]) => (
+                  <button
+                    key={k}
+                    id={`tab-${k}`}
+                    role="tab"
+                    aria-selected={activeTab === k}
+                    aria-controls="pms-panel"
+                    className="pms-btn"
+                    style={
+                      activeTab === k
+                        ? {
+                            background: "var(--accent)",
+                            color: "var(--accent-ink)",
+                          }
+                        : { border: 0 }
+                    }
+                    onClick={() => {
+                      setTab(k);
+                      setSheetOpen(activeTab === k && sheetOpen ? false : true);
+                    }}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+              <div
+                id="pms-panel"
+                role="tabpanel"
+                aria-labelledby={`tab-${activeTab}`}
+                className="mt-4 space-y-4"
+              >
+                {activeTab === "look" && <LookPanel />}
 
-              {activeTab === "scenes" && scenesPanel}
+                {activeTab === "scenes" && scenesPanel}
 
-              {activeTab === "bg" && <BackgroundPanel />}
+                {activeTab === "bg" && <BackgroundPanel />}
 
-              {activeTab === "audio" && <AudioPanel />}
+                {activeTab === "audio" && <AudioPanel />}
 
-              {activeTab === "story" && <StoryPanel />}
+                {activeTab === "story" && <StoryPanel />}
 
-              {activeTab === "poem" && poemPanel}
+                {activeTab === "poem" && poemPanel}
 
-              {activeTab === "full" && <FullPoemPanel />}
+                {activeTab === "full" && <FullPoemPanel />}
 
-              {activeTab === "poster" && <PosterPanel />}
+                {activeTab === "poster" && <PosterPanel />}
 
-              {activeTab === "project" && <ProjectPanel />}
+                {activeTab === "project" && <ProjectPanel />}
 
-              {activeTab === "export" && <ExportPanel />}
+                {activeTab === "export" && <ExportPanel />}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {full && comp && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Full-screen preview"
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black p-3"
-          style={{
-            paddingTop: "max(12px, env(safe-area-inset-top))",
-            paddingBottom: "max(12px, env(safe-area-inset-bottom))",
-          }}
-        >
-          <div className="flex w-full justify-between">
-            <Btn onClick={() => setPlaying((p) => !p)}>
-              {playing ? "Pause" : "Play"}
-            </Btn>
-            <Btn onClick={() => setFull(false)} autoFocus>
-              Close
-            </Btn>
-          </div>
-          <canvas
-            ref={fullRef}
-            width={540}
-            height={Math.round((540 * fmt.h) / fmt.w)}
-            style={{
-              height: "min(80dvh,100%)",
-              aspectRatio: `${fmt.w}/${fmt.h}`,
-            }}
-            className="rounded-lg"
-            role="img"
+        {full && comp && (
+          <div
+            role="dialog"
+            aria-modal="true"
             aria-label="Full-screen preview"
-          />
-        </div>
-      )}
-    </main>
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black p-3"
+            style={{
+              paddingTop: "max(12px, env(safe-area-inset-top))",
+              paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+            }}
+          >
+            <div className="flex w-full justify-between">
+              <Btn onClick={() => setPlaying((p) => !p)}>
+                {playing ? "Pause" : "Play"}
+              </Btn>
+              <Btn onClick={() => setFull(false)} autoFocus>
+                Close
+              </Btn>
+            </div>
+            <canvas
+              ref={fullRef}
+              width={540}
+              height={Math.round((540 * fmt.h) / fmt.w)}
+              style={{
+                height: "min(80dvh,100%)",
+                aspectRatio: `${fmt.w}/${fmt.h}`,
+              }}
+              className="rounded-lg"
+              role="img"
+              aria-label="Full-screen preview"
+            />
+          </div>
+        )}
+      </main>
     </StudioContext.Provider>
   );
 }
