@@ -114,6 +114,33 @@ const withTimeout = (p, ms, what) =>
     );
   });
 
+/**
+ * Compact, best-effort facts about WHY a font failed (for the error text only; never used to decide anything): the state of
+ * the matching @font-face rules, the status of the font files the page requested, and the connection. Everything is guarded.
+ */
+export function fontDiagnostics(fonts, font, env = typeof window !== "undefined" ? window : {}) {
+  const out = [];
+  try {
+    const fam = familyOf(font).split(",")[0].replace(/["']/g, "").trim();
+    const faces = [];
+    if (fonts && typeof fonts[Symbol.iterator] === "function")
+      for (const f of fonts) if (String(f.family).replace(/["']/g, "") === fam) faces.push(`${f.weight}:${f.status}`);
+    if (faces.length) out.push(`faces ${faces.slice(0, 6).join(",")}`);
+    else out.push("no matching @font-face");
+  } catch {}
+  try {
+    const res = (env.performance?.getEntriesByType?.("resource") || []).filter((r) => /\/_next\/static\/media\/.*\.(woff2?|ttf|otf)/i.test(r.name));
+    if (res.length)
+      out.push("files " + res.slice(-4).map((r) => `${r.name.split("/").pop().slice(0, 18)} ${r.responseStatus ?? "?"} ${Math.round(r.transferSize || 0)}B`).join("; "));
+    else out.push("no font file requested");
+  } catch {}
+  try {
+    const n = env.navigator;
+    out.push(`online ${n?.onLine}, net ${n?.connection?.effectiveType ?? "?"}${n?.connection?.saveData ? " saveData" : ""}`);
+  } catch {}
+  return out.join(" | ");
+}
+
 const familyOf = (font) => font.replace(/^\s*\d+\s+[\d.]+px\s+/, "");
 const weightOf = (font) => font.match(/^\s*(\d+)/)?.[1];
 
@@ -160,7 +187,7 @@ export async function ensureFonts(comp, opts = {}, deps = {}) {
           continue;
         }
         throw new FontReadinessError(
-          `The ${f.role} font (${weightOf(f.font)}) could not be loaded: ${e?.message || e}. Check your connection, reload the page and try again. Nothing was exported.`,
+          `The ${f.role} font (${weightOf(f.font)}) could not be loaded: ${e?.message || e}. Check your connection, reload the page and try again. Nothing was exported. [${fontDiagnostics(fonts, f.font)}]`,
         );
       }
     }

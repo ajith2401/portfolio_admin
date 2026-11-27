@@ -508,3 +508,15 @@ test("a transient network error loading a font is retried; a persistent one stil
   await assert.rejects(ensureFonts(comp, {}, { fonts: mk(99), fontRetryMs: 1 }), (e) => /could not be loaded: A network error occurred\./.test(e.message) && /reload the page/.test(e.message) && /Nothing was exported/.test(e.message));
   assert.equal(calls, 3);
 });
+
+test("fontDiagnostics reports face state, font-file status and connection, and never throws", async () => {
+  const { fontDiagnostics } = await import("../../src/lib/motion-studio/font-ready.js");
+  const d = fontDiagnostics(new Set([{ family: '"X"', weight: "100 900", status: "error" }]), "600 40px X, sans-serif", {
+    navigator: { onLine: true, connection: { effectiveType: "4g" } },
+    performance: { getEntriesByType: () => [{ name: "https://a/_next/static/media/abc.woff2", responseStatus: 404, transferSize: 0 }] },
+  });
+  assert.match(d, /100 900:error/);
+  assert.match(d, /abc\.woff2 404/);
+  assert.match(d, /net 4g/);
+  assert.equal(typeof fontDiagnostics(null, "400 40px X", {}), "string");
+});
