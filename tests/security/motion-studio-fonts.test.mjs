@@ -520,3 +520,16 @@ test("fontDiagnostics reports face state, font-file status and connection, and n
   assert.match(d, /net 4g/);
   assert.equal(typeof fontDiagnostics(null, "400 40px X", {}), "string");
 });
+
+test("fontProbe tries each unloaded face alone and reports its range, state change and error; never throws", async () => {
+  const { fontProbe, fontDiagnostics } = await import("../../src/lib/motion-studio/font-ready.js");
+  const bad = { family: '"X"', weight: "100 900", status: "unloaded", unicodeRange: "U+0B80-0BFF", load: async function () { this.status = "error"; throw Object.assign(new Error("A network error occurred."), { name: "NetworkError" }); } };
+  const good = { family: '"X"', status: "loaded", unicodeRange: "U+0000-00FF", load: async () => {} };
+  const env = { performance: { getEntriesByType: () => [{ name: "https://h/_next/static/immutable/media/a.woff2", responseStatus: 200, transferSize: 100, duration: 12 }] } };
+  const r = await fontProbe(new Set([good, bad]), "400 40px X, sans-serif", env);
+  assert.match(r, /U\+0B80-0BFF unloaded->error NetworkError: A network error occurred\./);
+  assert.match(r, /a\.woff2 st200 100B 12ms/);
+  assert.doesNotMatch(r, /U\+0000-00FF/);
+  assert.match(fontDiagnostics(new Set(), "400 40px X", env), /a\.woff2 200/);
+  assert.equal(typeof (await fontProbe(null, "400 40px X", {})), "string");
+});

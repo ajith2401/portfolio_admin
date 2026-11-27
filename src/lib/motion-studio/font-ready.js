@@ -129,7 +129,7 @@ export function fontDiagnostics(fonts, font, env = typeof window !== "undefined"
     else out.push("no matching @font-face");
   } catch {}
   try {
-    const res = (env.performance?.getEntriesByType?.("resource") || []).filter((r) => /\/_next\/static\/media\/.*\.(woff2?|ttf|otf)/i.test(r.name));
+    const res = (env.performance?.getEntriesByType?.("resource") || []).filter((r) => /\.(woff2?|ttf|otf)(\?|$)/i.test(r.name));
     if (res.length)
       out.push("files " + res.slice(-4).map((r) => `${r.name.split("/").pop().slice(0, 18)} ${r.responseStatus ?? "?"} ${Math.round(r.transferSize || 0)}B`).join("; "));
     else out.push("no font file requested");
@@ -139,6 +139,33 @@ export function fontDiagnostics(fonts, font, env = typeof window !== "undefined"
     out.push(`online ${n?.onLine}, net ${n?.connection?.effectiveType ?? "?"}${n?.connection?.saveData ? " saveData" : ""}`);
   } catch {}
   return out.join(" | ");
+}
+
+/**
+ * Failure-time probe (error text only): tries each matching @font-face that is not loaded, ONE AT A TIME, with a 4 s cap,
+ * and reports its unicode-range start plus the exact error name/message, then the font-file resource entries. Never throws.
+ */
+export async function fontProbe(fonts, font, env = typeof window !== "undefined" ? window : {}) {
+  const out = [];
+  try {
+    const fam = familyOf(font).split(",")[0].replace(/["']/g, "").trim();
+    let n = 0;
+    if (fonts && typeof fonts[Symbol.iterator] === "function")
+      for (const f of fonts) {
+        if (String(f.family).replace(/["']/g, "") !== fam || f.status === "loaded" || n++ >= 4) continue;
+        const before = f.status;
+        let res = "ok";
+        try {
+          await Promise.race([f.load(), new Promise((_, j) => setTimeout(() => j(new Error("timeout 4s")), 4000))]);
+        } catch (e) {
+          res = `${e?.name || "Error"}: ${String(e?.message || e).slice(0, 40)}`;
+        }
+        out.push(`[range ${String(f.unicodeRange).slice(0, 28)} ${before}->${f.status} ${res}]`);
+      }
+    const res = (env.performance?.getEntriesByType?.("resource") || []).filter((r) => /\.(woff2?|ttf|otf)(\?|$)/i.test(r.name));
+    out.push(res.length ? "files " + res.slice(-4).map((r) => `${r.name.split("/").pop().slice(0, 14)} st${r.responseStatus ?? "?"} ${Math.round(r.transferSize || 0)}B ${Math.round(r.duration || 0)}ms`).join("; ") : "no font file in resource timing");
+  } catch {}
+  return out.join(" ");
 }
 
 const familyOf = (font) => font.replace(/^\s*\d+\s+[\d.]+px\s+/, "");
@@ -187,7 +214,7 @@ export async function ensureFonts(comp, opts = {}, deps = {}) {
           continue;
         }
         throw new FontReadinessError(
-          `The ${f.role} font (${weightOf(f.font)}) could not be loaded: ${e?.message || e}. Check your connection, reload the page and try again. Nothing was exported. [${fontDiagnostics(fonts, f.font)}]`,
+          `The ${f.role} font (${weightOf(f.font)}) could not be loaded: ${e?.message || e}. Check your connection, reload the page and try again. Nothing was exported. [${fontDiagnostics(fonts, f.font)}] ${await fontProbe(fonts, f.font)}`,
         );
       }
     }
