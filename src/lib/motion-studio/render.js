@@ -250,9 +250,9 @@ export function pageLabelBox(comp, fmt, ctx, text) {
   return { text, font, size, x, y, w, left: x - w, right: x, top: y - size / 2, bottom: y + size / 2 };
 }
 
-export function drawFrame(ctx, comp, tMs, { w, h, assets = {}, still = false, scene: forced = null, minSize = defaultMinSize(comp.format), pageLabel = null, fxTrace = null, fxReport = null } = {}) {
+export function drawFrame(ctx, comp, tMs, { w, assets = {}, still = false, scene: forced = null, minSize = defaultMinSize(comp.format), pageLabel = null, fxTrace = null, fxReport = null } = {}) {
   const fmt = FORMATS[comp.format] || FORMATS.reel;
-  w = w || fmt.w; h = h || fmt.h;
+  w = w || fmt.w; // the height follows from the format's aspect ratio (scale is w / fmt.w on both axes)
   ctx.save(); ctx.scale(w / fmt.w, w / fmt.w);
   const env = { comp, fmt, W: fmt.w, H: fmt.h, tMs, still, assets, forced, minSize, pageLabel, total: compDuration(comp), rect: textRect(comp, fmt, ctx),
     // material (materials.js): [] unless comp.material selects a preset; fxTrace/fxReport are for fx/verify.js only

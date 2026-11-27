@@ -350,7 +350,10 @@ export default function MotionStudio() {
     const poem = poemFromWriting(r.data);
     if (!poem.stanzas.length)
       return flash("error", "This writing has no poem lines to animate."), false;
+    // over a limit: refuse with the reason; nothing is cut to fit
+    if (!poem.ok) return flash("error", poem.issues[0].message), false;
     const scenes = generateScenes(poem, { title: r.data.title });
+    if (scenes.length > MAX_SCENES) return flash("error", `This poem needs ${scenes.length} scenes; the limit is ${MAX_SCENES}. Nothing was cut.`), false;
     if (!start({ ...withLook(scenes, look), originalScenes: structuredClone(scenes) })) return false;
     draftId.current = null;
     setSource({
@@ -358,8 +361,10 @@ export default function MotionStudio() {
       kind: "writing",
       title: r.data.title,
       warnings: poem.warnings,
+      legacy: poem.legacy,
       version: r.data.version ?? null,
-      poem: { stanzas: poem.stanzas },
+      // verbatim text + blank-line structure, so the editable poem box shows the poem exactly as written
+      poem: { stanzas: poem.stanzas, source: poem.source, blank: poem.blank, trailingBlank: poem.trailingBlank },
     });
     setName(r.data.title || "Untitled");
     setProjectId(null);
@@ -598,7 +603,9 @@ export default function MotionStudio() {
     setProjects((p) => [snap.data.project, ...p]);
     const r = await apiRequest("GET", `/api/writings/${source.id}`);
     if (!r.ok) return flash("error", "Could not reload the poem");
-    const scenes = generateScenes(poemFromWriting(r.data), {
+    const fresh = poemFromWriting(r.data);
+    if (!fresh.ok) return flash("error", `${fresh.issues[0].message} Your scenes were not changed.`);
+    const scenes = generateScenes(fresh, {
       title: r.data.title,
     });
     update((c) => ({ ...c, scenes, originalScenes: structuredClone(scenes) }));
@@ -1481,10 +1488,17 @@ export default function MotionStudio() {
         </section>
       )}
       {source?.warnings?.length > 0 && (
-        <p className="mt-2 text-sm" style={{ color: "var(--warn-ink)" }}>
-          This is a legacy Markdown poem; it was converted for the preview with{" "}
-          {source.warnings.length} note(s).
-        </p>
+        <div role="status" data-testid="source-notices" className="mt-2 text-sm" style={{ color: "var(--warn-ink)" }}>
+          <p>
+            {source.legacy === false
+              ? "Some of this writing is not poem text:"
+              : "This is a legacy Markdown poem; it was converted for the preview with these notes:"}
+          </p>
+          <ul className="ml-5 list-disc">
+            {source.warnings.slice(0, 8).map((w, k) => <li key={k}>{String(w)}</li>)}
+          </ul>
+          {source.warnings.length > 8 && <p>…and {source.warnings.length - 8} more.</p>}
+        </div>
       )}
 
       {!comp ? null : (

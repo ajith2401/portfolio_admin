@@ -2,6 +2,7 @@
 // None of these touch the source poem: scenes are the creative project's own arrangement.
 import { sceneDuration, MIN_SCENE_MS, MAX_SCENE_MS, MAX_LINES_PER_SCENE } from "./scenes.js";
 import { MAX_SCENES, MAX_LINES } from "./composition.js";
+import { LIMITS } from "./poem-input.js";
 
 let n = 0;
 const nid = () => `e${Date.now().toString(36)}${(n++).toString(36)}`;
@@ -27,11 +28,30 @@ export function restamp(scenes) {
 }
 const dur = (lines, keep) => Math.min(MAX_SCENE_MS, Math.max(MIN_SCENE_MS, keep ?? sceneDuration(lines)));
 
-export function editLine(scenes, si, li, text) {
+/** Length of a scene line as the poem parser counts it (code points), so the same LIMITS.lineChars applies everywhere. */
+export const lineLength = (text) => [...String(text ?? "")].length;
+/**
+ * Why a scene-line edit must be refused, or null when it is acceptable. Text is never cut to fit: an over-long edit is
+ * refused as a whole and the line keeps its previous text.
+ */
+export function lineEditError(text) {
+  const n = lineLength(text);
+  return n > LIMITS.lineChars
+    ? `That line would have ${n} characters; the limit is ${LIMITS.lineChars}. Nothing was changed. Split it into shorter lines.`
+    : null;
+}
+/** Edit one scene line verbatim. Returns {ok, scenes, error}; on refusal `scenes` is the SAME array (nothing applied). */
+export function editLineResult(scenes, si, li, text) {
+  if (!scenes[si] || scenes[si].lines[li] === undefined) return { ok: false, scenes, error: "That line no longer exists." };
+  const error = lineEditError(text);
+  if (error) return { ok: false, scenes, error };
   const out = scenes.map(clone);
-  if (!out[si] || out[si].lines[li] === undefined) return scenes;
-  out[si].lines[li] = String(text).slice(0, 400);
-  return out;
+  out[si].lines[li] = String(text);
+  return { ok: true, scenes: out, error: null };
+}
+/** Scenes after the edit, or the unchanged input when the edit is refused (see editLineResult for the reason). */
+export function editLine(scenes, si, li, text) {
+  return editLineResult(scenes, si, li, text).scenes;
 }
 export function setDuration(scenes, si, ms) {
   return scenes.map((s, i) => (i === si ? { ...clone(s), durationMs: dur(s.lines, Number(ms)) } : s));
@@ -92,13 +112,24 @@ export function duplicateScene(scenes, si) {
   return [...scenes.slice(0, si + 1), noMeta({ ...clone(scenes[si]), id: nid() }), ...scenes.slice(si + 1)];
 }
 
-const flat = (stanzas) => stanzas.flat();
-/** Lines of the source poem that appear in no scene — shown to the author so omission is never silent. */
+/**
+ * Lines of the source poem that appear in no scene — shown to the author so omission is never silent.
+ * Comparison is exact on the verbatim text, the same rule the source-aware validators use (coverage.js): no trimming, no
+ * Unicode normalisation (NFC/NFD), ZWJ/ZWNJ, indentation and trailing spaces all count. A scene line the author edited
+ * therefore no longer stands in for its source line, and that source line is reported. Each source occurrence needs its
+ * own scene occurrence (a repeated refrain is matched by count); scene order is the author's choice and is not checked.
+ */
 export function missingLines(poem, scenes) {
   const used = new Map();
-  scenes.filter((s) => s.kind !== "title").forEach((s) => s.lines.forEach((l) => used.set(l, (used.get(l) || 0) + 1)));
+  (Array.isArray(scenes) ? scenes : [])
+    .filter((s) => s && s.kind !== "title" && Array.isArray(s.lines))
+    .forEach((s) => s.lines.forEach((l) => { if (typeof l === "string") used.set(l, (used.get(l) || 0) + 1); }));
   const out = [];
-  flat(poem.stanzas).forEach((l) => { const c = used.get(l) || 0; if (c > 0) used.set(l, c - 1); else out.push(l); });
+  (Array.isArray(poem?.stanzas) ? poem.stanzas : []).flat().forEach((l) => {
+    const c = used.get(l) || 0;
+    if (c > 0) used.set(l, c - 1);
+    else out.push(l);
+  });
   return out;
 }
 

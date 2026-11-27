@@ -75,6 +75,14 @@ test('advanced: per-scene editing, undo/redo, restore original, no silent omissi
   const line = page.getByLabel('Scene 2 line 1', { exact: true });
   await line.fill('திருத்திய வரி');
   await expect(line).toHaveValue('திருத்திய வரி');
+  // P10: an edit over 400 characters is refused whole (never cut); the message is visible and the text is unchanged
+  await line.fill('அ'.repeat(401));
+  await expect(page.getByRole('alert').filter({ hasText: /401 characters; the limit is 400\. Nothing was changed/ })).toBeVisible();
+  await expect(line).toHaveValue('திருத்திய வரி');
+  await expect(line).toHaveAttribute('aria-invalid', 'true');
+  await line.fill('திருத்திய வரி!'); // the next accepted edit clears the message
+  await expect(line).toHaveValue('திருத்திய வரி!');
+  await expect(page.getByRole('alert').filter({ hasText: /the limit is 400/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Split scene 2 before line 2' }).click();
   expect(await count()).toBe(n0 + 1);
   await page.getByRole('button', { name: 'Merge with next' }).nth(1).click();

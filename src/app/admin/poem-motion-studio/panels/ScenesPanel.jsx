@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import * as E from "@/lib/motion-studio/scene-edit";
 import { Btn, Field, Range } from "../studio-ui";
 import { useStudio } from "../studio-context";
@@ -14,6 +15,8 @@ export default function ScenesPanel() {
     setScenes,
     setSel,
   } = useStudio();
+  // an over-long line edit is refused as a whole (never cut); the message stays under that line until the next edit
+  const [lineErr, setLineErr] = useState(null);
   return (
 <section aria-label="Scenes">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -101,20 +104,26 @@ export default function ScenesPanel() {
                         </div>
                         <div className="mt-2 space-y-2">
                           {s.lines.map((l, li) => (
-                            <div key={li} className="flex items-center gap-1">
+                            <div key={li}>
+                            <div className="flex items-center gap-1">
                               <input
                                 aria-label={`Scene ${i + 1} line ${li + 1}`}
+                                aria-invalid={lineErr?.key === `${s.id}:${li}` || undefined}
+                                aria-describedby={lineErr?.key === `${s.id}:${li}` ? `line-err-${i}-${li}` : undefined}
                                 className="pms-field"
                                 lang="ta"
                                 value={l}
-                                maxLength={400}
                                 onFocus={() => setSel(i)}
-                                onChange={(e) =>
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  const err = E.lineEditError(v);
+                                  if (err) return setLineErr({ key: `${s.id}:${li}`, msg: err }); // previous text kept
+                                  setLineErr(null);
                                   setScenes(
-                                    (x) => E.editLine(x, i, li, e.target.value),
+                                    (x) => E.editLine(x, i, li, v),
                                     `line-${i}-${li}`,
-                                  )
-                                }
+                                  );
+                                }}
                               />
                               <select
                                 aria-label={`Move scene ${i + 1} line ${li + 1} to`}
@@ -154,6 +163,17 @@ export default function ScenesPanel() {
                                   Split
                                 </Btn>
                               )}
+                            </div>
+                            {lineErr?.key === `${s.id}:${li}` && (
+                              <p
+                                id={`line-err-${i}-${li}`}
+                                role="alert"
+                                className="mt-1 text-sm"
+                                style={{ color: "var(--warn-ink)" }}
+                              >
+                                {lineErr.msg}
+                              </p>
+                            )}
                             </div>
                           ))}
                         </div>
