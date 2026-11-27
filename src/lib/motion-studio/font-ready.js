@@ -121,10 +121,10 @@ const withTimeout = (p, ms, what) =>
 export function fontDiagnostics(fonts, font, env = typeof window !== "undefined" ? window : {}) {
   const out = [];
   try {
-    const fam = familyOf(font).split(",")[0].replace(/["']/g, "").trim();
+    const fams = familiesOf(font);
     const faces = [];
     if (fonts && typeof fonts[Symbol.iterator] === "function")
-      for (const f of fonts) if (String(f.family).replace(/["']/g, "") === fam) faces.push(`${f.weight}:${f.status}`);
+      for (const f of fonts) if (sameFam(f, fams)) faces.push(`${fams.indexOf(String(f.family).replace(/["']/g, "").trim())}/${f.weight}:${f.status}`);
     if (faces.length) out.push(`faces ${faces.slice(0, 6).join(",")}`);
     else out.push("no matching @font-face");
   } catch {}
@@ -148,11 +148,11 @@ export function fontDiagnostics(fonts, font, env = typeof window !== "undefined"
 export async function fontProbe(fonts, font, env = typeof window !== "undefined" ? window : {}) {
   const out = [];
   try {
-    const fam = familyOf(font).split(",")[0].replace(/["']/g, "").trim();
+    const fams = familiesOf(font);
     let n = 0;
     if (fonts && typeof fonts[Symbol.iterator] === "function")
       for (const f of fonts) {
-        if (String(f.family).replace(/["']/g, "") !== fam || f.status === "loaded" || n++ >= 4) continue;
+        if (!sameFam(f, fams) || f.status === "loaded" || n++ >= 4) continue;
         const before = f.status;
         let res = "ok";
         try {
@@ -176,11 +176,11 @@ export async function fontProbe(fonts, font, env = typeof window !== "undefined"
  */
 export async function warmFaces(fonts, font, capMs = 8000) {
   try {
-    const fam = familyOf(font).split(",")[0].replace(/["']/g, "").trim();
+    const fams = familiesOf(font);
     if (!fonts || typeof fonts[Symbol.iterator] !== "function") return 0;
     let n = 0;
     for (const f of [...fonts]) {
-      if (String(f.family).replace(/["']/g, "") !== fam || f.status === "loaded") continue;
+      if (!sameFam(f, fams) || f.status === "loaded") continue;
       try {
         await withTimeout(f.load(), capMs, "A font piece");
         n++;
@@ -196,11 +196,32 @@ export async function warmFaces(fonts, font, capMs = 8000) {
 function allFacesLoaded(fonts, font) {
   try {
     if (!fonts || typeof fonts[Symbol.iterator] !== "function") return false;
-    const fam = familyOf(font).split(",")[0].replace(/["']/g, "").trim();
-    const mine = [...fonts].filter((x) => String(x.family).replace(/["']/g, "") === fam);
+    const fams = familiesOf(font).slice(0, 1); // the MAIN family draws the Tamil; a lazy/failed fallback family must not block
+    const mine = [...fonts].filter((x) => sameFam(x, fams));
     return mine.length > 0 && mine.every((x) => x.status === "loaded");
   } catch {
     return false;
+  }
+}
+
+const GENERIC_FAMILIES = new Set(["serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui", "ui-serif", "ui-sans-serif"]);
+/** every NON-generic family named in a CSS font string, quotes stripped. */
+function familiesOf(font) {
+  return familyOf(font).split(",").map((x) => x.replace(/["']/g, "").trim()).filter((x) => x && !GENERIC_FAMILIES.has(x.toLowerCase()));
+}
+const sameFam = (f, fams) => fams.includes(String(f.family).replace(/["']/g, "").trim());
+
+/** error text only: the first few characters of `text` that fonts.check() reports as not ready, as code points. Never throws. */
+function notReadyChars(fonts, font, text) {
+  try {
+    const bad = [];
+    for (const ch of new Set(Array.from(String(text || "")))) {
+      if (bad.length >= 8) break;
+      if (!fonts.check(font, ch)) bad.push("U+" + ch.codePointAt(0).toString(16).toUpperCase());
+    }
+    return bad.length ? "notready " + bad.join(",") : "notready (no single character fails)";
+  } catch {
+    return "notready (probe failed)";
   }
 }
 
@@ -268,7 +289,7 @@ export async function ensureFonts(comp, opts = {}, deps = {}) {
       );
     if (fonts.check && !fonts.check(f.font, f.text))
       throw new FontReadinessError(
-        `The ${f.role} font is not ready for this text (${f.font}). Nothing was exported.`,
+        `The ${f.role} font is not ready for this text (${f.font}). Nothing was exported. [fr4 ${notReadyChars(fonts, f.font, f.text)} ${fontDiagnostics(fonts, f.font)}]`,
       );
     if (deps.measure) {
       const generic = familyOf(f.font).split(",").pop().trim();

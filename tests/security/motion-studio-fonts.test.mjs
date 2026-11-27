@@ -570,3 +570,14 @@ test("load() rejecting although every piece is loaded and check() is true procee
   const bad = await ensureFonts(comp, { poemText: "தமிழ்", title: "" }, { fonts: mk(false), fontRetryMs: 1 }).catch((e) => e);
   assert.ok(bad instanceof Error && /could not be loaded/.test(bad.message), "unready faces must still stop the export");
 });
+
+test("when check() fails after every piece loaded, the error names the failing code points and the tag", async () => {
+  const { ensureFonts } = await import("../../src/lib/motion-studio/font-ready.js");
+  const comp = { format: "reel", style: { font: "noto-serif", weight: 500, sizePx: 48 }, scenes: [{ kind: "stanza", lines: ["தமிழ்"] }], branding: { show: false } };
+  const fonts = new Set([{ family: '"Noto Serif Tamil"', weight: "100 900", status: "loaded", load: async () => {} }]);
+  fonts.load = async () => [{}];
+  fonts.check = (font, t) => !t.includes("்");
+  const e = await ensureFonts(comp, { poemText: "தமிழ்", title: "" }, { fonts }).catch((x) => x);
+  assert.ok(e instanceof Error && /not ready/.test(e.message), "must stop: " + (e && e.message));
+  assert.match(e.message, /fr4 notready U\+BCD/);
+});
