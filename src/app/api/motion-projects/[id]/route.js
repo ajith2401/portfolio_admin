@@ -47,12 +47,13 @@ export async function PUT(request, { params }) {
       if (!n) return NextResponse.json({ error: "Name is required" }, { status: 400 });
       set.name = n;
     }
-    { const o = overLongLine(body?.composition); if (o) return NextResponse.json({ error: overLongMessage(o), code: "LINE_TOO_LONG" }, { status: 422 }); }
-    if (body?.composition !== undefined) set.composition = normalizeComposition(body.composition);
     await connectDB();
     const existing = await MotionProject.findById(id).select("createdBy").lean();
     if (!existing) return bad();
     if (!owns(auth, existing)) return denied();
+    // Length guard only after access control, so a non-owner or a missing id gets 403/404, never the 422 detail.
+    { const o = overLongLine(body?.composition); if (o) return NextResponse.json({ error: overLongMessage(o), code: "LINE_TOO_LONG" }, { status: 422 }); }
+    if (body?.composition !== undefined) set.composition = normalizeComposition(body.composition);
     // acknowledgeSource: re-sync the stored hash after the author reviewed a changed poem
     if (body?.acknowledgeSource === true) {
       const cur = await MotionProject.findById(id).select("sourceWritingId").lean();

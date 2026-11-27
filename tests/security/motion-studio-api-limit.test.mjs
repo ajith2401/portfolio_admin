@@ -32,3 +32,12 @@ test("both API routes call the guard before normalizing and answer 422", () => {
     assert.match(s, /status: 422/);
   }
 });
+test("the guard runs only after auth, origin and (PUT) ownership checks", () => {
+  for (const f of ["src/app/api/motion-projects/route.js", "src/app/api/motion-projects/[id]/route.js"]) {
+    const s = readFileSync(new URL("../../" + f, import.meta.url), "utf8");
+    const body = s.slice(s.indexOf(f.includes("[id]") ? "export async function PUT" : "export async function POST"));
+    const g = body.indexOf("overLongLine(body?.composition)");
+    assert.ok(g > body.indexOf("requireAuth(") && g > body.indexOf("validateOrigin(request)"), f);
+    if (f.includes("[id]")) assert.ok(g > body.indexOf("if (!owns(auth, existing)) return denied();") && body.indexOf("if (!owns(") > 0, f);
+  }
+});
