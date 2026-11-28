@@ -29,6 +29,7 @@ import {
 import { familyLabel } from "@/lib/motion-studio/templates";
 import { Btn, Range } from "../studio-ui";
 import { useStudio } from "../studio-context";
+import SkySection from "./SkySection";
 
 const SW = 56;
 function Swatch({ comp, id, tick }) {
@@ -370,6 +371,7 @@ export default function MaterialPanel() {
           so the poem always stays readable.
         </p>
       </div>
+      <SkySection comp={comp} m={m} set={set} />
       <TextileSection comp={comp} m={m} set={set} />
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {m.texture && (

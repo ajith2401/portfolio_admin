@@ -12,6 +12,7 @@ import { rowState, activeBehaviour, buildPlan, animFrame, prefParams, fadeOutAt,
 import { runFx, runMaterial } from "./fx/registry.js";
 import { paintTextures } from "./textures.js";
 import { paintTextile, paintTextileScrims, textileActive } from "./textiles.js";
+import { paintSky, paintSkyScrims, skyActive } from "./sky.js";
 import { paintElements } from "./elements.js";
 import { writingOf, drawWrittenRows, measureIn, inkColour, planWriting } from "./writing.js";
 import { materialPlan, effectiveIntensity } from "./materials.js";
@@ -45,13 +46,16 @@ function drawCover(ctx, img, x, y, w, h) {
   const k = Math.max(w / iw, h / ih), dw = iw * k, dh = ih * k;
   ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
 }
-export function paintBackground(ctx, c, w, h, tMs, totalMs, assets) {
+// opts.rect / opts.still: the text area and still-frame flag, used only by a Sky & Celestial background (sky.js)
+export function paintBackground(ctx, c, w, h, tMs, totalMs, assets, opts = {}) {
   const st = c.style, p = clamp01(tMs / Math.max(1, totalMs)), k = c.motion.intensity;
   const bgMotion = c.motion.reduceMotion === true ? "none" : c.motion.bgMotion; // reduce motion also stills the background
   ctx.save();
   if (bgMotion === "zoom") { const z = 1 + 0.06 * k * p; ctx.translate(w / 2, h / 2); ctx.scale(z, z); ctx.translate(-w / 2, -h / 2); }
   if (bgMotion === "drift") ctx.translate(-30 * k * p, -20 * k * p);
+  const sky = !assets.bg && skyActive(c);
   if (assets.bg) drawCover(ctx, assets.bg, -30, -30, w + 60, h + 60);
+  else if (sky) { ctx.restore(); ctx.save(); paintSky(ctx, c, w, h, tMs, { rect: opts.rect, still: opts.still === true }); } // the sky moves by its own clock, not bgMotion
   else {
     const g = ctx.createLinearGradient(0, 0, w * 0.3, h);
     g.addColorStop(0, st.bg.a); g.addColorStop(1, st.bg.kind === "solid" ? st.bg.a : st.bg.b);
@@ -68,6 +72,7 @@ export function paintBackground(ctx, c, w, h, tMs, totalMs, assets) {
 // The broad soft layers (mist, bokeh, leak, sweep, ripple) stay at very low alpha so they never compete with the poem.
 export function paintParticles(ctx, c, w, h, tMs, k = 1) {
   const kind = c.style.particles; if (kind === "none" || !(k > 0)) return 0;
+  if (kind === "stars" && skyActive(c)) return 0; // the sky draws its own stars
   const n = 36, t = (tMs / 1000) * k;
   ctx.save();
   if (AMBIENT[kind]) { AMBIENT[kind](ctx, w, h, t); ctx.restore(); return 1; }
@@ -199,7 +204,7 @@ export const rowAnchor = (align, ax, ipx = 0) => (align === "left" ? ax + ipx : 
 // takes no state from any effect: effects run isolated, and the text state is re-asserted before the text is drawn.
 export const LAYERS = Object.freeze(["bg", "material", "atmosphere", "elements", "text", "surface", "signature"]);
 export const resetTextState = (ctx) => { ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.filter = "none"; ctx.shadowColor = "transparent"; };
-function layerBg(ctx, env) { paintBackground(ctx, env.comp, env.W, env.H, env.still ? 0 : env.tMs, env.total, env.assets); }
+function layerBg(ctx, env) { paintBackground(ctx, env.comp, env.W, env.H, env.still ? 0 : env.tMs, env.total, env.assets, { rect: env.rect, still: env.still }); }
 // surface texture + film grain (textures.js) first: the paper the material presets then sit on
 // a woven textile (textiles.js), when chosen, is the cloth everything else sits on
 function layerMaterial(ctx, env) { return paintTextile(ctx, env) + paintTextures(ctx, env) + runFx("material", ctx, env) + runMaterial("material", ctx, env); }
@@ -221,7 +226,7 @@ function layerText(ctx, env) {
   y = Math.max(rect.y, Math.min(rect.y + rect.h - blockH, y + shift));
   ctx.textBaseline = "middle"; ctx.textAlign = align;
   const ax = align === "left" ? rect.x : align === "right" ? rect.x + rect.w : rect.x + rect.w / 2;
-  if (textileActive(comp)) textileGuard(ctx, env, rowBoxes(rows, align, ax, y), size);
+  if (textileActive(comp) || skyActive(comp)) textileGuard(ctx, env, rowBoxes(rows, align, ax, y), size);
   // library animations (animation.js LIBRARY) draw through animFrame, the same function validateAnimation checks; the four
   // classic behaviours and every still keep the original per-row path below, call for call.
   const wr = writingOf(comp);
@@ -296,7 +301,8 @@ function textileGuard(ctx, env, boxes, size) {
   const sg = comp.branding?.color ? signatureBox(comp, fmt, ctx) : null;
   if (sg) blocks.push({ box: [sg.left - 16, sg.top - 8, sg.right + 16, sg.bottom + 8], color: comp.branding.color });
   ctx.save();
-  paintTextileScrims(ctx, env, blocks);
+  if (textileActive(comp)) paintTextileScrims(ctx, env, blocks); // the cloth covers the sky, so it decides the shade
+  else paintSkyScrims(ctx, env, blocks);
   ctx.restore();
 }
 function layerSurface(ctx, env) {

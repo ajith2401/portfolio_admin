@@ -6,6 +6,7 @@ import { effectById, SURFACE_CAP } from "./fx/registry.js";
 import "./fx/effects.js";
 import { TEXTURE_IDS, TEXTURE_NONE, DEFAULT_TEXTURE_AMOUNT, texturePasses } from "./textures.js";
 import { normalizeTextile, textileActive } from "./textiles.js";
+import { normalizeSky } from "./sky.js";
 
 export const MATERIAL_NONE = "none";
 export const MATERIALS = Object.freeze(
@@ -162,6 +163,7 @@ export function normalizeMaterial(m) {
     ...(num(o.grain, 0, 1, 0) > 0 ? { grain: Math.round(num(o.grain, 0, 1, 0) * 100) / 100, grainMove: o.grainMove !== false } : {}),
     // woven textile (textiles.js): stored only when a real textile is chosen
     ...(normalizeTextile(o.textile) ? { textile: normalizeTextile(o.textile) } : {}),
+    ...(normalizeSky(o.sky) ? { sky: normalizeSky(o.sky) } : {}),
   };
 }
 

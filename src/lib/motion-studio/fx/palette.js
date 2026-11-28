@@ -2,6 +2,7 @@
 // readability scrim), never on pixels, time or randomness, so preview and export draw the same material.
 import { hexRgb, lum, ratio } from "../contrast.js";
 import { textileBases } from "../textiles.js";
+import { skyBases } from "../sky.js";
 
 /** WCAG target used by contrast.js (requiredScrim). An effect may never push text contrast below it (or below the
  *  template's own contrast when that is already lower). */
@@ -55,6 +56,8 @@ export function fxBases(comp) {
     let k = 0;
     for (; k <= 1.0001; k += 0.01) if (ratio(tl, lum(...mix(text, far, k))) >= CONTRAST_TARGET) break;
     bases = [mix(text, far, Math.min(1, k))];
+  } else if (skyBases(comp)) {
+    bases = skyBases(comp); // a Sky & Celestial background replaces the template gradient (sky.js)
   } else {
     const a = hexRgb(st.bg.a), b = hexRgb(st.bg.kind === "solid" ? st.bg.a : st.bg.b);
     bases = [a, b, mix(a, b, 0.5)];

@@ -17,6 +17,7 @@ import { runMaterial } from "./fx/registry.js";
 import { realWeight, titleWeightOf } from "./font-registry.js";
 import { paintTextures } from "./textures.js";
 import { paintTextile, paintTextileScrims, textileActive } from "./textiles.js";
+import { paintSkyScrims, skyActive } from "./sky.js";
 import { paintElements } from "./elements.js";
 import { drawWrittenRows, measureIn, inkColour, rowLeft, planWriting, normalizeWriting } from "./writing.js";
 import { materialPlan, effectiveIntensity } from "./materials.js";
@@ -348,6 +349,11 @@ export function drawFullPoem(
   const fxMs = still ? 0 : anim.fxMs;
   // material layers (materials.js): no-ops unless comp.material selects a preset. Same guard/isolation as drawFrame.
   const fxEnv = { comp, W, H, tMs: fxMs, still, assets, rect: { x: 0, y: 0, w: W, h: H }, plan: materialPlan(comp), intensity: effectiveIntensity(comp), seed: comp.material?.seed ?? 1, fxTrace, fxReport };
+  // the poem block (for the sky's keep-out area and the readability shade)
+  const side0 = (PRESETS[layout.preset] || PRESETS.balanced).side;
+  const ys0 = layout.items.map((it) => [layout.offset + it.y - (it.px || 0) * 0.75, layout.offset + it.y + (it.px || 0) * 0.75]);
+  const block = ys0.length ? [W * side0 - 24, Math.min(...ys0.map((v) => v[0])), W * (1 - side0) + 24, Math.max(...ys0.map((v) => v[1]))] : null;
+  const skyRect = block ? { x: block[0], y: block[1], w: block[2] - block[0], h: block[3] - block[1] } : { x: 0, y: 0, w: W, h: H };
   ctx.save();
   ctx.scale(scale, scale);
   paintBackground(
@@ -360,6 +366,7 @@ export function drawFullPoem(
     still ? 0 : anim.bgMs,
     still ? 1 : anim.total,
     assets,
+    { rect: skyRect, still: still || !anim.motionK },
   );
   const atm = still ? 0 : paintParticles(ctx, comp, W, H, fxMs, anim.motionK);
   if (atm + paintTextile(ctx, fxEnv) + paintTextures(ctx, fxEnv) + runMaterial("material", ctx, fxEnv) + runMaterial("atmosphere", ctx, fxEnv) + paintElements(ctx, comp, W, H, fxMs, { still: still || !anim.motionK })) resetTextState(ctx);
@@ -375,6 +382,10 @@ export function drawFullPoem(
     const ys = layout.items.map((it) => [layout.offset + it.y - (it.px || 0) * 0.75, layout.offset + it.y + (it.px || 0) * 0.75]);
     ctx.save();
     paintTextileScrims(ctx, fxEnv, [{ box: [W * side - 24, Math.min(...ys.map((v) => v[0])), W * (1 - side) + 24, Math.max(...ys.map((v) => v[1]))], color: st.color }]);
+    ctx.restore();
+  } else if (block && skyActive(comp)) {
+    ctx.save();
+    paintSkyScrims(ctx, fxEnv, [{ box: block, color: st.color }]);
     ctx.restore();
   }
   ctx.textAlign = align;

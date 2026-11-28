@@ -532,19 +532,22 @@ export default function MotionStudio() {
   // ---- loading a poem (look: optional {format, templateId, motion} chosen in Quick Create)
   const withLook = (
     scenes,
-    { motion, whole: w, elements, textile, ...look } = {},
+    { motion, whole: w, elements, textile, sky, ...look } = {},
   ) => {
     const dl = defaultComposition({ scenes, ...look });
     // optional woven texture from Quick Create, layered onto whatever material the look already has
-    const d0 = textile
-      ? {
-          ...dl,
-          material: normalizeMaterial({
-            ...(dl.material || { id: "none" }),
-            textile,
-          }),
-        }
-      : dl;
+    // ...and the optional Sky & Celestial background (sky.js), stored beside it on the material
+    const d0 =
+      textile || sky
+        ? {
+            ...dl,
+            material: normalizeMaterial({
+              ...(dl.material || { id: "none" }),
+              ...(textile ? { textile } : {}),
+              ...(sky ? { sky } : {}),
+            }),
+          }
+        : dl;
     const d1 = w ? { ...d0, whole: normalizeWhole(w) } : d0;
     const d = elements?.length ? { ...d1, elements } : d1;
     return motion ? { ...d, motion: { ...d.motion, ...motion } } : d;
@@ -675,7 +678,7 @@ export default function MotionStudio() {
   // Quick Create: the same creation path, with the chosen output's format and look (and the author's motion feel)
   const quickCreate = async (
     choice,
-    { routeId, templateId, decor, textile },
+    { routeId, templateId, decor, textile, sky },
   ) => {
     const r = routeById(routeId);
     const motion = motionPrefsOf({
@@ -689,6 +692,7 @@ export default function MotionStudio() {
         ? { elements: decorationElements(decor) }
         : {}),
       ...(textile ? { textile } : {}),
+      ...(sky ? { sky } : {}),
       ...(Object.keys(motion).length ? { motion } : {}),
       ...(r?.group === "whole" || r?.id === "whole-cover"
         ? { whole: { on: true } }

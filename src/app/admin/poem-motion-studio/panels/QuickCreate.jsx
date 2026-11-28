@@ -15,6 +15,7 @@ import {
   formatForRoute,
 } from "@/lib/motion-studio/quick-create";
 import { TEXTILES, TEXTILE_DEFAULTS, suggestedTextiles } from "@/lib/motion-studio/textiles";
+import { SKY_PRESETS, SKY_QUICK, skyById } from "@/lib/motion-studio/sky";
 import { templateById, familyOf } from "@/lib/motion-studio/templates";
 import { Btn } from "../studio-ui";
 import { useStudio } from "../studio-context";
@@ -49,6 +50,10 @@ export default function QuickCreate({
     weavePick ||
     suggestedTextiles(familyOf(templateById(templateId)))[0] ||
     "dark-indigo-woven";
+  // sky & celestial background: off by default; the quick choices start from the preset's own
+  const [skyId, setSkyId] = useState("");
+  const [skyQ, setSkyQ] = useState({});
+  const skyQuick = skyId ? { ...skyById(skyId).q, ...skyQ } : null;
   const [busy, setBusy] = useState(false);
   const parsed = useMemo(() => parsePoemText(text, { title }), [text, title]);
   const issues = [];
@@ -70,6 +75,7 @@ export default function QuickCreate({
           templateId,
           decor,
           ...(weaveOn ? { textile: { ...TEXTILE_DEFAULTS, id: weaveId, strength: weaveStrength } } : {}),
+          ...(skyId ? { sky: { id: skyId, ...skyQ } } : {}),
         },
       );
     } finally {
@@ -235,6 +241,57 @@ export default function QuickCreate({
                 onChange={(e) => setWeaveStrength(Number(e.target.value))}
               />
             </label>
+          </div>
+        )}
+        <label className="pms-lbl mt-3 block">
+          Sky (optional)
+          <select
+            aria-label="Sky preset"
+            className="pms-field"
+            style={{ minHeight: 44 }}
+            value={skyId}
+            onChange={(e) => {
+              setSkyId(e.target.value);
+              setSkyQ({});
+            }}
+          >
+            <option value="">No sky (template background)</option>
+            <optgroup label="Night skies">
+              {SKY_PRESETS.filter((p) => p.kind === "night").map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Day & twilight">
+              {SKY_PRESETS.filter((p) => p.kind === "day").map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        </label>
+        {skyQuick && (
+          <div className="mt-1 grid gap-2 sm:grid-cols-2" data-testid="qc-sky-quick">
+            {Object.entries(SKY_QUICK).map(([k, vals]) => (
+              <label key={k} className="pms-lbl block">
+                {{ stars: "Stars", clouds: "Clouds", motion: "Sky motion", glow: "Glow" }[k]}
+                <select
+                  aria-label={`Quick Create sky ${k}`}
+                  className="pms-field"
+                  style={{ minHeight: 44 }}
+                  value={skyQuick[k]}
+                  onChange={(e) => setSkyQ((q) => ({ ...q, [k]: e.target.value }))}
+                >
+                  {vals.map((v) => (
+                    <option key={v} value={v}>
+                      {v.charAt(0).toUpperCase() + v.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
           </div>
         )}
       </div>
